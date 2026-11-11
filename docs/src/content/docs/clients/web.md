@@ -25,6 +25,7 @@ apps/web/src
 ├── api.ts         HTTP-Client für die Server-API
 ├── session.ts     Anmelden, Registrieren, Sperren, Fehlermeldungen
 ├── clipboard.ts   Kopieren mit automatischem Leeren
+├── prefs.ts       Geräte-Einstellungen (Auto-Lock-Zeit) im localStorage
 └── useIdle.ts     Auto-Lock
 ```
 
@@ -173,15 +174,30 @@ In der Seitenleiste des Passwortmanagers, mit der Zahl der Hinweise
 
 ## Konto
 
-Der Knopf „Konto“ oben rechts öffnet `AccountDialog`:
+Der Kreis mit dem Anfangsbuchstaben oben rechts öffnet die Seite **Konto** (`#/konto`,
+`screens/AccountScreen.tsx`). Fehlt das Notfall-Kit, trägt der Kreis einen roten Punkt.
 
-- **Sicherheitscode** des eigenen Schlüssels, zum Vergleichen beim Teilen.
-- **Notfall-Kit:** Status und Erstellen bzw. Ersetzen (`RecoveryKitDialog`). Nach Bestätigung des
-  Master-Passworts erzeugt der Worker den Recovery-Key und zeigt ihn einmal an, mit
-  „Als Datei speichern“ und „Kopieren“. „Fertig“ geht erst, wenn man bestätigt, ihn aufbewahrt zu haben.
-- **Master-Passwort ändern.**
+Die Seite zeigt E-Mail und Server und darunter zwei Listen. Jede Zeile hat einen Status in
+Klartext und genau eine Aktion:
 
-Solange kein Notfall-Kit existiert, zeigt die Eintragsliste einen Hinweis mit „Erstellen“.
+| Zeile | Status | Aktion |
+|---|---|---|
+| Notfall-Kit | eingerichtet oder fehlt (dann zusätzlich ein Hinweis oben) | erstellen bzw. neu erstellen |
+| Master-Passwort | | „Ändern“ öffnet einen eigenen Dialog |
+| Gespeicherte Passwörter | Hinweise aus dem [Sicherheits-Check](#sicherheits-check) | öffnet den Check (`#/passwoerter/sicherheit`) |
+| Sicherheitscode | | klappt den Code zum Vergleichen beim Teilen auf |
+| Automatisch sperren | 1, 5, 15 oder 30 Minuten, Standard 5, gilt pro Gerät | Auswahl |
+| Darstellung | System, hell oder dunkel, gilt pro Gerät | Umschalter |
+
+- **Notfall-Kit** (`RecoveryKitDialog`): Nach Bestätigung des Master-Passworts erzeugt der Worker
+  den Recovery-Key und zeigt ihn einmal an, mit „Als Datei speichern“ und „Kopieren“. „Fertig“ geht
+  erst, wenn man bestätigt, ihn aufbewahrt zu haben.
+- **Master-Passwort ändern:** sagt vorher, was passiert (andere Geräte werden abgemeldet,
+  Notfall-Kit und Bereiche bleiben). Anzeigen-Knopf an jedem Feld, Stärke-Balken, Prüfung auf
+  Übereinstimmung beim Tippen. Der Knopf ist erst aktiv, wenn alles passt (mindestens 12 Zeichen,
+  anders als das alte). Danach eine kurze Bestätigung unten.
+
+Solange kein Notfall-Kit existiert, zeigt auch der Startbildschirm einen Hinweis mit „Erstellen“.
 
 Die Anmeldeseite hat „Master-Passwort vergessen?“: E-Mail, Recovery-Key, neues Passwort. Der
 Recovery-Key wird im Worker geprüft (Prüfsumme). Tippfehler fallen also auf, bevor eine Anfrage
@@ -197,7 +213,7 @@ verschlüsselten Konto-Schlüssel, nie das Passwort selbst.
 | Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' https://api.pwnedpasswords.com`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. Die einzige fremde Adresse ist der Datenleck-Abgleich ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)). `style-src` erlaubt `'unsafe-inline'` für MUI ([warum](/melonapp/entscheidungen/0008-mui/#folge-für-die-content-security-policy)). |
 | Links in Einträgen nur mit `http(s):`, `mailto:`, `tel:` | verhindert `javascript:`-Links in gespeicherten Feldern |
 | Einladungs-Token im URL-Fragment (`/#/invite/…`) | landet nie in Server- oder Proxy-Logs |
-| Auto-Lock nach 5 Minuten ohne Eingabe | Schlüssel liegen nicht unbegrenzt im Speicher |
+| Auto-Lock nach 5 Minuten ohne Eingabe (einstellbar 1 bis 30 Minuten, nicht abschaltbar) | Schlüssel liegen nicht unbegrenzt im Speicher |
 | Zwischenablage wird 30 s nach dem Kopieren geleert, wenn sie noch das Passwort enthält | Passwörter bleiben nicht im Clipboard-Verlauf |
 | Kein Token, kein Schlüssel im `localStorage` | nach Neuladen ist der Tresor gesperrt. Gemerkt wird nur die E-Mail. |
 | Schriften lokal gebündelt | keine Anfragen an Google Fonts oder andere Dritte |

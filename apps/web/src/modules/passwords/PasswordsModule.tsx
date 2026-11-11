@@ -59,7 +59,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
   const [drawer, setDrawer] = useState(false);
   const [newMenu, setNewMenu] = useState<HTMLElement | null>(null);
   const [importing, setImporting] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [checking, setChecking] = useState(() => window.location.hash.endsWith('/sicherheit'));
   const wide = useMediaQuery((t) => t.breakpoints.up('md'), { noSsr: true });
 
   useEffect(() => {

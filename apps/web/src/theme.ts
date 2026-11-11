@@ -37,7 +37,7 @@ const body = '"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif';
 export const monoFont = '"Atkinson Hyperlegible Mono Variable", ui-monospace, "Cascadia Mono", monospace';
 
 export const theme = createTheme({
-  cssVariables: { colorSchemeSelector: 'media' },
+  cssVariables: { colorSchemeSelector: 'class' },
   colorSchemes: {
     light: {
       palette: {

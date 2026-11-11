@@ -5,23 +5,16 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
-import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
-import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
-import { useEffect, useState, type FormEvent } from 'react';
-import { cryptoCall } from '../crypto/client';
-import { changePassword, describeError, setupRecovery, type Account, type Session } from '../session';
+import { useState, type FormEvent } from 'react';
+import { describeError, setupRecovery, type Account, type Session } from '../session';
 import { monoFont } from '../theme';
-import { SecurityCode } from './SpaceDialog';
-
-const MIN_LENGTH = 12;
 
 function kitText(email: string, key: string): string {
   return [
@@ -163,116 +156,6 @@ export function RecoveryKitDialog({
           </DialogActions>
         </>
       )}
-    </Dialog>
-  );
-}
-
-function PasswordChange({ session, onChanged }: { session: Session; onChanged: (update: Partial<Account>) => void }) {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [repeat, setRepeat] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setDone(false);
-    if (next.length < MIN_LENGTH) return setError(`Das neue Master-Passwort braucht mindestens ${MIN_LENGTH} Zeichen.`);
-    if (next !== repeat) return setError('Die beiden neuen Passwörter stimmen nicht überein.');
-    setBusy(true);
-    try {
-      onChanged(await changePassword(session, current, next));
-      setCurrent('');
-      setNext('');
-      setRepeat('');
-      setDone(true);
-    } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Stack component="form" spacing={1.5} onSubmit={submit} noValidate>
-      <Typography variant="h3" sx={{ fontSize: '1.125rem' }}>
-        Master-Passwort ändern
-      </Typography>
-      <TextField label="Aktuelles Master-Passwort" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} size="small" fullWidth />
-      <TextField label="Neues Master-Passwort" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} size="small" fullWidth />
-      <TextField label="Neues Master-Passwort wiederholen" type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} size="small" fullWidth />
-      {error && <Alert severity="error">{error}</Alert>}
-      {done && <Alert severity="success">Master-Passwort geändert. Andere Geräte wurden abgemeldet.</Alert>}
-      <Button type="submit" variant="outlined" loading={busy} disabled={!current || !next} sx={{ alignSelf: 'flex-start' }}>
-        Master-Passwort ändern
-      </Button>
-    </Stack>
-  );
-}
-
-export function AccountDialog({
-  session,
-  onUpdate,
-  onClose,
-  onCreateKit,
-}: {
-  session: Session;
-  onUpdate: (update: Partial<Account>) => void;
-  onClose: () => void;
-  onCreateKit: () => void;
-}) {
-  const [code, setCode] = useState('');
-
-  useEffect(() => {
-    void cryptoCall('fingerprint', { publicKey: session.publicKey }).then(setCode);
-  }, [session.publicKey]);
-
-  return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="account-title">
-      <DialogTitle id="account-title" sx={{ pr: 7 }}>
-        Konto
-        <IconButton aria-label="Schließen" onClick={onClose} sx={{ position: 'absolute', right: 12, top: 12 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={3}>
-          <Typography color="text.secondary">{session.email}</Typography>
-
-          <section>
-            <Typography variant="h3" sx={{ fontSize: '1.125rem' }}>
-              Dein Sicherheitscode
-            </Typography>
-            <SecurityCode code={code} />
-            <Typography color="text.secondary" variant="body2">
-              Wenn dich jemand zu einem Bereich hinzufügt, sieht diese Person deinen Code. Vergleicht ihn zusammen, damit niemand
-              unbemerkt einen falschen Schlüssel unterschieben kann.
-            </Typography>
-          </section>
-
-          <Divider />
-
-          <Stack spacing={1.5}>
-            <Typography variant="h3" sx={{ fontSize: '1.125rem' }}>
-              Notfall-Kit
-            </Typography>
-            {session.hasRecovery ? (
-              <Alert severity="success">Du hast ein Notfall-Kit. Damit kommst du auch ohne Master-Passwort wieder an deine Daten.</Alert>
-            ) : (
-              <Alert severity="warning">Noch kein Notfall-Kit. Vergisst du dein Master-Passwort, sind deine Daten verloren.</Alert>
-            )}
-            <Button variant="outlined" onClick={onCreateKit} sx={{ alignSelf: 'flex-start' }}>
-              {session.hasRecovery ? 'Neues Notfall-Kit erstellen' : 'Notfall-Kit erstellen'}
-            </Button>
-          </Stack>
-
-          <Divider />
-
-          <PasswordChange session={session} onChanged={onUpdate} />
-        </Stack>
-      </DialogContent>
     </Dialog>
   );
 }

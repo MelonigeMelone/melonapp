@@ -2,6 +2,8 @@ import AppBar from '@mui/material/AppBar';
 import BottomNavigation from '@mui/material/BottomNavigation';
 import BottomNavigationAction from '@mui/material/BottomNavigationAction';
 import Box from '@mui/material/Box';
+import Avatar from '@mui/material/Avatar';
+import Badge from '@mui/material/Badge';
 import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
@@ -10,7 +12,6 @@ import Tabs from '@mui/material/Tabs';
 import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -18,7 +19,8 @@ import { ApiError } from './api';
 import { Brand } from './components/Brand';
 import { MODULES, moduleByPath, type ModuleDef } from './modules/registry';
 import { PasswordsModule } from './modules/passwords/PasswordsModule';
-import { AccountDialog, RecoveryKitDialog } from './screens/AccountDialog';
+import { AccountScreen } from './screens/AccountScreen';
+import { RecoveryKitDialog } from './screens/RecoveryKit';
 import { HomeScreen } from './screens/HomeScreen';
 import { NewSpaceDialog, SpaceDialog } from './screens/SpaceDialog';
 import { TOOLBAR } from './layout';
@@ -27,6 +29,7 @@ import type { Snapshot } from './vault/manager';
 
 const SYNC_INTERVAL_MS = 30_000;
 const HOME = '';
+const ACCOUNT = 'konto';
 
 export interface ShellContext {
   session: Session;
@@ -70,7 +73,6 @@ export function Shell({
   const [path, navigate] = useHashPath();
   const [loaded, setLoaded] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [accountOpen, setAccountOpen] = useState(false);
   const [kitOpen, setKitOpen] = useState(false);
   const [creatingSpace, setCreatingSpace] = useState(false);
   const [spaceDialog, setSpaceDialog] = useState<string | null>(null);
@@ -97,7 +99,7 @@ export function Shell({
   }, [manager, onLock]);
 
   const module: ModuleDef | undefined = moduleByPath(path);
-  const tab = module ? module.path : HOME;
+  const tab = module ? module.path : path === ACCOUNT ? false : HOME;
   const ctx: ShellContext = {
     session,
     snapshot,
@@ -129,9 +131,22 @@ export function Shell({
             </Tabs>
           )}
           <Box sx={{ flex: 1 }} />
-          <Tooltip title="Konto">
-            <IconButton aria-label="Konto" onClick={() => setAccountOpen(true)}>
-              <AccountCircleOutlinedIcon />
+          <Tooltip title={session.hasRecovery ? 'Konto' : 'Konto: Notfall-Kit fehlt'}>
+            <IconButton aria-label="Konto" aria-current={path === ACCOUNT ? 'page' : undefined} onClick={() => navigate(ACCOUNT)} sx={{ p: 0.75 }}>
+              <Badge color="primary" variant="dot" invisible={session.hasRecovery} overlap="circular">
+                <Avatar
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    bgcolor: path === ACCOUNT ? 'secondary.main' : 'melon.sunk',
+                    color: path === ACCOUNT ? 'secondary.contrastText' : 'text.primary',
+                  }}
+                >
+                  {session.email.slice(0, 1).toUpperCase()}
+                </Avatar>
+              </Badge>
             </IconButton>
           </Tooltip>
           <Tooltip title="Sperren">
@@ -142,7 +157,13 @@ export function Shell({
         </Toolbar>
       </AppBar>
 
-      {module?.id === 'passwords' ? <PasswordsModule ctx={ctx} module={module} /> : <HomeScreen ctx={ctx} />}
+      {module?.id === 'passwords' ? (
+        <PasswordsModule ctx={ctx} module={module} />
+      ) : path === ACCOUNT ? (
+        <AccountScreen ctx={ctx} onUpdate={onUpdate} />
+      ) : (
+        <HomeScreen ctx={ctx} />
+      )}
 
       {!wide && (
         <Paper square sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderTop: 1, borderColor: 'divider', zIndex: 3 }}>
@@ -156,17 +177,6 @@ export function Shell({
         </Paper>
       )}
 
-      {accountOpen && (
-        <AccountDialog
-          session={session}
-          onUpdate={onUpdate}
-          onClose={() => setAccountOpen(false)}
-          onCreateKit={() => {
-            setAccountOpen(false);
-            setKitOpen(true);
-          }}
-        />
-      )}
       {kitOpen && (
         <RecoveryKitDialog
           session={session}

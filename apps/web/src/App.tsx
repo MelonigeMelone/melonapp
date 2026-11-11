@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { AuthScreen } from './screens/AuthScreen';
 import { lock, type Account, type Session } from './session';
+import { useAutoLockMinutes } from './prefs';
 import { useIdle } from './useIdle';
 
 const loadShell = () => import('./Shell');
@@ -12,7 +13,6 @@ function inviteFromUrl(): string | null {
   return INVITE.exec(window.location.hash)?.[1] ?? null;
 }
 
-const AUTO_LOCK_MS = 5 * 60 * 1000;
 const EMAIL_KEY = 'melon.email';
 
 function rememberedEmail(): string {
@@ -63,8 +63,9 @@ export function App() {
     void loadShell();
   }, []);
 
-  useIdle(AUTO_LOCK_MS, () => {
-    if (session) onLock('MelonApp wurde nach 5 Minuten ohne Aktivität gesperrt.');
+  const autoLock = useAutoLockMinutes();
+  useIdle(autoLock * 60_000, () => {
+    if (session) onLock(`MelonApp wurde nach ${autoLock === 1 ? '1 Minute' : `${autoLock} Minuten`} ohne Aktivität gesperrt.`);
   });
 
   return session ? (

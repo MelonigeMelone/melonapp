@@ -20,32 +20,15 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useState, type FormEvent } from 'react';
 import { Generator } from '../../components/Generator';
 import { QrImportButton, useTotp } from '../../components/Totp';
-import LinearProgress from '@mui/material/LinearProgress';
 import { describeError } from '../../session';
 import { monoFont } from '../../theme';
 import { cleanItem, isTotpField, KIND_LABELS, newId, TEMPLATES, totpFields, type Field, type FieldKind, type Item } from '../../vault/item';
-import { estimateStrength, STRENGTH_LABELS } from '../../vault/strength';
+import { StrengthMeter } from '../../components/StrengthMeter';
 import { formatCode } from '../../vault/totp';
 import type { VaultView } from '../../vault/manager';
 
 const KIND_ORDER: FieldKind[] = ['text', 'concealed', 'totp', 'url', 'email', 'phone', 'date', 'multiline'];
 type Path = { section: number | null; index: number };
-
-function StrengthMeter({ password }: { password: string }) {
-  if (!password) return null;
-  const s = estimateStrength(password);
-  const value = s.level === 'weak' ? 25 : s.level === 'fair' ? 60 : 100;
-  const color = s.level === 'weak' ? 'error' : s.level === 'fair' ? 'warning' : 'success';
-  return (
-    <Stack spacing={0.5} className="strength-meter">
-      <LinearProgress variant="determinate" value={value} color={color} sx={{ height: 6, borderRadius: 3 }} aria-hidden="true" />
-      <Typography variant="body2" color="text.secondary">
-        <strong>{STRENGTH_LABELS[s.level]}</strong>
-        {s.hint ? `: ${s.hint}` : ''}
-      </Typography>
-    </Stack>
-  );
-}
 
 function TotpInput({ field, custom, onChange, onRemove }: { field: Field; custom: boolean; onChange: (f: Field) => void; onRemove?: () => void }) {
   const { cfg, code } = useTotp(field.value);

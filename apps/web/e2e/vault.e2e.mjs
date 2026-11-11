@@ -298,10 +298,11 @@ await step('bob loses access', async () => {
 await step('re-adding bob shows his security code first', async () => {
   current = b;
   await b.getByRole('button', { name: 'Konto' }).click();
-  const bobAccount = b.getByRole('dialog', { name: 'Konto' });
-  await bobAccount.locator('.security-code').filter({ hasText: /\d/ }).waitFor();
-  const bobCode = await bobAccount.locator('.security-code').innerText();
-  await bobAccount.getByRole('button', { name: 'Schließen' }).click();
+  await b.getByRole('heading', { name: 'Konto', level: 1 }).waitFor();
+  await b.locator('[data-row="code"]').getByRole('button', { name: 'Anzeigen' }).click();
+  await b.locator('.security-code').filter({ hasText: /\d/ }).waitFor();
+  const bobCode = await b.locator('.security-code').innerText();
+  await b.getByRole('tab', { name: 'Passwörter' }).click();
 
   current = a;
   await a.getByRole('button', { name: 'Familie: Mitglieder und Einstellungen' }).click();
@@ -340,18 +341,31 @@ await step('alice reads the re-encrypted vault after unlocking again', async () 
 
 await step('security code and master password change', async () => {
   await a.getByRole('button', { name: 'Konto' }).click();
-  const account = a.getByRole('dialog', { name: 'Konto' });
-  await account.locator('.security-code').filter({ hasText: /\d/ }).waitFor();
-  const code = await account.locator('.security-code').innerText();
+  await a.getByRole('heading', { name: 'Konto', level: 1 }).waitFor();
+  await a.locator('[data-row="kit"]').getByText('Eingerichtet', { exact: false }).waitFor();
+  await a.locator('[data-row="audit"]').getByText('Hinweise', { exact: false }).waitFor();
+  await a.locator('[data-row="code"]').getByRole('button', { name: 'Anzeigen' }).click();
+  await a.locator('.security-code').filter({ hasText: /\d/ }).waitFor();
+  const code = await a.locator('.security-code').innerText();
   if (!/^\d{5}( \d{5}){5}$/.test(code)) throw new Error(`unexpected security code ${code}`);
-  await account.getByLabel('Aktuelles Master-Passwort').fill(alice.master);
-  await account.getByLabel('Neues Master-Passwort', { exact: true }).fill('neues master passwort fuer alice');
-  await account.getByLabel('Neues Master-Passwort wiederholen').fill('neues master passwort fuer alice');
-  await account.getByRole('button', { name: 'Master-Passwort ändern' }).click();
-  await account.getByText('Master-Passwort geändert.', { exact: false }).waitFor({ timeout: 30000 });
-  alice.master = 'neues master passwort fuer alice';
   await shot(a, '8-account');
-  await account.getByRole('button', { name: 'Schließen' }).click();
+  await a.locator('[data-row="password"]').getByRole('button', { name: 'Ändern' }).click();
+  const dialog = a.getByRole('dialog', { name: 'Master-Passwort ändern' });
+  await dialog.getByLabel('Aktuelles Master-Passwort', { exact: true }).fill(alice.master);
+  await dialog.getByLabel('Neues Master-Passwort', { exact: true }).fill('kurz');
+  if (!(await dialog.getByRole('button', { name: 'Master-Passwort ändern' }).isDisabled())) throw new Error('short password accepted');
+  await dialog.getByLabel('Neues Master-Passwort', { exact: true }).fill('neues master passwort fuer alice');
+  await dialog.getByLabel('Neues Master-Passwort wiederholen', { exact: true }).fill('neues master passwort fuer alice');
+  await dialog.getByText('Stimmt überein.').waitFor();
+  await shot(a, '8b-change-password');
+  await dialog.getByRole('button', { name: 'Master-Passwort ändern' }).click();
+  await a.getByText('Master-Passwort geändert.', { exact: false }).waitFor({ timeout: 30000 });
+  alice.master = 'neues master passwort fuer alice';
+  await a.locator('[data-row="mode"]').getByRole('button', { name: 'Dunkel' }).click();
+  await a.waitForFunction(() => document.documentElement.classList.contains('dark'));
+  await shot(a, '8c-account-dark');
+  await a.locator('[data-row="mode"]').getByRole('button', { name: 'System', exact: true }).click();
+  await a.getByRole('tab', { name: 'Passwörter' }).click();
 });
 
 await step('wrong password is rejected', async () => {
@@ -393,6 +407,10 @@ await step('mobile and dark mode', async () => {
   await m.getByRole('button', { name: 'Bereiche anzeigen' }).click();
   await m.getByRole('button', { name: /^Familie/ }).first().waitFor();
   await shot(m, '11-mobile-drawer');
+  await m.keyboard.press('Escape');
+  await m.getByRole('button', { name: 'Konto' }).click();
+  await m.getByRole('heading', { name: 'Konto', level: 1 }).waitFor();
+  await shot(m, '12-mobile-account');
 });
 
 await browser.close();
