@@ -58,7 +58,7 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         if: github.event_name != 'pull_request'
         with:
           subject-name: ${{ env.IMAGE }}
