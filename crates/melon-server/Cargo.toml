@@ -11,7 +11,7 @@ anyhow = "1"
 argon2 = "0.5"
 axum = "0.8"
 base64 = "0.22"
-hmac = "0.12"
+hmac = "0.13"
 melon-crypto = { path = "../melon-crypto" }
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
