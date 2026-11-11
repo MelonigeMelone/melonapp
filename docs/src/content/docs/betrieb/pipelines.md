@@ -22,6 +22,17 @@ sidebar:
 
 Image: `ghcr.io/melonigemelone/melonapp-server`.
 
+## Öffentliches oder privates Repo
+
+CodeQL und GitHub Pages sind für **öffentliche** Repos kostenlos. Bei einem privaten Repo
+brauchen sie einen kostenpflichtigen Plan (Advanced Security bzw. Pro). Deshalb laufen der
+CodeQL-Job und das Veröffentlichen der Doku nur, wenn das Repo öffentlich ist. Gebaut wird
+die Doku trotzdem immer, damit kaputte Seiten auffallen.
+
+Ein öffentliches Repo schadet der Sicherheit nicht. Das Modell hängt nicht an geheimem
+Code, sondern an Schlüsseln, die nur auf den Geräten existieren. Secrets gehören nie ins
+Repo, das prüft gitleaks.
+
 ## Einmalige Einrichtung im Repo
 
 - **Pages:** Settings â†’ Pages â†’ Source: *GitHub Actions*.
