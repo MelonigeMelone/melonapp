@@ -107,7 +107,7 @@ xcodebuild -version
 xcrun simctl list devices available
 ```
 
-Homebrew installieren, falls es fehlt (Anleitung auf https://brew.sh). Rust mit rustup
+Homebrew installieren, falls es fehlt (Anleitung auf https://brew.sh). Rust ≥ 1.87 mit rustup
 verwalten; ein vorhandenes Homebrew-Rust muss nicht entfernt werden. `~/.cargo/bin` muss
 für dieses Projekt im Suchpfad vor Homebrew stehen.
 
@@ -142,3 +142,19 @@ Die Trust-Authentifizierung gilt ausschließlich für diese lokale Testinstanz; 
 nur an Loopback. Beenden mit `pg_ctl -D tmp/apple-postgres stop`. Für einen vollständigen
 lokalen Server eine eigene Datenbank anlegen und die Variablen aus
 [Server-Konfiguration](/melonapp/server/konfiguration/) setzen.
+
+
+### Signierter macOS-Entwicklungsbuild
+
+Eine vorhandene Apple-Development-Identität aus `security find-identity -v -p codesigning`
+verwenden. Der Team-Identifier steht im Zertifikat beziehungsweise in Xcode. Das Skript
+erzeugt temporäre Entitlements für die Data Protection Keychain und prüft die Signatur:
+
+```sh
+export APPLE_DEVELOPMENT_TEAM="DEIN_TEAM"
+export APPLE_SIGNING_IDENTITY="Apple Development: Dein Name (IDENTITY)"
+bash scripts/build-macos-signed.sh
+```
+
+Es werden keine Apple-Zugangsdaten gespeichert. Ein solcher Entwicklungsbuild ist
+nicht notarisiert und nicht zur öffentlichen Verteilung gedacht.

@@ -24,7 +24,9 @@ der Login-Einträge nach erfolgreichem Sync. Er gilt höchstens 24 Stunden. Auto
 vergleicht HTTPS-Hosts exakt; Subdomains, ähnlich geschriebene Domains und HTTP werden
 nicht automatisch akzeptiert. Stilles AutoFill ohne Benutzerinteraktion wird abgelehnt.
 
-Passkeys verwenden ES256 mit RustCrypto `p256`. Private Schlüssel werden bereits vor
+Passkeys verwenden ES256 mit RustCrypto `p256` 0.14. Die ältere 0.13-Linie zieht
+ein von RUSTSEC-2026-0387 betroffenes `crypto-bigint` ein; deshalb verwenden wir die
+gepatchte Abhängigkeitslinie und erhöhen die Workspace-Mindestversion auf Rust 1.87. Private Schlüssel werden bereits vor
 Verlassen von Rust mit dem Kontoschlüssel und an RP-ID sowie Credential-ID gebunden
 verschlüsselt. Die Extension speichert diese Datensätze nochmals verschlüsselt in der
 App Group. WebAuthn-Registrierung verwendet Attestation `none`, Null-AAGUID und einen

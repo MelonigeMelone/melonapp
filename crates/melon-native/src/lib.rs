@@ -28,6 +28,7 @@ pub struct Session {
     proofs: HashMap<String, Zeroizing<String>>,
     last_activity: Instant,
     timeout: Duration,
+    active: bool,
 }
 
 impl Default for Session {
@@ -41,6 +42,7 @@ impl Default for Session {
             proofs: HashMap::new(),
             last_activity: Instant::now(),
             timeout: Duration::from_secs(300),
+            active: true,
         }
     }
 }
@@ -112,6 +114,17 @@ fn wipe(value: &mut Value) {
 }
 
 impl Session {
+    pub fn set_active(&mut self, active: bool) {
+        self.active = active;
+        if !active {
+            self.lock();
+        }
+    }
+
+    pub fn is_locked(&self) -> bool {
+        self.account.is_none() && self.wrapping.is_none() && self.recovery.is_none()
+    }
+
     pub fn lock(&mut self) {
         self.wrapping = None;
         self.account = None;
@@ -167,6 +180,9 @@ impl Session {
 
     pub fn biometric_restore(&mut self, key: &[u8], scope: &str, snapshot: &str) -> Result<Value> {
         self.lock();
+        if !self.active {
+            return Err("background_locked");
+        }
         let bytes: [u8; 32] = key.try_into().map_err(|_| "invalid_key")?;
         let account = SymmetricKey::from_bytes(bytes);
         let plaintext = account
@@ -260,6 +276,9 @@ impl Session {
 
     fn call_inner(&mut self, method: &str, a: &Value) -> Result<Value> {
         self.expire();
+        if !self.active && method != "lock" {
+            return Err("background_locked");
+        }
         match method {
             "lock" => {
                 self.lock();
@@ -484,6 +503,112 @@ mod tests {
             )
             .unwrap();
         (session, created)
+    }
+
+    #[test]
+    fn sharing_and_rotation_preserve_context_and_versions() {
+        let (mut owner, _) = account();
+        let (mut guest, guest_account) = account();
+        let sealed = owner
+            .call(
+                "sealFor",
+                json!({"vaultId":"vault","publicKey":guest_account["publicKey"],"userId":"guest"}),
+            )
+            .unwrap();
+        assert!(
+            guest
+                .call(
+                    "openVault",
+                    json!({"vaultId":"vault","userId":"attacker","keyVersion":1,"sealed":sealed})
+                )
+                .is_err()
+        );
+        guest
+            .call(
+                "openVault",
+                json!({"vaultId":"vault","userId":"guest","keyVersion":1,"sealed":sealed}),
+            )
+            .unwrap();
+        let data = owner
+            .call(
+                "encryptItem",
+                json!({"vaultId":"vault","itemId":"item","plaintext":"shared"}),
+            )
+            .unwrap();
+        let result = guest
+            .call(
+                "decryptItems",
+                json!({"vaultId":"vault","items":[{"id":"item","data":data,"keyVersion":1}]}),
+            )
+            .unwrap();
+        assert_eq!(result[0]["plaintext"], "shared");
+        let rotated = owner.call("rotate",json!({"vaultId":"vault","meta":"new name","members":[{"userId":"guest","publicKey":guest_account["publicKey"]}],"items":[{"id":"item","plaintext":"rotated"}]})).unwrap();
+        let item = json!({"vaultId":"vault","items":[{"id":"item","data":rotated["items"][0]["data"],"keyVersion":2}]});
+        assert_eq!(
+            guest.call("decryptItems", item.clone()).unwrap()[0]["error"],
+            "key_version_mismatch"
+        );
+        guest.call("openVault",json!({"vaultId":"vault","userId":"guest","keyVersion":2,"sealed":rotated["members"][0]["encrypted_vault_key"]})).unwrap();
+        assert_eq!(
+            guest.call("decryptItems", item).unwrap()[0]["plaintext"],
+            "rotated"
+        );
+        assert_eq!(
+            owner
+                .call("hasVault", json!({"vaultId":"vault","keyVersion":1}))
+                .unwrap(),
+            true
+        );
+    }
+
+    #[test]
+    fn password_change_and_recovery_preserve_account_and_reject_wrong_password() {
+        let (mut session, created) = account();
+        let mut reauth = json!({"password":"wrong","salt":STANDARD.encode(b"0123456789abcdef"),"kdf":KdfParams::minimum(),"wrappedAccountKey":created["wrappedAccountKey"],"newPassword":"next-password","newSalt":STANDARD.encode(b"fedcba9876543210"),"newKdf":KdfParams::minimum()});
+        assert_eq!(
+            session.call("changePassword", reauth.clone()).err(),
+            Some("wrong_password")
+        );
+        reauth["password"] = json!("test-password");
+        let recovery = session.call("setupRecovery", reauth.clone()).unwrap();
+        let changed = session.call("changePassword", reauth).unwrap();
+        assert!(
+            changed["authKey"]
+                .as_str()
+                .unwrap()
+                .starts_with("native-proof:")
+        );
+        session.call("derive",json!({"password":"next-password","salt":STANDARD.encode(b"fedcba9876543210"),"kdf":KdfParams::minimum()})).unwrap();
+        assert_eq!(session.call("unlock",json!({"wrappedAccountKey":changed["wrappedAccountKey"],"encryptedPrivateKey":created["encryptedPrivateKey"]})).unwrap(),created["publicKey"]);
+        session
+            .call(
+                "recoveryAuth",
+                json!({"recoveryKey":recovery["recoveryKey"]}),
+            )
+            .unwrap();
+        let reset = session.call("recoveryReset",json!({"recoveryWrappedAccountKey":recovery["recoveryWrappedAccountKey"],"newPassword":"reset-password","newSalt":STANDARD.encode(b"0123456789abcdef"),"newKdf":KdfParams::minimum()})).unwrap();
+        assert!(session.call("recoveryReset", json!({})).is_err());
+        session.call("derive",json!({"password":"reset-password","salt":STANDARD.encode(b"0123456789abcdef"),"kdf":KdfParams::minimum()})).unwrap();
+        assert_eq!(session.call("unlock",json!({"wrappedAccountKey":reset["wrappedAccountKey"],"encryptedPrivateKey":created["encryptedPrivateKey"]})).unwrap(),created["publicKey"]);
+    }
+
+    #[test]
+    fn background_rejects_pending_biometric_restore_and_new_derivation() {
+        let (mut session, _) = account();
+        let key = session.biometric_key().unwrap();
+        let snapshot = session.biometric_snapshot("test", json!({})).unwrap();
+        session.set_active(false);
+        assert_eq!(
+            session.biometric_restore(&key, "test", &snapshot).err(),
+            Some("background_locked")
+        );
+        assert_eq!(
+            session.call("derive", json!({})).err(),
+            Some("background_locked")
+        );
+        session.set_active(true);
+        assert!(session.is_locked());
+        assert!(session.biometric_restore(&key, "test", &snapshot).is_ok());
     }
 
     #[test]

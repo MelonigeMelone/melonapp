@@ -55,3 +55,10 @@ Implementierung, native Rust-Tests, Apple-Builds, Security-Review, CI und PR fol
 - Geprüft: iOS-Bundle inklusive `PlugIns/MelonAutoFill.appex` gebaut, erneut im Simulator installiert und gestartet.
 - Geprüft: `cargo +1.85.0 check --workspace --locked` erfolgreich.
 - Blocker: T3-Geräteautomatisierung ist in den Umgebungseinstellungen ausgeschaltet; keine Umgehung oder Einstellungsänderung vorgenommen. Simulator-Build, Installation, Launch und Screenshot funktionieren über Xcode-Werkzeuge.
+
+- Entscheidung: Nach RustSec-Fund wird `p256` von 0.13 auf 0.14 aktualisiert; `crypto-bigint` ist damit gepatcht, Mindest-Rust-Version steigt auf 1.87.
+- Geprüft: `cargo deny check` im Workspace und die separaten macOS-/iOS-Target-Prüfungen im Tauri-Workspace sind erfolgreich; keine Advisory-Ausnahme eingetragen.
+- Geprüft: `cargo +1.87.0 check --workspace --locked` sowie erneuter WASM-Build erfolgreich; die frühere 1.85-Prüfung ist durch die Sicherheitsaktualisierung überholt.
+- Entscheidung: Kryptografie und biometrische Swift-Aufrufe laufen außerhalb des UI-Threads; abgebrochene/ausgeblendete Abläufe dürfen keine verspätete Entsperrung liefern.
+- Geprüft: macOS-Entwicklungsbuild mit vorhandener Apple-Development-Identität signiert; `codesign --verify --deep --strict` erfolgreich, Team `S7FTFS4QRH`.
+- Blocker: iOS-Gerätearchiv scheitert an abgelehnter Xcode-Anmeldung und fehlendem App-Group-Entitlement im bestehenden Provisioning-Profil. Kein Gerät wurde verändert.

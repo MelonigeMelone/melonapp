@@ -4,16 +4,20 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
 #[tauri::command]
-fn crypto_call(
+async fn crypto_call(
     method: String,
     args: serde_json::Value,
-    state: tauri::State<'_, Mutex<Session>>,
+    app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
-    state
-        .lock()
-        .map_err(|_| "session_unavailable".to_owned())?
-        .call(&method, args)
-        .map_err(str::to_owned)
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<Mutex<Session>>()
+            .lock()
+            .map_err(|_| "session_unavailable".to_owned())?
+            .call(&method, args)
+            .map_err(str::to_owned)
+    })
+    .await
+    .map_err(|_| "session_unavailable".to_owned())?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -49,17 +53,22 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            let should_lock = matches!(
-                event,
-                tauri::WindowEvent::Focused(false) | tauri::WindowEvent::Destroyed
-            );
-            #[cfg(mobile)]
-            let should_lock = should_lock || matches!(event, tauri::WindowEvent::Suspended);
-            if should_lock {
+            let active = match event {
+                tauri::WindowEvent::Focused(active) => Some(*active),
+                tauri::WindowEvent::Destroyed => Some(false),
+                #[cfg(mobile)]
+                tauri::WindowEvent::Suspended => Some(false),
+                #[cfg(mobile)]
+                tauri::WindowEvent::Resumed => Some(true),
+                _ => None,
+            };
+            if let Some(active) = active {
                 if let Ok(mut session) = window.state::<Mutex<Session>>().lock() {
-                    session.lock();
+                    session.set_active(active);
                 }
-                let _ = window.emit("melon-locked", ());
+                if !active {
+                    let _ = window.emit("melon-locked", ());
+                }
             }
         });
     #[cfg(target_os = "macos")]

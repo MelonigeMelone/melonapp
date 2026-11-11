@@ -1,0 +1,53 @@
+name: Apple apps
+
+on:
+  push:
+    branches: [main, feat/apple-apps]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apple:
+    name: macOS desktop and iOS simulator
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+          components: rustfmt, clippy
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            apps/desktop/src-tauri -> target
+      - run: brew install xcodegen
+      - run: npm ci
+      - run: cargo install cargo-deny --locked
+      - run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml --target aarch64-apple-darwin check
+      - run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml --target aarch64-apple-ios-sim check
+      - run: cargo test --locked -p melon-crypto -p melon-native -p melon-ffi
+      - run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
+      - run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --lib
+      - run: bash scripts/test-apple-swift.sh
+      - run: npm run tauri -w desktop -- build
+      - run: bash scripts/build-apple-ffi.sh iphonesimulator
+      - run: xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
+      - run: npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apple-apps-unsigned
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/macos/*.app
+            apps/desktop/src-tauri/gen/apple/build/arm64-sim/*.app

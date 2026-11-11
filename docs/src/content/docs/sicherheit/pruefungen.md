@@ -97,3 +97,11 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 |---|---|
 | React erhält nur zufällige Auth-Handles; fremde und gesperrte Handles werden verworfen | `auth_proofs_stay_native_and_handles_expire_on_lock` |
 | Nativer Client registriert und entsperrt gegen den echten Server mit PostgreSQL, liest verschlüsselte Items und richtet Recovery ein | `api::native_client_registers_unlocks_and_roundtrips_items` |
+
+
+| Zusätzliche Lebenszyklus- und Speichertests | Test |
+|---|---|
+| Hintergrund verwirft Schlüssel und verhindert verspätetes biometrisches Entsperren | `background_rejects_pending_biometric_restore_and_new_derivation` |
+| Teilen/Rotation binden Empfänger und Version; alter Schlüssel liest neue Version nicht | `sharing_and_rotation_preserve_context_and_versions` |
+| Passwortwechsel und Recovery behalten Kontoidentität, falsches Passwort wird abgelehnt | `password_change_and_recovery_preserve_account_and_reject_wrong_password` |
+| Cache-Dateien bleiben privat (0600), atomarer Ersatz hinterlässt keine temporäre Datei | `platform::tests::cache_files_are_private_and_atomically_replaced` |

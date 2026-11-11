@@ -21,22 +21,21 @@ fn location(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
     Ok(dir.join(name))
 }
 
-fn write(app: &tauri::AppHandle, name: &str, data: &[u8]) -> Result<(), String> {
+fn atomic_write(path: &std::path::Path, data: &[u8]) -> Result<(), String> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-    let path = location(app, name)?;
-    let temp = path.with_extension("pending");
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .mode(0o600)
-        .open(&temp)
+    let parent = path.parent().ok_or("storage_unavailable")?;
+    let mut temporary =
+        tempfile::NamedTempFile::new_in(parent).map_err(|_| "storage_unavailable")?;
+    temporary
+        .write_all(data)
+        .and_then(|()| temporary.as_file().sync_all())
         .map_err(|_| "storage_unavailable")?;
-    file.write_all(data)
-        .and_then(|()| file.sync_all())
-        .map_err(|_| "storage_unavailable")?;
-    fs::rename(temp, path).map_err(|_| "storage_unavailable".into())
+    temporary.persist(path).map_err(|_| "storage_unavailable")?;
+    Ok(())
+}
+
+fn write(app: &tauri::AppHandle, name: &str, data: &[u8]) -> Result<(), String> {
+    atomic_write(&location(app, name)?, data)
 }
 
 fn read(app: &tauri::AppHandle, name: &str) -> Result<String, String> {
@@ -74,11 +73,12 @@ pub fn get_server(app: tauri::AppHandle) -> Result<String, String> {
 #[tauri::command]
 pub fn set_server(app: tauri::AppHandle, value: String) -> Result<(), String> {
     let value = validated_server(&value)?;
+    let state = app.state::<Mutex<Session>>();
+    let session = state.lock().map_err(|_| "session_unavailable")?;
     if server(&app).ok().as_ref() != Some(&value) {
-        app.state::<Mutex<Session>>()
-            .lock()
-            .map_err(|_| "session_unavailable")?
-            .lock();
+        if !session.is_locked() {
+            return Err("lock_before_changing_server".into());
+        }
     }
     write(&app, "server.txt", value.as_bytes())
 }
@@ -207,6 +207,9 @@ pub async fn biometric_unlock(app: tauri::AppHandle) -> Result<Value, String> {
         );
         let state = app.state::<Mutex<Session>>();
         let mut session = state.lock().map_err(|_| "session_unavailable")?;
+        if format!("{}/biometric", server(&app)?) != scope {
+            return Err("server_changed".into());
+        }
         session
             .biometric_restore(&key, &scope, &snapshot)
             .map_err(str::to_owned)
@@ -233,6 +236,21 @@ pub fn biometric_disable(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cache_files_are_private_and_atomically_replaced() {
+        use std::os::unix::fs::PermissionsExt;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cache.enc");
+        atomic_write(&path, b"first ciphertext").unwrap();
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        atomic_write(&path, b"replacement ciphertext").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"replacement ciphertext");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
 
     #[test]
     fn server_requires_tls_except_loopback_and_rejects_credentials() {
@@ -315,17 +333,11 @@ pub async fn autofill_publish(
             config.set_access_control(access);
             passwords::set_generic_password_options(&key, config)
                 .map_err(|_| "biometric_unavailable")?;
-            fs::write(
-                directory.join(format!("{scope}.passwords.pending")),
-                ciphertext,
-            )
-            .map_err(|_| "storage_unavailable")?;
-            fs::rename(
-                directory.join(format!("{scope}.passwords.pending")),
-                directory.join(format!("{scope}.passwords.enc")),
-            )
-            .map_err(|_| "storage_unavailable")?;
-            fs::write(directory.join("active.txt"), scope).map_err(|_| "storage_unavailable")?;
+            atomic_write(
+                &directory.join(format!("{scope}.passwords.enc")),
+                ciphertext.as_bytes(),
+            )?;
+            atomic_write(&directory.join("active.txt"), scope.as_bytes())?;
             Ok(())
         })
         .await

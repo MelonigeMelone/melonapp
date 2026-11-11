@@ -1,6 +1,7 @@
 use crate::{CryptoError, EncString, SymmetricKey};
 use ciborium::value::Value;
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
+use p256::elliptic_curve::Generate;
 use rand::{RngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
@@ -58,11 +59,11 @@ pub fn create_passkey(
     if !valid_rp(rp) {
         return Err(CryptoError::Malformed);
     }
-    let signing = SigningKey::random(&mut OsRng);
+    let signing = SigningKey::try_generate().map_err(|_| CryptoError::Malformed)?;
     let private = Zeroizing::new(signing.to_bytes());
     let mut id = vec![0; 32];
     OsRng.fill_bytes(&mut id);
-    let public = signing.verifying_key().to_encoded_point(false);
+    let public = signing.verifying_key().to_sec1_point(false);
     let cose = Value::Map(vec![
         (Value::Integer(1.into()), Value::Integer(2.into())),
         (Value::Integer(3.into()), Value::Integer((-7).into())),
