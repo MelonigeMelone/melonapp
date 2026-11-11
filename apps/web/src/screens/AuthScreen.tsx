@@ -10,9 +10,11 @@ import Typography from '@mui/material/Typography';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { MelonMark } from '../components/Brand';
-import { describeError, login, register, type Session } from '../session';
+import { monoFont } from '../theme';
+import { describeError, login, recoverAccount, register, type Session } from '../session';
+import { ApiError } from '../api';
 
-type Mode = 'login' | 'register';
+type Mode = 'login' | 'register' | 'recover';
 const MIN_LENGTH = 12;
 
 export function AuthScreen({
@@ -32,6 +34,7 @@ export function AuthScreen({
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +58,7 @@ export function AuthScreen({
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (mode === 'register') {
+    if (mode !== 'login') {
       if (password.length < MIN_LENGTH) {
         setError(`Das Master-Passwort braucht mindestens ${MIN_LENGTH} Zeichen.`);
         return;
@@ -70,12 +73,19 @@ export function AuthScreen({
       const session =
         mode === 'login'
           ? await login(email.trim(), password)
-          : await register(email.trim(), password, inviter ? inviteToken : null);
+          : mode === 'recover'
+            ? await recoverAccount(email.trim(), recoveryKey, password)
+            : await register(email.trim(), password, inviter ? inviteToken : null);
+      setRecoveryKey('');
       setPassword('');
       setConfirm('');
       onSession(session);
     } catch (err) {
-      setError(describeError(err));
+      setError(
+        mode === 'recover' && err instanceof ApiError && err.status === 401
+          ? 'E-Mail oder Recovery-Key stimmt nicht.'
+          : describeError(err),
+      );
     } finally {
       setBusy(false);
     }
@@ -109,6 +119,16 @@ export function AuthScreen({
 
       <Paper variant="outlined" sx={{ p: { xs: 2.5, sm: 3.5 }, borderRadius: '18px' }}>
         <Stack component="form" spacing={2.5} onSubmit={submit} noValidate>
+          {mode === 'recover' ? (
+            <Stack spacing={1}>
+              <Typography variant="h3" component="h2" sx={{ fontSize: '1.375rem' }}>
+                Master-Passwort vergessen
+              </Typography>
+              <Typography color="text.secondary" variant="body2">
+                Mit dem Recovery-Key aus deinem Notfall-Kit setzt du ein neues Master-Passwort. Deine Tresore bleiben erhalten.
+              </Typography>
+            </Stack>
+          ) : (
           <Tabs
             value={mode}
             onChange={(_, m: Mode) => switchMode(m)}
@@ -118,6 +138,7 @@ export function AuthScreen({
             <Tab value="login" label="Anmelden" />
             <Tab value="register" label="Konto erstellen" />
           </Tabs>
+          )}
 
           {notice && mode === 'login' && <Alert severity="info">{notice}</Alert>}
           {inviter && mode === 'register' && (
@@ -138,8 +159,21 @@ export function AuthScreen({
             slotProps={{ htmlInput: { readOnly: !!inviter && mode === 'register' } }}
             fullWidth
           />
+          {mode === 'recover' && (
+            <TextField
+              label="Recovery-Key"
+              value={recoveryKey}
+              onChange={(e) => setRecoveryKey(e.target.value)}
+              placeholder="ABCD-EFGH-…"
+              autoComplete="off"
+              multiline
+              minRows={2}
+              slotProps={{ htmlInput: { spellCheck: false, style: { fontFamily: monoFont, letterSpacing: '0.04em' } } }}
+              fullWidth
+            />
+          )}
           <TextField
-            label="Master-Passwort"
+            label={mode === 'recover' ? 'Neues Master-Passwort' : 'Master-Passwort'}
             type="password"
             autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
             autoFocus={!!initialEmail}
@@ -147,14 +181,18 @@ export function AuthScreen({
             onChange={(e) => setPassword(e.target.value)}
             fullWidth
           />
-          {mode === 'register' && (
+          {mode !== 'login' && (
             <TextField
-              label="Master-Passwort wiederholen"
+              label={mode === 'recover' ? 'Neues Master-Passwort wiederholen' : 'Master-Passwort wiederholen'}
               type="password"
               autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
-              helperText={`Mindestens ${MIN_LENGTH} Zeichen. Am sichersten sind vier bis sechs zufällige Wörter. Ohne Master-Passwort kommt niemand an deine Daten, auch du nicht.`}
+              helperText={
+                mode === 'recover'
+                  ? `Mindestens ${MIN_LENGTH} Zeichen. Danach sind alle deine Geräte abgemeldet.`
+                  : `Mindestens ${MIN_LENGTH} Zeichen. Am sichersten sind vier bis sechs zufällige Wörter. Ohne Master-Passwort kommt niemand an deine Daten, auch du nicht.`
+              }
               fullWidth
             />
           )}
@@ -166,8 +204,18 @@ export function AuthScreen({
           )}
 
           <Button type="submit" variant="contained" size="large" loading={busy} fullWidth>
-            {mode === 'login' ? 'Tresor öffnen' : 'Konto erstellen'}
+            {mode === 'login' ? 'Tresor öffnen' : mode === 'recover' ? 'Neues Master-Passwort setzen' : 'Konto erstellen'}
           </Button>
+          {mode === 'login' && (
+            <Button onClick={() => switchMode('recover')} sx={{ alignSelf: 'center', color: 'text.secondary' }}>
+              Master-Passwort vergessen?
+            </Button>
+          )}
+          {mode === 'recover' && (
+            <Button onClick={() => switchMode('login')} sx={{ alignSelf: 'center', color: 'text.secondary' }}>
+              Zurück zur Anmeldung
+            </Button>
+          )}
         </Stack>
       </Paper>
     </Box>

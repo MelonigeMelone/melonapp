@@ -53,6 +53,29 @@ herausfinden, welche Konten existieren. Ein zufälliges Salt würde sich bei jed
   10 000 Einträge, alte werden aufgeräumt). Nach erfolgreichem Login wird der Zähler gelöscht.
 - Argon2 läuft in `spawn_blocking`, damit es den Async-Server nicht blockiert.
 
+## Master-Passwort ändern
+
+Die App leitet aus dem aktuellen Passwort den Auth-Key ab (Bestätigung) und aus dem neuen
+Passwort mit neuem Salt den neuen Auth- und Wrap-Key. Nur der Konto-Schlüssel wird neu
+verschlüsselt. Alles darunter (privater Schlüssel, Tresor-Schlüssel, Recovery-Kopie) bleibt.
+Andere Geräte werden abgemeldet.
+
+## Wiederherstellen mit dem Recovery-Key
+
+```text
+Client                                         Server
+  │ Recovery-Key → Recovery-Auth-Key, -Wrap-Key  │
+  │ recover/start(email, recovery_auth_key) ───► │ Argon2id-Verify, Sperre bei Fehlversuchen
+  │ ◄──── Recovery-Token (15 min), recovery_wrapped_account_key
+  │ Konto-Schlüssel entschlüsseln, neues Passwort ableiten
+  │ recover/complete(neue Zugangsdaten) ──────►  │ speichern, alle Sitzungen beenden
+  │ normaler Login mit neuem Passwort            │
+```
+
+Die Recovery-Sitzung kann nichts lesen (Geltungsbereich `recovery`). Wer nur den Token abfängt,
+kommt also nicht an Daten. Er könnte höchstens ein neues Passwort setzen, für das er den
+Konto-Schlüssel nicht hat.
+
 ## Sitzungen
 
 - Token: 32 Byte aus `OsRng`, base64url-kodiert.

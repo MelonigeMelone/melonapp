@@ -15,7 +15,7 @@ Chiffretext, Hashes und öffentliche Schlüssel.
 Master-Passwort ─Argon2id(salt)─► Master-Key (nie gespeichert, nie gesendet)
    ├─HKDF "melon/v1/auth"─► Auth-Key ─► Server speichert nur Argon2id(Auth-Key)
    └─HKDF "melon/v1/wrap"─► Wrap-Key
-                              └─► Konto-Schlüssel (zufällig)
+                              └─► Konto-Schlüssel (zufällig) ◄─ Recovery-Key (zweite Kopie)
                                      └─► privater X25519-Schlüssel
                                             └─HPKE─► Tresor-Schlüssel (je Tresor, zufällig)
                                                         └─► Einträge und Tresor-Name
@@ -23,7 +23,7 @@ Master-Passwort ─Argon2id(salt)─► Master-Key (nie gespeichert, nie gesende
 
 - Der **Auth-Key** beweist dem Server, dass man das Passwort kennt. Entschlüsseln kann man damit nichts.
 - Der **Konto-Schlüssel** schützt nur den privaten Schlüssel. Passwortwechsel und Recovery-Key
-  (M4) verschlüsseln nur ihn neu.
+  verschlüsseln nur ihn neu.
 - Jeder **Tresor** hat einen eigenen Schlüssel. Jedes Mitglied bekommt eine eigene, per HPKE
   für seinen öffentlichen Schlüssel verschlüsselte Kopie. Teilen gibt also nur genau diesen
   Tresor preis.
@@ -59,14 +59,26 @@ Er muss ein Master-Passwort offline erraten. Jeder Versuch kostet eine volle
 Argon2id-Ableitung mit 64 MiB. Ein starkes Master-Passwort (5–6 zufällige Wörter) ist damit
 praktisch nicht zu knacken.
 
-## Bekannte Grenze: öffentliche Schlüssel
+## Öffentliche Schlüssel prüfen: Sicherheitscode
 
-Beim Hinzufügen holt die App den öffentlichen Schlüssel vom Server. Ein kompromittierter
-Server könnte einen eigenen unterschieben und so den Tresor-Schlüssel abfangen. Gegenmittel ist
-ein Fingerabdruck-Vergleich zwischen den beiden Personen (M4, siehe
-[Offene Punkte](/melonapp/sicherheit/offene-punkte/)).
+Beim Hinzufügen holt die App den öffentlichen Schlüssel vom Server. Ein kompromittierter Server
+könnte einen eigenen unterschieben und so den Tresor-Schlüssel abfangen. Dagegen hilft der
+**Sicherheitscode**: Die App zeigt ihn vor dem Hinzufügen an, und die andere Person sieht ihren
+eigenen unter „Konto“. Stimmen beide überein, ist es der richtige Schlüssel
+([ADR 0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/)).
 
-## Wiederherstellung (M4)
+Eingeladene Personen werden automatisch freigeschaltet. Ihren Code prüft man danach im Tresor-Dialog.
 
-Recovery-Key als „Notfall-Kit“: verschlüsselt den Konto-Schlüssel ein zweites Mal. Ohne
+## Wiederherstellung
+
+Der **Recovery-Key** aus dem Notfall-Kit verschlüsselt den Konto-Schlüssel ein zweites Mal. Damit
+setzt man ein neues Master-Passwort, ohne dass der Server je einen Schlüssel sieht. Ohne
 Master-Passwort und ohne Recovery-Key kommt niemand an die Daten, auch der Betreiber nicht.
+
+```text
+Recovery-Key ─HKDF─┬─► Recovery-Auth-Key ─► Server (Argon2id-Hash)
+                   └─► Recovery-Wrap-Key ─► Konto-Schlüssel (zweite Kopie)
+```
+
+Wer Recovery-Key **und** E-Mail kennt, kann das Konto übernehmen. Das Kit gehört deshalb offline
+aufbewahrt, ausgedruckt oder abgeschrieben.

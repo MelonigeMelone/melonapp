@@ -117,6 +117,20 @@ HPKE braucht `rand_core` 0.9, der Rest der Crate nutzt 0.6. Beide holen ihren Zu
 Betriebssystem. In WASM liefert ihn `getrandom` 0.3 über `crypto.getRandomValues`, eingestellt
 per `getrandom_backend="wasm_js"` in `.cargo/config.toml`.
 
+## Recovery-Key und Sicherheitscode (`recovery.rs`)
+
+| | Aufbau |
+|---|---|
+| Recovery-Key | 30 Byte Zufall + 2 Byte SHA-256-Prüfsumme, Base32 ohne Padding, 13 Vierergruppen |
+| Recovery-Auth-Key | HKDF-SHA256(Salt `melon/v2/recovery`, Info `melon/v2/recovery-auth`) |
+| Recovery-Wrap-Key | HKDF-SHA256(Salt `melon/v2/recovery`, Info `melon/v2/recovery-wrap`) |
+| Konto-Schlüssel per Recovery | XChaCha20-Poly1305, AAD `melon/v2/account-key-recovery` |
+| Sicherheitscode | SHA-256(`melon/v2/fingerprint\0` ‖ öffentlicher Schlüssel), Byte 0–29 als 6 × 5 Ziffern |
+
+Die eigene AAD verhindert, dass die Recovery-Kopie des Konto-Schlüssels mit der
+Passwort-Kopie verwechselt oder vertauscht wird. Begründung:
+[ADR 0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/).
+
 ## Speicherhygiene
 
 `MasterKey`, `AuthKey`, `SymmetricKey` und der private Schlüssel werden beim Verlassen des Gültigkeitsbereichs

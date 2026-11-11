@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { AuthScreen } from './screens/AuthScreen';
-import { lock, type Session } from './session';
+import { lock, type Account, type Session } from './session';
 import { useIdle } from './useIdle';
 
 const loadVault = () => import('./screens/VaultScreen');
@@ -55,6 +55,10 @@ export function App() {
     [session],
   );
 
+  const onUpdate = useCallback((update: Partial<Account>) => {
+    setSession((s) => (s ? { ...s, ...update } : s));
+  }, []);
+
   useEffect(() => {
     void loadVault();
   }, []);
@@ -65,7 +69,7 @@ export function App() {
 
   return session ? (
     <Suspense fallback={null}>
-      <VaultScreen session={session} onLock={onLock} />
+      <VaultScreen session={session} onLock={onLock} onUpdate={onUpdate} />
     </Suspense>
   ) : (
     <AuthScreen initialEmail={email} notice={notice} inviteToken={inviteToken} onSession={onSession} />

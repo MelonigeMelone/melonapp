@@ -33,6 +33,10 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Entfernen erzwingt Schlüsselwechsel über alle Einträge und Mitglieder | `api::removing_a_member_rotates_the_key` |
 | Schreiben mit altem Schlüssel wird abgelehnt | `api::removing_a_member_rotates_the_key`, `store.test.ts` |
 | Letzter Besitzer kann nicht gehen | `api::leaving_flags_rotation_and_last_owner_stays` |
+| Passwortwechsel nur mit altem Passwort, andere Geräte abgemeldet, Tresore bleiben lesbar | `api::changing_the_master_password` |
+| Recovery: falscher Key und unbekannte E-Mail sehen gleich aus, Recovery-Sitzung liest nichts, ist einmalig, danach alle Sitzungen weg | `api::recovering_with_the_recovery_key` |
+| Recovery-Key: Tippfehler werden erkannt, Groß-/Kleinschreibung und Trennzeichen egal | `recovery::tests` |
+| Sicherheitscode beider Seiten stimmt überein | CI-Job `e2e`, Schritt „security code“ |
 | Server speichert keinen Klartext | `api::personal_vault_flow` |
 | Login-Sperre nach Fehlversuchen | `api::wrong_password_and_lockout` |
 | `prelogin` verrät keine Konten | `api::prelogin_does_not_reveal_accounts` |

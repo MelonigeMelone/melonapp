@@ -70,6 +70,14 @@ export interface LoginResult {
   wrapped_account_key: string;
   public_key: string;
   encrypted_private_key: string;
+  has_recovery: boolean;
+}
+
+export interface NewCredentials {
+  kdf: Kdf;
+  salt: string;
+  auth_key: string;
+  wrapped_account_key: string;
 }
 
 export interface RotateBody {
@@ -137,6 +145,12 @@ export const api = {
   register: (body: RegisterBody) => request<{ user_id: string }>('POST', '/auth/register', { body }),
   login: (body: { email: string; auth_key: string }) => request<LoginResult>('POST', '/auth/login', { body }),
   logout: (token: string) => request<void>('POST', '/auth/logout', { token }),
+  recoverStart: (email: string, recovery_auth_key: string) =>
+    request<{ token: string; expires_in_seconds: number; recovery_wrapped_account_key: string }>('POST', '/auth/recover/start', {
+      body: { email, recovery_auth_key },
+    }),
+  recoverComplete: (token: string, body: NewCredentials) =>
+    request<void>('POST', '/auth/recover/complete', { token, body }),
   invitePreview: (token: string) =>
     request<{ email: string; invited_by: string }>('POST', '/auth/invites/preview', { body: { token } }),
 };
@@ -152,6 +166,10 @@ export function authed(token: string) {
         `/users/lookup?email=${encodeURIComponent(email)}`,
         o,
       ),
+    changePassword: (body: NewCredentials & { current_auth_key: string }) =>
+      request<void>('PUT', '/account/password', { ...o, body }),
+    setRecovery: (body: { current_auth_key: string; recovery_auth_key: string; recovery_wrapped_account_key: string }) =>
+      request<void>('PUT', '/account/recovery', { ...o, body }),
     listVaults: () => request<{ vaults: RemoteVault[] }>('GET', '/vaults', o),
     createVault: (body: { id: string; encrypted_meta: string; encrypted_vault_key: string }) =>
       request<{ revision: number }>('POST', '/vaults', { ...o, body }),

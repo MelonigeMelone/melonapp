@@ -26,7 +26,12 @@ export interface Snapshot {
   items: VaultItem[];
 }
 
-export type AddResult = { kind: 'added' } | { kind: 'invited'; token: string; expiresInDays: number };
+export interface FoundUser {
+  user_id: string;
+  email: string;
+  public_key: string;
+  fingerprint: string;
+}
 
 interface Entry {
   remote: RemoteVault;
@@ -253,18 +258,22 @@ export class VaultsManager {
     await this.sync();
   }
 
-  async addMember(vaultId: string, email: string, role: Role): Promise<AddResult> {
-    const entry = this.requireEntry(vaultId);
-    let user: { user_id: string; public_key: string } | null = null;
+  fingerprint(publicKey: string): Promise<string> {
+    return this.crypto('fingerprint', { publicKey });
+  }
+
+  async findUser(email: string): Promise<FoundUser | null> {
     try {
-      user = await this.api.lookupUser(email);
+      const user = await this.api.lookupUser(email);
+      return { ...user, fingerprint: await this.fingerprint(user.public_key) };
     } catch (e) {
-      if (!(e instanceof ApiError && e.status === 404)) throw e;
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
     }
-    if (!user) {
-      const invite = await this.api.createInvite(vaultId, email, role);
-      return { kind: 'invited', token: invite.token, expiresInDays: invite.expires_in_days };
-    }
+  }
+
+  async addKnownMember(vaultId: string, user: FoundUser, role: Role) {
+    const entry = this.requireEntry(vaultId);
     const sealed = await this.crypto('sealFor', { vaultId, publicKey: user.public_key, userId: user.user_id });
     await this.api.addMember(vaultId, {
       user_id: user.user_id,
@@ -273,7 +282,11 @@ export class VaultsManager {
       key_version: entry.remote.key_version,
     });
     await this.sync();
-    return { kind: 'added' };
+  }
+
+  async invite(vaultId: string, email: string, role: Role): Promise<{ token: string; expiresInDays: number }> {
+    const invite = await this.api.createInvite(vaultId, email, role);
+    return { token: invite.token, expiresInDays: invite.expires_in_days };
   }
 
   async changeRole(vaultId: string, userId: string, role: Role) {

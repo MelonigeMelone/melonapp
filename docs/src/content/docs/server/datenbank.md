@@ -29,10 +29,13 @@ Alle Revisionen (Tresore und Einträge) kommen aus derselben Sequenz `revision_s
 | `wrapped_account_key` | Konto-Schlüssel, mit dem Wrap-Key verschlüsselt |
 | `public_key` | X25519, Klartext (öffentlich) |
 | `encrypted_private_key` | privater Schlüssel, mit dem Konto-Schlüssel verschlüsselt |
+| `recovery_auth_hash` | Argon2id-Hash des Recovery-Auth-Keys, `NULL` ohne Notfall-Kit (Migration 0002) |
+| `recovery_wrapped_account_key` | Konto-Schlüssel, mit dem Recovery-Wrap-Key verschlüsselt (Migration 0002) |
 
 ## `sessions`
 
-`token_hash` (SHA-256 des Tokens), `user_id`, `expires_at`.
+`token_hash` (SHA-256 des Tokens), `user_id`, `expires_at` und `scope` (Migration 0002):
+`full` für normale Sitzungen, `recovery` für die 15-Minuten-Sitzung beim Wiederherstellen.
 
 ## `vaults`
 

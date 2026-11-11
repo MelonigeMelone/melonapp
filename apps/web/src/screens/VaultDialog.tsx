@@ -18,13 +18,27 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { InviteInfo, Role } from '../api';
 import { describeError } from '../session';
-import type { VaultsManager, VaultView } from '../vault/manager';
+import type { FoundUser, VaultsManager, VaultView } from '../vault/manager';
+import { monoFont } from '../theme';
 
 export const ROLE_LABELS: Record<Role, string> = { owner: 'Besitzer', editor: 'Bearbeiter', viewer: 'Betrachter' };
 const ROLES: Role[] = ['viewer', 'editor', 'owner'];
+
+export function SecurityCode({ code }: { code: string }) {
+  return (
+    <Typography
+      component="p"
+      className="security-code"
+      sx={{ fontFamily: monoFont, fontSize: '1.5rem', letterSpacing: '0.08em', wordSpacing: '0.4em', my: 1 }}
+    >
+      {code}
+    </Typography>
+  );
+}
 
 export function inviteLink(token: string): string {
   return `${window.location.origin}/#/invite/${token}`;
@@ -101,6 +115,8 @@ export function VaultDialog({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmUser, setConfirmUser] = useState<FoundUser | null>(null);
+  const [codeFor, setCodeFor] = useState<{ email: string; code: string } | null>(null);
   const [confirm, setConfirm] = useState<{ kind: 'remove'; userId: string; email: string } | { kind: 'leave' } | { kind: 'delete' } | null>(null);
 
   const loadInvites = useCallback(async () => {
@@ -132,15 +148,17 @@ export function VaultDialog({
     e.preventDefault();
     if (!email.trim()) return;
     void run('add', async () => {
-      const result = await manager.addMember(vault.id, email.trim(), role);
-      if (result.kind === 'added') {
-        setNotice(`${email.trim()} hat jetzt Zugriff.`);
-        setLink(null);
-      } else {
-        setLink(inviteLink(result.token));
-        setNotice(`${email.trim()} hat noch kein Konto. Schick diesen Link, er gilt ${result.expiresInDays} Tage und nur für diese E-Mail:`);
-        await loadInvites();
+      setNotice(null);
+      setLink(null);
+      const found = await manager.findUser(email.trim());
+      if (found) {
+        setConfirmUser(found);
+        return;
       }
+      const result = await manager.invite(vault.id, email.trim(), role);
+      setLink(inviteLink(result.token));
+      setNotice(`${email.trim()} hat noch kein Konto. Schick diesen Link, er gilt ${result.expiresInDays} Tage und nur für diese E-Mail:`);
+      await loadInvites();
       setEmail('');
     });
   };
@@ -183,15 +201,25 @@ export function VaultDialog({
                   key={m.user_id}
                   disableGutters
                   secondaryAction={
-                    vault.isOwner && m.user_id !== me ? (
-                      <Tooltip title="Entfernen">
-                        <IconButton aria-label={`${m.email} entfernen`} onClick={() => setConfirm({ kind: 'remove', userId: m.user_id, email: m.email })}>
-                          <CloseIcon />
+                    <Stack direction="row">
+                      <Tooltip title="Sicherheitscode">
+                        <IconButton
+                          aria-label={`Sicherheitscode von ${m.email}`}
+                          onClick={() => void manager.fingerprint(m.public_key).then((code) => setCodeFor({ email: m.email, code }))}
+                        >
+                          <FingerprintIcon />
                         </IconButton>
                       </Tooltip>
-                    ) : undefined
+                      {vault.isOwner && m.user_id !== me && (
+                        <Tooltip title="Entfernen">
+                          <IconButton aria-label={`${m.email} entfernen`} onClick={() => setConfirm({ kind: 'remove', userId: m.user_id, email: m.email })}>
+                            <CloseIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
                   }
-                  sx={{ pr: vault.isOwner ? 6 : 0, gap: 1, flexWrap: 'wrap' }}
+                  sx={{ pr: vault.isOwner ? 12 : 6, gap: 1, flexWrap: 'wrap' }}
                 >
                   <ListItemText
                     primary={m.user_id === me ? `${m.email} (du)` : m.email}
@@ -300,6 +328,51 @@ export function VaultDialog({
           </Stack>
         </Stack>
       </DialogContent>
+
+      <Dialog open={confirmUser !== null} onClose={() => setConfirmUser(null)} maxWidth="xs" aria-labelledby="confirm-user-title">
+        <DialogTitle id="confirm-user-title">Sicherheitscode vergleichen</DialogTitle>
+        <DialogContent>
+          <Typography>
+            So lautet der Sicherheitscode von {confirmUser?.email}. Bitte die Person, in MelonApp unter „Konto“ nachzusehen,
+            ob ihr Code genauso aussieht, am besten am Telefon oder persönlich.
+          </Typography>
+          {confirmUser && <SecurityCode code={confirmUser.fingerprint} />}
+          <Typography color="text.secondary" variant="body2">
+            Stimmt er nicht, könnte jemand den Schlüssel auf dem Server ausgetauscht haben. Dann nicht hinzufügen.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setConfirmUser(null)}>Abbrechen</Button>
+          <Button
+            variant="contained"
+            loading={busy === 'confirm-add'}
+            onClick={() =>
+              void run('confirm-add', async () => {
+                if (!confirmUser) return;
+                await manager.addKnownMember(vault.id, confirmUser, role);
+                setNotice(`${confirmUser.email} hat jetzt Zugriff.`);
+                setConfirmUser(null);
+                setEmail('');
+              })
+            }
+          >
+            Code stimmt, hinzufügen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={codeFor !== null} onClose={() => setCodeFor(null)} maxWidth="xs" aria-labelledby="code-title">
+        <DialogTitle id="code-title">Sicherheitscode von {codeFor?.email}</DialogTitle>
+        <DialogContent>
+          {codeFor && <SecurityCode code={codeFor.code} />}
+          <Typography color="text.secondary" variant="body2">
+            Vergleiche ihn mit dem Code, den diese Person unter „Konto“ sieht. Weicht er ab, entferne sie aus dem Tresor.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setCodeFor(null)}>Schließen</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={confirm !== null} onClose={() => setConfirm(null)} maxWidth="xs">
         {confirm?.kind === 'remove' && (

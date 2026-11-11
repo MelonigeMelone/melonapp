@@ -42,9 +42,11 @@ Das gilt für jeden Passwortmanager.
 
 ## Jemanden hinzufügen
 
-**Hat die Person schon ein Konto** auf deinem Server, gibst du ihre E-Mail ein. Die App holt
-ihren öffentlichen Schlüssel, verschlüsselt den Tresor-Schlüssel dafür, und sie sieht den
-Tresor sofort.
+**Hat die Person schon ein Konto** auf deinem Server, gibst du ihre E-Mail ein. Die App zeigt
+ihren **Sicherheitscode** (sechs fünfstellige Zahlen). Sie sieht ihren eigenen unter „Konto“.
+Stimmen beide überein, fügst du sie hinzu: Die App verschlüsselt den Tresor-Schlüssel für sie, und
+sie sieht den Tresor sofort. Der Vergleich stellt sicher, dass niemand auf dem Server einen
+falschen Schlüssel untergeschoben hat.
 
 **Hat sie noch kein Konto**, erzeugt die App einen **Einladungslink** (7 Tage gültig, nur
 einmal nutzbar, an die E-Mail gebunden). Den schickst du ihr per Messenger. Der Server

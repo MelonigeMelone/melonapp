@@ -24,6 +24,18 @@ export interface Rotated {
   items: { id: string; data: string }[];
 }
 
+export interface Credentials {
+  authKey: string;
+  wrappedAccountKey: string;
+}
+
+export interface Reauth {
+  password: string;
+  salt: string;
+  kdf: Kdf;
+  wrappedAccountKey: string;
+}
+
 export interface CryptoMethods {
   derive(a: { password: string; salt: string; kdf: Kdf }): string;
   createAccount(a: { userId: string; personalVaultId: string; meta: string }): NewAccount;
@@ -42,6 +54,16 @@ export interface CryptoMethods {
     members: { userId: string; publicKey: string }[];
     items: { id: string; plaintext: string }[];
   }): Rotated;
+  setupRecovery(a: Reauth): {
+    currentAuthKey: string;
+    recoveryKey: string;
+    recoveryAuthKey: string;
+    recoveryWrappedAccountKey: string;
+  };
+  changePassword(a: Reauth & { newPassword: string; newSalt: string; newKdf: Kdf }): Credentials & { currentAuthKey: string };
+  recoveryAuth(a: { recoveryKey: string }): string;
+  recoveryReset(a: { recoveryWrappedAccountKey: string; newPassword: string; newSalt: string; newKdf: Kdf }): Credentials;
+  fingerprint(a: { publicKey: string }): string;
   lock(): void;
   generateSalt(): string;
   generatePassword(a: GeneratorOptions): string;

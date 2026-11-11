@@ -14,6 +14,8 @@ pub enum CryptoError {
     UnsupportedVersion,
     #[error("invalid key length")]
     InvalidKey,
+    #[error("invalid recovery key")]
+    InvalidRecoveryKey,
     #[error("invalid password generator options")]
     InvalidGeneratorOptions,
 }

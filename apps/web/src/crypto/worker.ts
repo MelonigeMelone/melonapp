@@ -1,9 +1,11 @@
 import init, {
   AccountKey,
   deriveKeys,
+  fingerprint,
   generatePassword,
   generateSalt,
   Identity,
+  Recovery,
   sealVaultKey,
   VaultKey,
   type DerivedKeys,
@@ -12,6 +14,7 @@ import type { CryptoMethods, CryptoRequest, CryptoResponse } from './protocol';
 
 let derived: DerivedKeys | null = null;
 let identity: Identity | null = null;
+let pendingRecovery: Recovery | null = null;
 const vaults = new Map<string, { key: VaultKey; version: number }>();
 const ready = init();
 
@@ -39,6 +42,20 @@ function dropDerived() {
 function setVault(vaultId: string, key: VaultKey, version: number) {
   vaults.get(vaultId)?.key.free();
   vaults.set(vaultId, { key, version });
+}
+
+function withAccountKey<T>(r: { password: string; salt: string; kdf: { memory_kib: number; iterations: number; parallelism: number }; wrappedAccountKey: string }, fn: (account: AccountKey, current: DerivedKeys) => T): T {
+  const current = deriveKeys(r.password, r.salt, r.kdf.memory_kib, r.kdf.iterations, r.kdf.parallelism);
+  try {
+    const account = current.unwrapAccountKey(r.wrappedAccountKey);
+    try {
+      return fn(account, current);
+    } finally {
+      account.free();
+    }
+  } finally {
+    current.free();
+  }
 }
 
 const handlers: CryptoMethods = {
@@ -140,7 +157,55 @@ const handlers: CryptoMethods = {
       key.free();
     }
   },
+  setupRecovery(r) {
+    return withAccountKey(r, (account, current) => {
+      const recovery = Recovery.generate();
+      try {
+        return {
+          currentAuthKey: current.authKey,
+          recoveryKey: recovery.display,
+          recoveryAuthKey: recovery.authKey,
+          recoveryWrappedAccountKey: recovery.wrapAccountKey(account),
+        };
+      } finally {
+        recovery.free();
+      }
+    });
+  },
+  changePassword(r) {
+    return withAccountKey(r, (account, current) => {
+      const next = deriveKeys(r.newPassword, r.newSalt, r.newKdf.memory_kib, r.newKdf.iterations, r.newKdf.parallelism);
+      try {
+        return { currentAuthKey: current.authKey, authKey: next.authKey, wrappedAccountKey: next.wrapAccountKey(account) };
+      } finally {
+        next.free();
+      }
+    });
+  },
+  recoveryAuth({ recoveryKey }) {
+    pendingRecovery?.free();
+    pendingRecovery = Recovery.parse(recoveryKey);
+    return pendingRecovery.authKey;
+  },
+  recoveryReset({ recoveryWrappedAccountKey, newPassword, newSalt, newKdf }) {
+    const recovery = pendingRecovery ?? fail('recovery_not_started');
+    const account = recovery.unwrapAccountKey(recoveryWrappedAccountKey);
+    const next = deriveKeys(newPassword, newSalt, newKdf.memory_kib, newKdf.iterations, newKdf.parallelism);
+    try {
+      return { authKey: next.authKey, wrappedAccountKey: next.wrapAccountKey(account) };
+    } finally {
+      next.free();
+      account.free();
+      recovery.free();
+      pendingRecovery = null;
+    }
+  },
+  fingerprint({ publicKey }) {
+    return fingerprint(publicKey);
+  },
   lock() {
+    pendingRecovery?.free();
+    pendingRecovery = null;
     dropDerived();
     identity?.free();
     identity = null;

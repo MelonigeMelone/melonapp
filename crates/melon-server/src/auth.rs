@@ -39,7 +39,7 @@ pub fn hash_auth_key(auth_key: &[u8]) -> anyhow::Result<String> {
         .map_err(|e| anyhow!("hashing failed: {e}"))
 }
 
-fn verify_auth_key(auth_key: &[u8], phc: &str) -> bool {
+pub(crate) fn verify_auth_key(auth_key: &[u8], phc: &str) -> bool {
     PasswordHash::new(phc)
         .map(|h| server_argon().verify_password(auth_key, &h).is_ok())
         .unwrap_or(false)
@@ -62,7 +62,7 @@ pub(crate) fn normalize_email(raw: &str) -> ApiResult<String> {
     }
 }
 
-fn decode_auth_key(b64: &str) -> Option<[u8; 32]> {
+pub(crate) fn decode_auth_key(b64: &str) -> Option<[u8; 32]> {
     STANDARD.decode(b64).ok()?.try_into().ok()
 }
 
@@ -285,9 +285,10 @@ pub struct LoginResponse {
     wrapped_account_key: String,
     public_key: String,
     encrypted_private_key: String,
+    has_recovery: bool,
 }
 
-type UserAuthRow = (Uuid, String, String, String, String);
+type UserAuthRow = (Uuid, String, String, String, String, bool);
 
 pub async fn login(
     State(state): State<AppState>,
@@ -299,7 +300,8 @@ pub async fn login(
     }
 
     let user: Option<UserAuthRow> = sqlx::query_as(
-        "SELECT id, auth_hash, wrapped_account_key, public_key, encrypted_private_key
+        "SELECT id, auth_hash, wrapped_account_key, public_key, encrypted_private_key,
+                recovery_auth_hash IS NOT NULL
          FROM users WHERE email = $1",
     )
     .bind(&email)
@@ -315,7 +317,7 @@ pub async fn login(
         .await
         .map_err(|e| anyhow!(e))?;
 
-    let Some((user_id, _, wrapped_account_key, public_key, encrypted_private_key)) =
+    let Some((user_id, _, wrapped_account_key, public_key, encrypted_private_key, has_recovery)) =
         user.filter(|_| matches && key.is_some())
     else {
         state.limiter.record_failure(&email);
@@ -324,23 +326,8 @@ pub async fn login(
     };
     state.limiter.reset(&email);
 
-    let mut raw = [0u8; 32];
-    OsRng.fill_bytes(&mut raw);
-    let token = URL_SAFE_NO_PAD.encode(raw);
     let ttl_hours = state.config.session_ttl_hours;
-
-    sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND expires_at < now()")
-        .bind(user_id)
-        .execute(&state.db)
-        .await?;
-    sqlx::query(
-        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, now() + make_interval(hours => $3))",
-    )
-    .bind(token_hash(&token))
-    .bind(user_id)
-    .bind(ttl_hours)
-    .execute(&state.db)
-    .await?;
+    let token = create_session(&state, user_id, "full", ttl_hours * 60).await?;
 
     Ok(Json(LoginResponse {
         token,
@@ -349,6 +336,7 @@ pub async fn login(
         wrapped_account_key,
         public_key,
         encrypted_private_key,
+        has_recovery,
     }))
 }
 
@@ -388,33 +376,82 @@ pub async fn logout(State(state): State<AppState>, user: AuthUser) -> ApiResult<
 
 pub struct AuthUser {
     pub user_id: Uuid,
-    token_hash: Vec<u8>,
+    pub(crate) token_hash: Vec<u8>,
+}
+
+pub struct RecoveryUser {
+    pub user_id: Uuid,
+}
+
+async fn session(
+    parts: &Parts,
+    state: &AppState,
+    scope: &str,
+) -> Result<(Uuid, Vec<u8>), ApiError> {
+    let token = parts
+        .headers
+        .get(AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .filter(|t| !t.is_empty() && t.len() <= 128)
+        .ok_or(ApiError::Unauthorized)?;
+    let hash = token_hash(token);
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT user_id FROM sessions WHERE token_hash = $1 AND scope = $2 AND expires_at > now()",
+    )
+    .bind(&hash)
+    .bind(scope)
+    .fetch_optional(&state.db)
+    .await?;
+    let (user_id,) = row.ok_or(ApiError::Unauthorized)?;
+    Ok((user_id, hash))
 }
 
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let token = parts
-            .headers
-            .get(AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|v| v.strip_prefix("Bearer "))
-            .filter(|t| !t.is_empty() && t.len() <= 128)
-            .ok_or(ApiError::Unauthorized)?;
-        let hash = token_hash(token);
-        let row: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at > now()",
-        )
-        .bind(&hash)
-        .fetch_optional(&state.db)
-        .await?;
-        let (user_id,) = row.ok_or(ApiError::Unauthorized)?;
+        let (user_id, token_hash) = session(parts, state, "full").await?;
         Ok(Self {
             user_id,
-            token_hash: hash,
+            token_hash,
         })
     }
+}
+
+impl FromRequestParts<AppState> for RecoveryUser {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
+        let (user_id, _) = session(parts, state, "recovery").await?;
+        Ok(Self { user_id })
+    }
+}
+
+pub(crate) async fn create_session(
+    state: &AppState,
+    user_id: Uuid,
+    scope: &str,
+    minutes: i32,
+) -> ApiResult<String> {
+    let mut raw = [0u8; 32];
+    OsRng.fill_bytes(&mut raw);
+    let token = URL_SAFE_NO_PAD.encode(raw);
+    sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND expires_at < now()")
+        .bind(user_id)
+        .execute(&state.db)
+        .await?;
+    sqlx::query(
+        "INSERT INTO sessions (token_hash, user_id, scope, expires_at)
+         VALUES ($1, $2, $3, now() + make_interval(mins => $4))",
+    )
+    .bind(token_hash(&token))
+    .bind(user_id)
+    .bind(scope)
+    .bind(minutes)
+    .execute(&state.db)
+    .await?;
+    Ok(token)
 }
 
 #[cfg(test)]

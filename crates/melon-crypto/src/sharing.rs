@@ -35,6 +35,10 @@ impl PublicKey {
     pub fn to_base64(&self) -> String {
         STANDARD.encode(self.0.to_bytes())
     }
+
+    pub(crate) fn bytes(&self) -> Vec<u8> {
+        self.0.to_bytes().to_vec()
+    }
 }
 
 impl std::fmt::Debug for PublicKey {

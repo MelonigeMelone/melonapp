@@ -6,9 +6,9 @@ use axum::{
 use base64::{Engine, engine::general_purpose::STANDARD};
 use http_body_util::BodyExt;
 use melon_crypto::{
-    EncString, KdfParams, KeyPair, PublicKey, SealedKey, SymmetricKey, VaultKeyContext,
-    derive_master_key, generate_salt, item_aad, seal_vault_key, unwrap_account_key, vault_meta_aad,
-    wrap_account_key,
+    EncString, KdfParams, KeyPair, PublicKey, RecoveryKey, SealedKey, SymmetricKey,
+    VaultKeyContext, derive_master_key, generate_salt, item_aad, seal_vault_key,
+    unwrap_account_key, vault_meta_aad, wrap_account_key,
 };
 use melon_server::{AppState, Config, MIGRATOR, router};
 use serde_json::{Value, json};
@@ -82,6 +82,7 @@ struct Person {
     email: String,
     password: String,
     keys: KeyPair,
+    account_key: SymmetricKey,
     personal_vault: String,
     token: String,
 }
@@ -93,6 +94,7 @@ impl Person {
             email: format!("{name}-{}@example.com", Uuid::new_v4()),
             password: "korrekt-pferd-batterie-heftklammer".into(),
             keys: KeyPair::generate(),
+            account_key: SymmetricKey::generate(),
             personal_vault: Uuid::new_v4().to_string(),
             token: String::new(),
         }
@@ -102,7 +104,7 @@ impl Person {
         let salt = generate_salt();
         let kdf = KdfParams::minimum();
         let mk = derive_master_key(&self.password, &salt, &kdf).unwrap();
-        let account_key = SymmetricKey::generate();
+        let account_key = &self.account_key;
         let vault_key = SymmetricKey::generate();
         let pv = &self.personal_vault;
         let body = json!({
@@ -111,9 +113,9 @@ impl Person {
             "kdf": kdf,
             "salt": STANDARD.encode(salt),
             "auth_key": mk.auth_key().to_base64(),
-            "wrapped_account_key": wrap_account_key(&mk.wrapping_key(), &account_key),
+            "wrapped_account_key": wrap_account_key(&mk.wrapping_key(), account_key),
             "public_key": self.keys.public_key().to_base64(),
-            "encrypted_private_key": self.keys.seal_with(&account_key),
+            "encrypted_private_key": self.keys.seal_with(account_key),
             "personal_vault": {
                 "id": pv,
                 "encrypted_meta": vault_key.encrypt(br#"{"name":"Privat"}"#, &vault_meta_aad(pv, 1)),
@@ -885,4 +887,243 @@ async fn auth_is_required_and_headers_are_set() {
     assert_eq!(h["cache-control"], "no-store");
     assert_eq!(h["x-content-type-options"], "nosniff");
     assert_eq!(h["x-frame-options"], "DENY");
+}
+
+const WRONG_KEY: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+impl Person {
+    async fn current_auth_key(&self, app: &Router) -> String {
+        let (_, pre) = call(
+            app,
+            "POST",
+            "/api/v1/auth/prelogin",
+            None,
+            Some(json!({ "email": self.email })),
+        )
+        .await;
+        let salt = STANDARD.decode(pre["salt"].as_str().unwrap()).unwrap();
+        derive_master_key(&self.password, &salt, &KdfParams::minimum())
+            .unwrap()
+            .auth_key()
+            .to_base64()
+    }
+
+    fn new_credentials(&self, password: &str) -> Value {
+        let salt = generate_salt();
+        let kdf = KdfParams::minimum();
+        let mk = derive_master_key(password, &salt, &kdf).unwrap();
+        json!({
+            "kdf": kdf,
+            "salt": STANDARD.encode(salt),
+            "auth_key": mk.auth_key().to_base64(),
+            "wrapped_account_key": wrap_account_key(&mk.wrapping_key(), &self.account_key),
+        })
+    }
+}
+
+#[tokio::test]
+async fn changing_the_master_password() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    alice.register(&app, None).await;
+    alice.login(&app).await;
+    let other_device = alice.token.clone();
+    alice.login(&app).await;
+    let vault = alice.personal_vault.clone();
+    let key_before = alice.vault_key(&app, &vault).await;
+
+    let mut body = alice.new_credentials("neues-sehr-langes-passwort");
+    body["current_auth_key"] = json!(WRONG_KEY);
+    let (s, r) = alice
+        .send(&app, "PUT", "/api/v1/account/password", body.clone())
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::FORBIDDEN, Some("wrong_password"))
+    );
+
+    body["current_auth_key"] = json!(alice.current_auth_key(&app).await);
+    let (s, _) = alice
+        .send(&app, "PUT", "/api/v1/account/password", body)
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+
+    let (s, _) = call(&app, "GET", "/api/v1/vaults", Some(&other_device), None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "other devices are signed out");
+    let (s, _) = alice.get(&app, "/api/v1/vaults").await;
+    assert_eq!(s, StatusCode::OK, "the current session stays");
+
+    assert_eq!(
+        alice.login_with(&app, &alice.password.clone()).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    alice.password = "neues-sehr-langes-passwort".into();
+    alice.login(&app).await;
+    let key_after = alice.vault_key(&app, &vault).await;
+    assert_eq!(
+        key_before.as_bytes(),
+        key_after.as_bytes(),
+        "vault keys survive a password change"
+    );
+}
+
+#[tokio::test]
+async fn recovering_with_the_recovery_key() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    alice.register(&app, None).await;
+    alice.login(&app).await;
+    let vault = alice.personal_vault.clone();
+    let key = alice.vault_key(&app, &vault).await;
+    let item = Uuid::new_v4().to_string();
+    put_item(
+        &app,
+        &alice,
+        (&vault, &key, 1),
+        &item,
+        b"vor dem vergessen",
+        Value::Null,
+    )
+    .await;
+
+    let start = |email: &str, recovery: &RecoveryKey| json!({ "email": email, "recovery_auth_key": recovery.auth_key().to_base64() });
+    let recovery = RecoveryKey::generate();
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/start",
+        None,
+        Some(start(&alice.email, &recovery)),
+    )
+    .await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "no recovery key set yet");
+
+    let setup = |current: String| {
+        json!({
+            "current_auth_key": current,
+            "recovery_auth_key": recovery.auth_key().to_base64(),
+            "recovery_wrapped_account_key": recovery.wrap_account_key(&alice.account_key),
+        })
+    };
+    let (s, r) = alice
+        .send(
+            &app,
+            "PUT",
+            "/api/v1/account/recovery",
+            setup(WRONG_KEY.into()),
+        )
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::FORBIDDEN, Some("wrong_password"))
+    );
+    let current = alice.current_auth_key(&app).await;
+    let (s, _) = alice
+        .send(&app, "PUT", "/api/v1/account/recovery", setup(current))
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (_, login) = alice.login_with(&app, &alice.password.clone()).await;
+    assert_eq!(login["has_recovery"], true);
+
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/start",
+        None,
+        Some(start(&alice.email, &RecoveryKey::generate())),
+    )
+    .await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "wrong recovery key");
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/start",
+        None,
+        Some(start("nobody@example.com", &recovery)),
+    )
+    .await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "unknown e-mail looks the same");
+
+    let typed = RecoveryKey::parse(&recovery.display().to_lowercase()).unwrap();
+    let (s, started) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/start",
+        None,
+        Some(start(&alice.email, &typed)),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    let recovery_token = started["token"].as_str().unwrap().to_owned();
+    let (s, _) = call(&app, "GET", "/api/v1/vaults", Some(&recovery_token), None).await;
+    assert_eq!(
+        s,
+        StatusCode::UNAUTHORIZED,
+        "a recovery session cannot read vaults"
+    );
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/complete",
+        Some(&alice.token),
+        Some(alice.new_credentials("x-y-z-neu-12345")),
+    )
+    .await;
+    assert_eq!(
+        s,
+        StatusCode::UNAUTHORIZED,
+        "a normal session cannot use the recovery endpoint"
+    );
+
+    let wrapped =
+        EncString::parse(started["recovery_wrapped_account_key"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        typed.unwrap_account_key(&wrapped).unwrap().as_bytes(),
+        alice.account_key.as_bytes()
+    );
+
+    let new_password = "nach-dem-vergessen-lang-genug";
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/complete",
+        Some(&recovery_token),
+        Some(alice.new_credentials(new_password)),
+    )
+    .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (s, _) = alice.get(&app, "/api/v1/vaults").await;
+    assert_eq!(
+        s,
+        StatusCode::UNAUTHORIZED,
+        "all sessions end after recovery"
+    );
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/complete",
+        Some(&recovery_token),
+        Some(alice.new_credentials("again-and-again")),
+    )
+    .await;
+    assert_eq!(
+        s,
+        StatusCode::UNAUTHORIZED,
+        "the recovery session is single use"
+    );
+
+    alice.password = new_password.into();
+    alice.login(&app).await;
+    let key_after = alice.vault_key(&app, &vault).await;
+    let (_, page) = alice
+        .get(&app, &format!("/api/v1/vaults/{vault}/items"))
+        .await;
+    let data = EncString::parse(page["items"][0]["data"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        key_after
+            .decrypt(&data, &item_aad(&vault, &item, 1))
+            .unwrap()
+            .as_slice(),
+        b"vor dem vergessen"
+    );
 }

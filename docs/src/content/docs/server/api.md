@@ -21,6 +21,10 @@ Formate: `EncString` = `1.<base64url>` (XChaCha20-Poly1305), `SealedKey` = `h1.<
 | POST | `/auth/login` | alle | Sitzung + verschlüsseltes Schlüsselmaterial |
 | POST | `/auth/logout` | angemeldet | Sitzung beenden |
 | POST | `/auth/invites/preview` | alle | E-Mail und Einladender zu einem Einladungslink |
+| POST | `/auth/recover/start` | alle | Recovery-Sitzung mit Recovery-Auth-Key |
+| POST | `/auth/recover/complete` | Recovery-Sitzung | neues Master-Passwort setzen |
+| PUT | `/account/password` | angemeldet | Master-Passwort ändern |
+| PUT | `/account/recovery` | angemeldet | Recovery-Key setzen oder ersetzen |
 | GET | `/users/lookup?email=` | angemeldet | Nutzer-ID und öffentlicher Schlüssel |
 | GET | `/vaults` | angemeldet | eigene Tresore mit Mitgliedern |
 | POST | `/vaults` | angemeldet | geteilten Tresor anlegen |
@@ -74,7 +78,8 @@ bei der Registrierung an sie gebunden wird. Mit Einladungs-Token wird die Person
 
 ```json
 { "token": "…", "expires_in_seconds": 1209600, "user_id": "…",
-  "wrapped_account_key": "1.<…>", "public_key": "…", "encrypted_private_key": "1.<…>" }
+  "wrapped_account_key": "1.<…>", "public_key": "…", "encrypted_private_key": "1.<…>",
+  "has_recovery": true }
 ```
 
 `401 unauthorized` · `429 too_many_requests`
@@ -85,6 +90,43 @@ bei der Registrierung an sie gebunden wird. Mit Einladungs-Token wird die Person
 
 Der Token steht im Link hinter `#`. Browser schicken diesen Teil nie an den Server, er landet
 also nicht in Server- oder Proxy-Logs. Die Web-App sendet ihn nur im Body dieser Anfrage.
+
+## Konto
+
+Beide Endpunkte verlangen das **aktuelle** Master-Passwort als `current_auth_key`. Bei falschem
+Passwort kommt `403 wrong_password`, nach 10 Fehlversuchen in 15 Minuten `429`.
+
+### `PUT /account/password`
+
+`{ "current_auth_key", "kdf", "salt", "auth_key", "wrapped_account_key" }` → `204`
+
+Alle anderen Sitzungen des Kontos werden beendet, die aktuelle bleibt.
+
+### `PUT /account/recovery`
+
+`{ "current_auth_key", "recovery_auth_key", "recovery_wrapped_account_key" }` → `204`
+
+Ersetzt einen vorhandenen Recovery-Key.
+
+## Wiederherstellung
+
+### `POST /auth/recover/start`
+
+`{ "email", "recovery_auth_key" }` → `200`
+
+```json
+{ "token": "…", "expires_in_seconds": 900, "recovery_wrapped_account_key": "1.<…>" }
+```
+
+`401 unauthorized` bei falschem Key, unbekannter E-Mail oder fehlendem Recovery-Key. Die drei
+Fälle sehen gleich aus und dauern gleich lang. `429` nach 10 Fehlversuchen.
+
+Der Token gilt 15 Minuten und **nur** für `recover/complete`. Alle anderen Endpunkte lehnen ihn ab.
+
+### `POST /auth/recover/complete`
+
+`Authorization: Bearer <Recovery-Token>`, Body `{ "kdf", "salt", "auth_key", "wrapped_account_key" }`
+→ `204`. Danach sind alle Sitzungen des Kontos beendet, auch die Recovery-Sitzung.
 
 ## Tresore
 

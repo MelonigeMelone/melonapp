@@ -41,7 +41,9 @@ Die gesamte Kryptografie läuft in einem **Web Worker**, der `melon-crypto` als 
 
 RPC (`crypto/protocol.ts`): `derive`, `createAccount`, `unlock`, `openVault`, `newVault`,
 `hasVault`, `encryptMeta`, `decryptMeta`, `encryptItem`, `decryptItems`, `sealFor`, `rotate`,
-`lock`, `generateSalt`, `generatePassword`.
+`setupRecovery`, `changePassword`, `recoveryAuth`, `recoveryReset`, `fingerprint`, `lock`,
+`generateSalt`, `generatePassword`. Für Passwortwechsel und Notfall-Kit entschlüsselt der Worker
+den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
 
 ## Datenmodell
 
@@ -91,6 +93,25 @@ speichert erneut:
 3. Wurde der Eintrag anderswo gelöscht, wird er mit der Revision des Tombstones wiederbelebt.
 
 Bei `409 key_rotated` gibt es keinen automatischen zweiten Versuch (siehe [Sync](/melonapp/server/sync/)).
+
+## Konto
+
+Der Knopf „Konto“ oben rechts öffnet `AccountDialog`:
+
+- **Sicherheitscode** des eigenen Schlüssels, zum Vergleichen beim Teilen.
+- **Notfall-Kit:** Status und Erstellen bzw. Ersetzen (`RecoveryKitDialog`). Nach Bestätigung des
+  Master-Passworts erzeugt der Worker den Recovery-Key und zeigt ihn einmal an, mit
+  „Als Datei speichern“ und „Kopieren“. „Fertig“ geht erst, wenn man bestätigt, ihn aufbewahrt zu haben.
+- **Master-Passwort ändern.**
+
+Solange kein Notfall-Kit existiert, zeigt die Eintragsliste einen Hinweis mit „Erstellen“.
+
+Die Anmeldeseite hat „Master-Passwort vergessen?“: E-Mail, Recovery-Key, neues Passwort. Der
+Recovery-Key wird im Worker geprüft (Prüfsumme). Tippfehler fallen also auf, bevor eine Anfrage
+rausgeht.
+
+Für das erneute Bestätigen des Passworts hält die Sitzung Salt, KDF-Parameter und den
+verschlüsselten Konto-Schlüssel, nie das Passwort selbst.
 
 ## Schutzmaßnahmen
 

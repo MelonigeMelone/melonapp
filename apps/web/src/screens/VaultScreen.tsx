@@ -23,6 +23,7 @@ import AddIcon from '@mui/icons-material/Add';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
@@ -32,7 +33,8 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { ApiError } from '../api';
 import { Brand } from '../components/Brand';
 import { ItemAvatar, TYPE_ICONS } from '../components/TypeIcon';
-import { describeError, type Session } from '../session';
+import { describeError, type Account, type Session } from '../session';
+import { AccountDialog, RecoveryKitDialog } from './AccountDialog';
 import { emptyItem, matchesSearch, subtitle, TEMPLATES, type Item, type ItemType } from '../vault/item';
 import { ItemDetail } from './ItemDetail';
 import { ItemEditor } from './ItemEditor';
@@ -49,7 +51,15 @@ const entries = (n: number) => count(n, 'Eintrag', 'Einträge');
 type Selection = { vaultId: string; id: string } | null;
 type Editing = { vaultId: string; id: string | null; item: Item } | null;
 
-export function VaultScreen({ session, onLock }: { session: Session; onLock: (notice?: string) => void }) {
+export function VaultScreen({
+  session,
+  onLock,
+  onUpdate,
+}: {
+  session: Session;
+  onLock: (notice?: string) => void;
+  onUpdate: (update: Partial<Account>) => void;
+}) {
   const manager = session.vaults;
   const { vaults, items } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
   const [scope, setScope] = useState<string>(ALL);
@@ -62,6 +72,8 @@ export function VaultScreen({ session, onLock }: { session: Session; onLock: (no
   const [newMenu, setNewMenu] = useState<HTMLElement | null>(null);
   const [vaultDialog, setVaultDialog] = useState<string | null>(null);
   const [creatingVault, setCreatingVault] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [kitOpen, setKitOpen] = useState(false);
   const wide = useMediaQuery((t) => t.breakpoints.up('md'), { noSsr: true });
 
   useEffect(() => {
@@ -208,6 +220,18 @@ export function VaultScreen({ session, onLock }: { session: Session; onLock: (no
           },
         }}
       />
+      {!session.hasRecovery && (
+        <Alert
+          severity="warning"
+          action={
+            <Button color="inherit" size="small" onClick={() => setKitOpen(true)}>
+              Erstellen
+            </Button>
+          }
+        >
+          Noch kein Notfall-Kit. Ohne es ist dein Tresor verloren, wenn du dein Master-Passwort vergisst.
+        </Alert>
+      )}
       {syncError && <Alert severity="warning">{syncError}</Alert>}
       {vaults.some((v) => v.unreadable > 0) && (
         <Alert severity="warning">Einige Einträge ließen sich nicht entschlüsseln und werden ausgeblendet.</Alert>
@@ -315,6 +339,11 @@ export function VaultScreen({ session, onLock }: { session: Session; onLock: (no
               <AddIcon />
             </IconButton>
           )}
+          <Tooltip title="Konto">
+            <IconButton aria-label="Konto" onClick={() => setAccountOpen(true)}>
+              <AccountCircleOutlinedIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Tresor sperren">
             <IconButton aria-label="Sperren" onClick={() => onLock()}>
               <LockOutlinedIcon />
@@ -386,6 +415,27 @@ export function VaultScreen({ session, onLock }: { session: Session; onLock: (no
           setVaultDialog(id);
         }}
       />
+      {accountOpen && (
+        <AccountDialog
+          session={session}
+          onUpdate={onUpdate}
+          onClose={() => setAccountOpen(false)}
+          onCreateKit={() => {
+            setAccountOpen(false);
+            setKitOpen(true);
+          }}
+        />
+      )}
+      {kitOpen && (
+        <RecoveryKitDialog
+          session={session}
+          onClose={() => setKitOpen(false)}
+          onDone={(update) => {
+            onUpdate(update);
+            setKitOpen(false);
+          }}
+        />
+      )}
       {dialogVault && <VaultDialog vault={dialogVault} manager={manager} me={session.userId} onClose={() => setVaultDialog(null)} />}
     </Box>
   );

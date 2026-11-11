@@ -13,8 +13,8 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 |---|---|
 | GitHub Actions sind über Tags gepinnt, nicht über Commit-SHAs | vor dem echten Einsatz auf SHAs umstellen, Dependabot hält sie aktuell |
 | Login-Limit nur pro Konto, im Speicher | IP-basiertes Limit über Caddy oder fail2ban. Ein Neustart setzt die Zähler zurück, das ist akzeptiert. |
-| Kein Recovery-Key, Master-Passwort nicht änderbar | M4, als Nächstes |
-| Öffentliche Schlüssel werden dem Server geglaubt | Fingerabdruck-Vergleich beim Hinzufügen (M4), siehe [Sicherheitsmodell](/melonapp/sicherheit/modell/#bekannte-grenze-öffentliche-schlüssel) |
+| Eingeladene werden ohne vorherigen Code-Vergleich freigeschaltet | Code danach im Tresor-Dialog prüfen ([ADR 0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/)). Später optional: Freigabe erst nach Bestätigung. |
+| Geprüfte Sicherheitscodes werden nicht gespeichert | später: „verifiziert“-Markierung pro Mitglied |
 | Mitgliederliste zeigt allen Mitgliedern die E-Mails | gewollt für Familie/Freunde |
 | Kein Wechsel des eigenen Schlüsselpaars | nach M4 |
 | Parser nicht gefuzzt | `cargo-fuzz` für `EncString::parse` und JSON-Eingaben |

@@ -1,7 +1,7 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
-    EncString, KdfParams, KeyPair, PasswordOptions, PublicKey, SealedKey, SymmetricKey,
-    VaultKeyContext, derive_master_key, item_aad, unwrap_account_key, vault_meta_aad,
+    EncString, KdfParams, KeyPair, PasswordOptions, PublicKey, RecoveryKey, SealedKey,
+    SymmetricKey, VaultKeyContext, derive_master_key, item_aad, unwrap_account_key, vault_meta_aad,
     wrap_account_key,
 };
 use wasm_bindgen::prelude::*;
@@ -219,4 +219,48 @@ pub fn generate_password(
     melon_crypto::generate_password(&opts)
         .map(|p| p.to_string())
         .map_err(js_err)
+}
+
+#[wasm_bindgen]
+pub struct Recovery(RecoveryKey);
+
+#[wasm_bindgen]
+impl Recovery {
+    pub fn generate() -> Recovery {
+        Recovery(RecoveryKey::generate())
+    }
+
+    pub fn parse(input: &str) -> Result<Recovery, JsError> {
+        RecoveryKey::parse(input).map(Recovery).map_err(js_err)
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn display(&self) -> String {
+        self.0.display().to_string()
+    }
+
+    #[wasm_bindgen(getter, js_name = authKey)]
+    pub fn auth_key(&self) -> String {
+        self.0.auth_key().to_base64()
+    }
+
+    #[wasm_bindgen(js_name = wrapAccountKey)]
+    pub fn wrap_account_key(&self, account_key: &AccountKey) -> String {
+        self.0.wrap_account_key(&account_key.0).to_string()
+    }
+
+    #[wasm_bindgen(js_name = unwrapAccountKey)]
+    pub fn unwrap_account_key(&self, wrapped: &str) -> Result<AccountKey, JsError> {
+        let enc = EncString::parse(wrapped).map_err(js_err)?;
+        self.0
+            .unwrap_account_key(&enc)
+            .map(AccountKey)
+            .map_err(js_err)
+    }
+}
+
+#[wasm_bindgen]
+pub fn fingerprint(public_key: &str) -> Result<String, JsError> {
+    let key = PublicKey::from_base64(public_key).map_err(js_err)?;
+    Ok(melon_crypto::fingerprint(&key))
 }

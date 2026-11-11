@@ -22,5 +22,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0008](/melonapp/entscheidungen/0008-mui/) | MUI als Komponentenbibliothek | angenommen |
 | [0009](/melonapp/entscheidungen/0009-tresor-schluessel/) | Tresor-Schlüssel und Schlüsselpaare (HPKE) | angenommen |
 | [0010](/melonapp/entscheidungen/0010-keine-logos/) | Keine Logos von Websites | angenommen |
+| [0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/) | Recovery-Key und Sicherheitscode | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.

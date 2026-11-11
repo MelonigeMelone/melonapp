@@ -1,17 +1,25 @@
-import { api, ApiError, authed, DEFAULT_KDF, NetworkError } from './api';
+import { api, ApiError, authed, DEFAULT_KDF, NetworkError, type Kdf } from './api';
 import { cryptoCall } from './crypto/client';
 import { newId } from './vault/item';
 import { VaultsManager } from './vault/manager';
 
-export interface Session {
+export interface Account {
+  kdf: Kdf;
+  salt: string;
+  wrappedAccountKey: string;
+  publicKey: string;
+  hasRecovery: boolean;
+}
+
+export interface Session extends Account {
   email: string;
   userId: string;
   token: string;
   vaults: VaultsManager;
 }
 
-function open(email: string, userId: string, token: string): Session {
-  return { email, userId, token, vaults: new VaultsManager(userId, authed(token), cryptoCall) };
+function open(email: string, userId: string, token: string, account: Account): Session {
+  return { email, userId, token, vaults: new VaultsManager(userId, authed(token), cryptoCall), ...account };
 }
 
 export async function login(email: string, password: string): Promise<Session> {
@@ -23,7 +31,13 @@ export async function login(email: string, password: string): Promise<Session> {
       wrappedAccountKey: res.wrapped_account_key,
       encryptedPrivateKey: res.encrypted_private_key,
     });
-    return open(email, res.user_id, res.token);
+    return open(email, res.user_id, res.token, {
+      kdf: pre.kdf,
+      salt: pre.salt,
+      wrappedAccountKey: res.wrapped_account_key,
+      publicKey: res.public_key,
+      hasRecovery: res.has_recovery,
+    });
   } catch (e) {
     await cryptoCall('lock');
     throw e;
@@ -58,11 +72,68 @@ export async function register(email: string, password: string, inviteToken: str
       invite_token: inviteToken,
     });
     const res = await api.login({ email, auth_key: authKey });
-    return open(email, res.user_id, res.token);
+    return open(email, res.user_id, res.token, {
+      kdf: DEFAULT_KDF,
+      salt,
+      wrappedAccountKey: account.wrappedAccountKey,
+      publicKey: account.publicKey,
+      hasRecovery: false,
+    });
   } catch (e) {
     await cryptoCall('lock');
     throw e;
   }
+}
+
+function reauth(session: Session, password: string) {
+  return { password, salt: session.salt, kdf: session.kdf, wrappedAccountKey: session.wrappedAccountKey };
+}
+
+export async function setupRecovery(session: Session, password: string): Promise<{ recoveryKey: string; account: Partial<Account> }> {
+  const r = await cryptoCall('setupRecovery', reauth(session, password));
+  await authed(session.token).setRecovery({
+    current_auth_key: r.currentAuthKey,
+    recovery_auth_key: r.recoveryAuthKey,
+    recovery_wrapped_account_key: r.recoveryWrappedAccountKey,
+  });
+  return { recoveryKey: r.recoveryKey, account: { hasRecovery: true } };
+}
+
+export async function changePassword(session: Session, current: string, next: string): Promise<Partial<Account>> {
+  const newSalt = await cryptoCall('generateSalt');
+  const r = await cryptoCall('changePassword', { ...reauth(session, current), newPassword: next, newSalt, newKdf: DEFAULT_KDF });
+  await authed(session.token).changePassword({
+    current_auth_key: r.currentAuthKey,
+    kdf: DEFAULT_KDF,
+    salt: newSalt,
+    auth_key: r.authKey,
+    wrapped_account_key: r.wrappedAccountKey,
+  });
+  return { kdf: DEFAULT_KDF, salt: newSalt, wrappedAccountKey: r.wrappedAccountKey };
+}
+
+export async function recoverAccount(email: string, recoveryKey: string, newPassword: string): Promise<Session> {
+  let recoveryAuthKey: string;
+  try {
+    recoveryAuthKey = await cryptoCall('recoveryAuth', { recoveryKey });
+  } catch {
+    throw new ApiError(400, 'invalid_recovery_key');
+  }
+  const started = await api.recoverStart(email, recoveryAuthKey);
+  const newSalt = await cryptoCall('generateSalt');
+  const creds = await cryptoCall('recoveryReset', {
+    recoveryWrappedAccountKey: started.recovery_wrapped_account_key,
+    newPassword,
+    newSalt,
+    newKdf: DEFAULT_KDF,
+  });
+  await api.recoverComplete(started.token, {
+    kdf: DEFAULT_KDF,
+    salt: newSalt,
+    auth_key: creds.authKey,
+    wrapped_account_key: creds.wrappedAccountKey,
+  });
+  return login(email, newPassword);
 }
 
 export async function lock(session: Session | null) {
@@ -72,6 +143,8 @@ export async function lock(session: Session | null) {
 
 const messages: Record<string, string> = {
   unauthorized: 'E-Mail oder Master-Passwort ist falsch.',
+  wrong_password: 'Das Master-Passwort stimmt nicht.',
+  invalid_recovery_key: 'Der Recovery-Key ist unvollständig oder hat einen Tippfehler. Prüfe jede Vierergruppe.',
   too_many_requests: 'Zu viele Fehlversuche. Warte 15 Minuten und versuche es dann erneut.',
   registration_disabled:
     'Auf diesem Server ist die Registrierung ausgeschaltet. Du brauchst einen Einladungslink, oder der Betreiber setzt MELON_ALLOW_REGISTRATION=true.',

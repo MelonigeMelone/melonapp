@@ -71,6 +71,10 @@ pub struct MasterKey([u8; 32]);
 pub struct AuthKey([u8; 32]);
 
 impl AuthKey {
+    pub(crate) fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }

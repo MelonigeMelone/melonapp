@@ -1,4 +1,5 @@
 pub mod access;
+pub mod account;
 pub mod auth;
 pub mod config;
 pub mod error;
@@ -34,6 +35,10 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/login", post(auth::login))
         .route("/auth/logout", post(auth::logout))
         .route("/auth/invites/preview", post(auth::invite_preview))
+        .route("/auth/recover/start", post(account::recover_start))
+        .route("/auth/recover/complete", post(account::recover_complete))
+        .route("/account/password", put(account::change_password))
+        .route("/account/recovery", put(account::set_recovery))
         .route("/users/lookup", get(members::lookup_user))
         .route(
             "/vaults",

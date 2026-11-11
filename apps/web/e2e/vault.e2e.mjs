@@ -66,6 +66,23 @@ await step('alice registers', async () => {
   await a.getByText('Noch keine Einträge.').waitFor({ timeout: 30000 });
 });
 
+let recoveryKey = '';
+await step('emergency kit', async () => {
+  await a.getByText('Noch kein Notfall-Kit.', { exact: false }).first().waitFor();
+  await a.getByRole('button', { name: 'Erstellen' }).click();
+  const kit = a.getByRole('dialog', { name: 'Notfall-Kit' });
+  await kit.getByLabel('Master-Passwort zur Bestätigung').fill(alice.master);
+  await kit.getByRole('button', { name: 'Notfall-Kit erstellen' }).click();
+  await kit.locator('.recovery-key').waitFor();
+  recoveryKey = await kit.locator('.recovery-key').innerText();
+  if (!/^([A-Z2-7]{4}-){12}[A-Z2-7]{4}$/.test(recoveryKey)) throw new Error(`unexpected recovery key ${recoveryKey}`);
+  if (!(await kit.getByRole('button', { name: 'Fertig' }).isDisabled())) throw new Error('kit must be confirmed first');
+  await shot(a, '2-recovery-kit');
+  await kit.getByLabel('Ich habe den Recovery-Key sicher aufbewahrt.').check();
+  await kit.getByRole('button', { name: 'Fertig' }).click();
+  await a.getByText('Noch kein Notfall-Kit.', { exact: false }).first().waitFor({ state: 'detached' });
+});
+
 let generated = '';
 await step('login with generated password and a custom hidden field', async () => {
   await newItem(a, 'Login');
@@ -80,7 +97,7 @@ await step('login with generated password and a custom hidden field', async () =
   await a.getByRole('menuitem', { name: 'Verborgen' }).click();
   await a.getByLabel('Name des Felds (Verborgen)').fill('Recovery-Code');
   await a.getByLabel('Wert').fill('R-2468-1357');
-  await shot(a, '2-editor');
+  await shot(a, '3-editor');
   await a.getByRole('button', { name: 'Speichern' }).click();
   await a.getByRole('heading', { name: 'GitHub', level: 2 }).waitFor();
   await a.getByText('Recovery-Code').waitFor();
@@ -108,7 +125,7 @@ await step('reveal and copy password', async () => {
   await pw.getByRole('button', { name: 'Kopieren' }).click();
   await a.getByText(/Kopiert\./).waitFor();
   if ((await a.evaluate(() => navigator.clipboard.readText())) !== generated) throw new Error('clipboard mismatch');
-  await shot(a, '3-detail');
+  await shot(a, '4-detail');
 });
 
 await step('editing a password keeps the old one', async () => {
@@ -132,7 +149,7 @@ await step('shared vault and invite link', async () => {
   await linkField.waitFor();
   inviteLink = await linkField.inputValue();
   if (!inviteLink.includes('/#/invite/')) throw new Error(`unexpected link ${inviteLink}`);
-  await shot(a, '4-vault-dialog');
+  await shot(a, '5-vault-dialog');
   expect404 = false;
   await dialog.getByRole('button', { name: 'Schließen' }).click();
 });
@@ -155,7 +172,7 @@ await step('bob registers through the invite link and waits', async () => {
   if ((await b.getByLabel('E-Mail').inputValue()) !== bob.email) throw new Error('invite e-mail not prefilled');
   await register(b, bob);
   await b.getByText('Wartet auf Freigabe').first().waitFor({ timeout: 30000 });
-  await shot(b, '5-bob-pending');
+  await shot(b, '6-bob-pending');
 });
 
 await step('alice grants the key automatically, bob sees the entry', async () => {
@@ -172,7 +189,7 @@ await step('alice grants the key automatically, bob sees the entry', async () =>
   await pw.getByRole('button', { name: 'Anzeigen' }).click();
   if ((await pw.locator('.concealed-value .pw').innerText()) !== 'wlan-geheim-12345') throw new Error('bob cannot read the shared password');
   if (await b.locator('.entry-row', { hasText: 'GitHub' }).count()) throw new Error('bob must not see alice\'s personal vault');
-  await shot(b, '6-bob-shared');
+  await shot(b, '7-bob-shared');
 });
 
 await step('alice removes bob, the vault key is rotated', async () => {
@@ -195,6 +212,36 @@ await step('bob loses access', async () => {
   if (await b.locator('.vault-row', { hasText: 'Familie' }).count()) throw new Error('bob still sees the vault');
 });
 
+await step('re-adding bob shows his security code first', async () => {
+  current = b;
+  await b.getByRole('button', { name: 'Konto' }).click();
+  const bobAccount = b.getByRole('dialog', { name: 'Konto' });
+  await bobAccount.locator('.security-code').filter({ hasText: /\d/ }).waitFor();
+  const bobCode = await bobAccount.locator('.security-code').innerText();
+  await bobAccount.getByRole('button', { name: 'Schließen' }).click();
+
+  current = a;
+  await a.getByRole('button', { name: 'Familie: Mitglieder und Einstellungen' }).click();
+  const dialog = a.getByRole('dialog', { name: 'Familie' });
+  await dialog.getByLabel('E-Mail').fill(bob.email);
+  await dialog.getByRole('button', { name: 'Hinzufügen' }).click();
+  const confirm = a.getByRole('dialog', { name: 'Sicherheitscode vergleichen' });
+  await confirm.locator('.security-code').waitFor();
+  const shown = await confirm.locator('.security-code').innerText();
+  if (shown !== bobCode) throw new Error(`security codes differ: ${shown} vs ${bobCode}`);
+  await shot(a, '7b-compare-code');
+  await confirm.getByRole('button', { name: 'Code stimmt, hinzufügen' }).click();
+  await dialog.getByText(`${bob.email} hat jetzt Zugriff.`).waitFor({ timeout: 15000 });
+  await dialog.getByRole('button', { name: 'Schließen' }).click();
+
+  current = b;
+  for (let i = 0; i < 10 && !(await b.locator('.entry-row', { hasText: 'WLAN Zuhause' }).count()); i++) {
+    await sync(b);
+    await b.waitForTimeout(700);
+  }
+  await b.locator('.entry-row', { hasText: 'WLAN Zuhause' }).waitFor();
+});
+
 await step('alice reads the re-encrypted vault after unlocking again', async () => {
   current = a;
   await a.reload();
@@ -208,12 +255,44 @@ await step('alice reads the re-encrypted vault after unlocking again', async () 
   if ((await pw.locator('.concealed-value .pw').innerText()) !== 'wlan-geheim-12345') throw new Error('rotated entry unreadable');
 });
 
+await step('security code and master password change', async () => {
+  await a.getByRole('button', { name: 'Konto' }).click();
+  const account = a.getByRole('dialog', { name: 'Konto' });
+  await account.locator('.security-code').filter({ hasText: /\d/ }).waitFor();
+  const code = await account.locator('.security-code').innerText();
+  if (!/^\d{5}( \d{5}){5}$/.test(code)) throw new Error(`unexpected security code ${code}`);
+  await account.getByLabel('Aktuelles Master-Passwort').fill(alice.master);
+  await account.getByLabel('Neues Master-Passwort', { exact: true }).fill('neues master passwort fuer alice');
+  await account.getByLabel('Neues Master-Passwort wiederholen').fill('neues master passwort fuer alice');
+  await account.getByRole('button', { name: 'Master-Passwort ändern' }).click();
+  await account.getByText('Master-Passwort geändert.', { exact: false }).waitFor({ timeout: 30000 });
+  alice.master = 'neues master passwort fuer alice';
+  await shot(a, '8-account');
+  await account.getByRole('button', { name: 'Schließen' }).click();
+});
+
 await step('wrong password is rejected', async () => {
   expect401 = true;
   await a.getByRole('button', { name: 'Sperren' }).click();
   await a.getByLabel('Master-Passwort', { exact: true }).fill('falsches passwort hier');
   await a.getByRole('button', { name: 'Tresor öffnen' }).click();
   await a.getByText('E-Mail oder Master-Passwort ist falsch.').waitFor({ timeout: 30000 });
+});
+
+await step('forgotten master password, recovered with the kit', async () => {
+  await a.getByRole('button', { name: 'Master-Passwort vergessen?' }).click();
+  await a.getByLabel('E-Mail').fill(alice.email);
+  await a.getByLabel('Recovery-Key').fill(recoveryKey.toLowerCase().replaceAll('-', ' '));
+  await a.getByLabel('Neues Master-Passwort', { exact: true }).fill('wiederhergestellt mit dem kit');
+  await a.getByLabel('Neues Master-Passwort wiederholen').fill('wiederhergestellt mit dem kit');
+  await shot(a, '9-recover');
+  await a.getByRole('button', { name: 'Neues Master-Passwort setzen' }).click();
+  await a.locator('.entry-row', { hasText: 'GitHub' }).waitFor({ timeout: 30000 });
+  alice.master = 'wiederhergestellt mit dem kit';
+  await a.locator('.entry-row', { hasText: 'WLAN Zuhause' }).click();
+  const pw = a.locator('.concealed-field').first();
+  await pw.getByRole('button', { name: 'Anzeigen' }).click();
+  if ((await pw.locator('.concealed-value .pw').innerText()) !== 'wlan-geheim-12345') throw new Error('shared vault unreadable after recovery');
 });
 
 await step('mobile and dark mode', async () => {
@@ -224,10 +303,10 @@ await step('mobile and dark mode', async () => {
   await m.getByLabel('Master-Passwort', { exact: true }).fill(alice.master);
   await m.getByRole('button', { name: 'Tresor öffnen' }).click();
   await m.locator('.entry-row', { hasText: 'GitHub' }).waitFor({ timeout: 30000 });
-  await shot(m, '7-mobile-list');
+  await shot(m, '10-mobile-list');
   await m.getByRole('button', { name: 'Tresore anzeigen' }).click();
   await m.getByRole('button', { name: /^Familie/ }).first().waitFor();
-  await shot(m, '8-mobile-drawer');
+  await shot(m, '11-mobile-drawer');
 });
 
 await browser.close();
