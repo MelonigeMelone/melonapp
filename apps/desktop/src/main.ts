@@ -15,7 +15,7 @@ const platform = {
       id: `${v.vaultId}/${v.id}`,
       user: v.item.fields.find((f) => f.id === 'username')?.value ?? '',
       password: v.item.fields.find((f) => f.id === 'password')?.value ?? '',
-      urls: v.item.fields.filter((f) => f.kind === 'url').map((f) => f.value),
+      urls: [...v.item.fields, ...v.item.sections.flatMap((section) => section.fields)].filter((f) => f.kind === 'url').map((f) => /^[a-z][a-z0-9+.-]*:/i.test(f.value) ? f.value : `https://${f.value}`),
     }));
     await invoke('autofill_publish', { userId: session.userId, entries });
   },

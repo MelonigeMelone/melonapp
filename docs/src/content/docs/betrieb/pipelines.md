@@ -52,4 +52,7 @@ Distribution sind damit nicht bestätigt. Der Apple-Job läuft auch bei Pushes a
 Der Apple-Job prüft mit `cargo-deny` auch den getrennten Tauri-Workspace für macOS
 und iOS. Der vollständige plattformübergreifende Tauri-Graph enthält zusätzlich
 eine ungewartete Linux-GTK-Build-Abhängigkeit (`proc-macro-error`); sie wird nicht
-für die Apple-Targets gebaut. Keine Advisory-Ausnahme wurde eingeführt.
+für die Apple-Targets gebaut. Für das reine UniFFI-Generatorwerkzeug besteht eine begründete Wartungsausnahme
+([Apple-Review](/melonapp/sicherheit/apple-review/)); echte Schwachstellen werden nicht
+unterdrückt. Der nächtliche Security-Workflow und Dependabot erfassen auch den
+getrennten Tauri-Workspace.

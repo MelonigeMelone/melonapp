@@ -13,7 +13,8 @@ nicht erlaubt. Web und Browser-Erweiterung verwenden weiterhin WASM im Worker.
 Auf dem Anmeldebildschirm die HTTPS-Adresse des eigenen Servers eintragen, ohne Pfad.
 HTTP ist ausschließlich für Loopback-Adressen erlaubt. Native HTTP-Anfragen folgen
 keinen Weiterleitungen und sind auf 30 Sekunden sowie 32 MiB Antwortgröße begrenzt.
-Die WebView kann keine beliebigen Netzverbindungen öffnen; der Rust-Transport bedient
+Die WebView kann keine beliebigen Netzverbindungen öffnen; ausgenommen ist der
+bestehende, ausdrücklich gestartete Datenleck-Abgleich mit `api.pwnedpasswords.com`; der Rust-Transport bedient
 das bestehende API-Protokoll. Angezeigte Einträge und Sitzungstokens liegen weiterhin in React. Authentifizierungs-
 und Entschlüsselungsschlüssel bleiben in Rust; der Login verwendet undurchsichtige
 Handles, die nur der native HTTP-Transport auflösen kann. Der ausdrücklich angezeigte

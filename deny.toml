@@ -4,7 +4,7 @@ all-features = false
 [advisories]
 version = 2
 yanked = "deny"
-ignore = []
+ignore = [{ id = "RUSTSEC-2026-0374", reason = "Nur UniFFI-Binding-Generator: askama liest lokale Build-Konfiguration; nicht im App-Laufzeitgraph. Siehe sicherheit/apple-review.md; bei UniFFI-Updates erneut pruefen." }]
 
 [licenses]
 version = 2

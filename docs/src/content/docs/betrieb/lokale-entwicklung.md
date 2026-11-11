@@ -148,13 +148,36 @@ lokalen Server eine eigene Datenbank anlegen und die Variablen aus
 
 Eine vorhandene Apple-Development-Identität aus `security find-identity -v -p codesigning`
 verwenden. Der Team-Identifier steht im Zertifikat beziehungsweise in Xcode. Das Skript
-erzeugt temporäre Entitlements für die Data Protection Keychain und prüft die Signatur:
+prüft das passende macOS-Provisioning-Profil, bettet es ein, erzeugt temporäre
+Entitlements für die Data Protection Keychain und prüft die Signatur:
 
 ```sh
 export APPLE_DEVELOPMENT_TEAM="DEIN_TEAM"
 export APPLE_SIGNING_IDENTITY="Apple Development: Dein Name (IDENTITY)"
+export APPLE_PROVISIONING_PROFILE="/absoluter/Pfad/zum/macOS-Entwicklungsprofil.provisionprofile"
 bash scripts/build-macos-signed.sh
 ```
 
 Es werden keine Apple-Zugangsdaten gespeichert. Ein solcher Entwicklungsbuild ist
 nicht notarisiert und nicht zur öffentlichen Verteilung gedacht.
+
+Eine gültige Codesign-Signatur allein genügt für diese Keychain-Entitlements nicht:
+ohne passendes eingebettetes Provisioning-Profil kann macOS den Start verweigern.
+Der normale `tauri build` bleibt für Passwort-Anmeldung ohne Biometrie nutzbar.
+
+### Browser-End-to-End-Test nativ
+
+Bei laufendem lokalem Server auf Port 8080 und `npm run dev -w web -- --host 127.0.0.1`
+in einem zweiten Terminal:
+
+```sh
+npm install --prefix tmp/playwright playwright@1.65.0
+tmp/playwright/node_modules/.bin/playwright install chromium
+cp apps/web/e2e/vault.e2e.mjs tmp/playwright/vault.e2e.mjs
+mkdir -p tmp/apple-e2e
+BASE=http://127.0.0.1:5173 OUT="$PWD/tmp/apple-e2e" node tmp/playwright/vault.e2e.mjs
+```
+
+Dafür eine separate lokale Datenbank und offene Registrierung verwenden. Der Test
+legt ausschließlich synthetische Konten und Einträge an; niemals gegen den produktiven
+Server laufen lassen. Er prüft unter anderem Teilen, Rotation, Recovery und Mobilansicht.

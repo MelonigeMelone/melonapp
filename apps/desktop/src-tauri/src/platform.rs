@@ -75,10 +75,8 @@ pub fn set_server(app: tauri::AppHandle, value: String) -> Result<(), String> {
     let value = validated_server(&value)?;
     let state = app.state::<Mutex<Session>>();
     let session = state.lock().map_err(|_| "session_unavailable")?;
-    if server(&app).ok().as_ref() != Some(&value) {
-        if !session.is_locked() {
-            return Err("lock_before_changing_server".into());
-        }
+    if server(&app).ok().as_ref() != Some(&value) && !session.is_locked() {
+        return Err("lock_before_changing_server".into());
     }
     write(&app, "server.txt", value.as_bytes())
 }

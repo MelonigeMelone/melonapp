@@ -32,5 +32,6 @@ WASM-Objekte gehalten und verlassen den Worker nie. Der Haupt-Thread schickt nur
 - Alle Krypto-Aufrufe sind asynchron.
 - Entschlüsselte *Einträge* liegen weiterhin im Haupt-Thread, weil sie angezeigt werden
   müssen. Geschützt ist das Schlüsselmaterial, nicht jeder angezeigte Klartext.
-- In Tauri (Desktop/iOS) wird derselbe Worker zunächst übernommen. Später kann der
-  Rust-Kern dort nativ im App-Prozess laufen.
+- In Tauri (Desktop/iOS) übernimmt seit [ADR 0015](/melonapp/entscheidungen/0015-native-apple-clients/)
+  eine native Rust-Sitzung diese Grenze. Auch Authentifizierungsschlüssel bleiben dort
+  nativ; die UI erhält dafür nur kurzlebige Handles.
