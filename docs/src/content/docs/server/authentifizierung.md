@@ -13,16 +13,22 @@ Client                                   Server
   │ ◄──────────────────────────────────── │
   │ Argon2id → Master-Key → Auth-Key      │
   │ login(email, auth_key) ────────────►  │  Argon2id-Verify gegen gespeicherten Hash
-  │ ◄──────────────── token, wrapped_vault_key
-  │ Wrap-Key entschlüsselt Vault-Key      │
+  │ ◄──── token, wrapped_account_key, encrypted_private_key
+  │ Wrap-Key → Konto-Schlüssel → privater Schlüssel
+  │ privater Schlüssel öffnet die Tresor-Schlüssel (GET /vaults)
 ```
 
 ## Registrierung
 
 - Standardmäßig **aus** (`MELON_ALLOW_REGISTRATION=false`). Man schaltet sie nur zum
   Anlegen der eigenen Konten an, weil MelonApp kein öffentlicher Dienst ist.
+- Alternativ mit **Einladungs-Token**: gilt 7 Tage, nur einmal und nur für die E-Mail, für die
+  er erzeugt wurde. Damit klappt die Registrierung auch bei ausgeschalteter offener Registrierung.
 - Der Server prüft das Format: E-Mail, KDF-Parameter mit denselben Grenzen wie der Client,
-  Salt 16–64 Byte, Auth-Key genau 32 Byte, Vault-Key als gültiges `EncString`.
+  Salt 16–64 Byte, Auth-Key genau 32 Byte, öffentlicher Schlüssel (X25519), verschlüsseltes
+  Schlüsselmaterial als gültiges `EncString` bzw. `SealedKey`.
+- In derselben Transaktion entstehen Konto, persönlicher Tresor und die Mitgliedschaft als
+  Besitzer. Bei Einladung kommt die wartende Mitgliedschaft im geteilten Tresor dazu.
 - Der Auth-Key wird **noch einmal** mit Argon2id gehasht (19 MiB, 2 Iterationen) und als
   PHC-String gespeichert. Diese leichteren Parameter reichen, weil der Auth-Key schon ein
   256-bit-Geheimnis ist. Der Hash schützt nur davor, dass jemand mit einer geklauten

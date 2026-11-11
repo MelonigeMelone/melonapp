@@ -9,35 +9,65 @@ PostgreSQL 17. Migrationen liegen in `crates/melon-server/migrations/`, werden b
 automatisch ausgeführt (`sqlx::migrate!`) und sind ins Binary eingebettet.
 
 :::danger
-Eine Migration, die schon irgendwo gelaufen ist, darf nie geändert werden. sqlx prüft
+Eine Migration, die schon irgendwo produktiv gelaufen ist, darf nie geändert werden. sqlx prüft
 Checksummen und startet sonst nicht. Änderungen kommen immer als neue Datei.
+
+Ausnahme bisher: `0001_init.sql` wurde für M3 (Tresore) einmal komplett ersetzt, weil noch
+keine Installation produktiv lief.
 :::
+
+Alle Revisionen (Tresore und Einträge) kommen aus derselben Sequenz `revision_seq`.
 
 ## `users`
 
 | Spalte | Inhalt |
 |---|---|
-| `id` | UUID |
+| `id` | UUID, vom Client erzeugt |
 | `email` | normalisiert (klein, getrimmt), eindeutig |
-| `kdf_memory_kib`, `kdf_iterations`, `kdf_parallelism` | Argon2id-Parameter des Clients |
-| `kdf_salt` | Salt des Clients (base64) |
+| `kdf_*`, `kdf_salt` | Argon2id-Parameter und Salt des Clients |
 | `auth_hash` | Argon2id-PHC-String des Auth-Keys. **Nie** das Passwort. |
-| `wrapped_vault_key` | Vault-Key, vom Client mit dem Wrap-Key verschlüsselt |
+| `wrapped_account_key` | Konto-Schlüssel, mit dem Wrap-Key verschlüsselt |
+| `public_key` | X25519, Klartext (öffentlich) |
+| `encrypted_private_key` | privater Schlüssel, mit dem Konto-Schlüssel verschlüsselt |
 
 ## `sessions`
 
+`token_hash` (SHA-256 des Tokens), `user_id`, `expires_at`.
+
+## `vaults`
+
 | Spalte | Inhalt |
 |---|---|
-| `token_hash` | SHA-256 des Tokens (Primärschlüssel). Das Token selbst wird nie gespeichert. |
-| `user_id` | Besitzer, wird beim Löschen des Nutzers mitgelöscht |
-| `expires_at` | Ablauf, indiziert für das Aufräumen |
+| `id` | UUID, vom Client erzeugt |
+| `personal` | persönlicher Tresor (genau einer pro Konto, nicht teilbar) |
+| `encrypted_meta` | Name usw., mit dem Tresor-Schlüssel verschlüsselt |
+| `key_version` | aktuelle Schlüsselversion |
+| `rotation_needed` | jemand mit Schlüssel hat den Tresor verlassen, ein Besitzer muss rotieren |
+| `revision` | steigt bei jeder Änderung an Tresor oder Mitgliedern |
+
+## `vault_members`
+
+| Spalte | Inhalt |
+|---|---|
+| `vault_id`, `user_id` | Primärschlüssel |
+| `role` | `owner`, `editor` oder `viewer` |
+| `encrypted_vault_key` | Tresor-Schlüssel per HPKE für dieses Mitglied. `NULL` = wartet auf Freigabe. |
+| `key_version` | Version des hinterlegten Schlüssels |
 
 ## `items`
 
 | Spalte | Inhalt |
 |---|---|
-| `user_id`, `id` | zusammengesetzter Primärschlüssel. Item-IDs sind nur pro Nutzer eindeutig, sodass ein Nutzer mit einer fremden ID nichts anrichten kann. |
-| `module` | Modulname im Klartext |
+| `vault_id`, `id` | Primärschlüssel. IDs sind nur pro Tresor eindeutig. |
 | `data` | `EncString` oder `NULL` bei Tombstones |
-| `revision` | aus `item_revision_seq`, Index `(user_id, revision)` für den Sync |
-| `deleted` | Tombstone-Markierung |
+| `key_version` | mit welcher Schlüsselversion verschlüsselt |
+| `revision`, `deleted` | Sync und Tombstones |
+
+## `invites`
+
+| Spalte | Inhalt |
+|---|---|
+| `token_hash` | SHA-256 des Einladungs-Tokens, nie der Token selbst |
+| `email`, `vault_id`, `role` | wofür die Einladung gilt |
+| `expires_at` | 7 Tage nach Erstellung |
+| `accepted_by`, `accepted_at` | gesetzt, sobald jemand sich damit registriert hat |

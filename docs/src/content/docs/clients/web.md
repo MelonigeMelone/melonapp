@@ -13,8 +13,8 @@ derselben Domain wie die API, ohne CORS.
 ```text
 apps/web/src
 ├── crypto/        Web Worker mit melon-crypto (WASM) + kleines RPC
-├── vault/         Datenmodell (entry.ts) und Sync-Store (store.ts), rein und getestet
-├── screens/       Anmelden, Tresor, Detail, Editor
+├── vault/         Datenmodell (item.ts), Sync je Tresor (store.ts), alle Tresore (manager.ts)
+├── screens/       Anmelden, Tresore, Eintrag, Editor, Tresor-Dialog (Mitglieder, Einladungen)
 ├── components/    Generator, Passwortanzeige, Logo
 ├── theme.ts       MUI-Theme: Wassermelonen-Farben, Schriften, Formen, Hell/Dunkel
 ├── api.ts         HTTP-Client für die Server-API
@@ -29,57 +29,76 @@ Die gesamte Kryptografie läuft in einem **Web Worker**, der `melon-crypto` als 
 (`crates/melon-wasm` → `packages/melon-wasm`). Warum, steht in
 [ADR 0007](/melonapp/entscheidungen/0007-schluessel-im-worker/).
 
-- Master-Key, Wrap-Key und Vault-Key existieren **nur im Speicher des Workers** als
-  WASM-Objekte. Die Oberfläche bekommt nie Schlüsselbytes zu sehen, sondern nur den
-  Auth-Key (für den Server), Chiffretexte und entschlüsselte Einträge.
-- Die Argon2id-Ableitung (64 MiB) blockiert die Oberfläche nicht. Sie dauert im Browser
-  unter einer Sekunde.
-- Nach dem Entsperren verwirft der Worker Master- und Wrap-Key sofort. Übrig bleibt nur der Vault-Key.
-- `lock` gibt alle Schlüssel frei (`free()`, auf Rust-Seite per `zeroize` genullt).
+- Privater Schlüssel und alle Tresor-Schlüssel existieren **nur im Speicher des Workers**. Die
+  Oberfläche sieht nie Schlüsselbytes, nur Auth-Key, öffentliche Schlüssel, Chiffretexte und
+  entschlüsselte Einträge.
+- Master-Key, Wrap-Key und Konto-Schlüssel werden direkt nach dem Entsperren freigegeben. Übrig
+  bleiben der private Schlüssel und die geöffneten Tresor-Schlüssel (je Tresor die aktuelle Version).
+- Beim Schlüsselwechsel erzeugt der Worker den neuen Tresor-Schlüssel, verschlüsselt alles neu
+  und gibt den neuen Schlüssel sofort wieder frei. Nach dem nächsten Sync öffnet er ihn regulär
+  über die eigene HPKE-Kopie.
+- `lock` gibt alles frei (`free()`, auf Rust-Seite per `zeroize` genullt).
 
-Das RPC ist bewusst klein (`crypto/protocol.ts`): `derive`, `createVault`, `unlock`,
-`encrypt`, `decryptMany`, `lock`, `generateSalt`, `generatePassword`.
+RPC (`crypto/protocol.ts`): `derive`, `createAccount`, `unlock`, `openVault`, `newVault`,
+`hasVault`, `encryptMeta`, `decryptMeta`, `encryptItem`, `decryptItems`, `sealFor`, `rotate`,
+`lock`, `generateSalt`, `generatePassword`.
 
 ## Datenmodell
 
-Ein Eintrag im Modul `passwords` (siehe [Passwortmanager](/melonapp/konzept/passwortmanager/#datenformat-eines-eintrags)).
-Zusätzlich führt jeder Eintrag einen **Passwort-Verlauf** (`history`, höchstens 10 Einträge,
-ohne Doppelte und ohne das aktuelle Passwort). Wer ein Passwort ändert, kann so das alte
-noch nachschlagen, etwa wenn die Änderung auf der Website nicht geklappt hat.
+`vault/item.ts`. Ein Eintrag hat einen **Typ** und Felder
+([Konzept](/melonapp/konzept/tresore/#eintragstypen-und-eigene-felder)):
 
-`parseEntry` liest Einträge tolerant: Unbekannte Felder werden ignoriert, fehlende bekommen
-Standardwerte. Ältere und neuere Clients können so nebeneinander laufen.
+```ts
+{ type: 'login' | 'note' | 'card' | 'identity' | 'wifi',
+  title, notes,
+  fields:   [{ id, label, kind, value }],
+  sections: [{ id, title, fields: [...] }],
+  history:  [{ fieldId, label, value, changedAt }] }
+```
 
-## Sync-Store
+- `fields` kommen aus der Vorlage des Typs (feste IDs wie `username`, `password`), `sections`
+  enthalten eigene Felder.
+- Feldarten: `text`, `concealed`, `url`, `email`, `phone`, `date`, `multiline`. Unbekannte Arten
+  werden als `text` gelesen. So zeigen ältere Apps neuere Einträge trotzdem an.
+- **Verlauf:** Ändert sich ein verborgenes Feld (`concealed`), egal ob Vorlage oder eigenes Feld,
+  wandert der alte Wert in `history` (höchstens 20, ohne Doppelte und ohne aktuelle Werte).
+- **Suche** durchsucht Titel und sichtbare Felder (Text, URL, E-Mail, Telefon), nie verborgene.
+- Links entstehen nur für `http(s):`, `mailto:` und `tel:` (`safeHref`).
 
-`VaultStore` (`vault/store.ts`) hält alle entschlüsselten Einträge im Speicher und setzt
-das [Sync-Protokoll](/melonapp/server/sync/) um:
+## Sync
 
-- Beim Öffnen, alle 30 Sekunden und wenn das Fenster den Fokus bekommt, holt er Änderungen
-  seit der letzten Revision. Mehrere gleichzeitige Syncs werden zu einem zusammengefasst.
-- Einträge, die sich nicht entschlüsseln lassen, werden übersprungen und gezählt, statt den
-  ganzen Sync abzubrechen. Die Oberfläche zeigt einen Hinweis.
-- Die Item-ID erzeugt der Client (UUID v4 aus `crypto.getRandomValues`), damit sie vor dem
-  Hochladen in die AAD eingehen kann.
+- `VaultsManager` (`vault/manager.ts`) hält alle Tresore. `VaultStore` (`vault/store.ts`) hält die
+  Einträge eines Tresors und setzt das [Sync-Protokoll](/melonapp/server/sync/) um.
+- Sync beim Öffnen, alle 30 Sekunden und wenn das Fenster den Fokus bekommt.
+- Einträge, die sich nicht entschlüsseln lassen, werden übersprungen und gezählt. Der Rest des
+  Syncs läuft weiter.
+
+### Besitzer-Aufgaben laufen automatisch
+
+Bei jedem Sync erledigt die App eines Besitzers, was nur ein Besitzer kann:
+
+1. **Wartende Mitglieder freischalten:** Tresor-Schlüssel für deren öffentlichen Schlüssel
+   verschlüsseln und hinterlegen (`PUT …/members/{user}/key`).
+2. **Schlüssel wechseln**, wenn jemand den Tresor verlassen hat (`rotation_needed`).
 
 ### Konflikte
 
-Antwortet der Server beim Speichern mit `409`, synchronisiert der Store und speichert erneut:
+Antwortet der Server beim Speichern mit `409 revision_mismatch`, synchronisiert der Store und
+speichert erneut:
 
-1. **Die eigene Änderung gewinnt.** Wer gerade auf „Speichern“ gedrückt hat, erwartet genau diesen Stand.
-2. Das Passwort der anderen Seite landet im **Verlauf**, die Verläufe beider Seiten werden
-   zusammengeführt. So geht kein Passwort verloren.
-3. Wurde der Eintrag auf einem anderen Gerät gelöscht, wird er mit der Revision des
-   Tombstones wiederbelebt.
+1. **Die eigene Änderung gewinnt.** Wer gerade gespeichert hat, erwartet genau diesen Stand.
+2. Verborgene Werte der anderen Seite landen im **Verlauf**. So geht kein Passwort verloren.
+3. Wurde der Eintrag anderswo gelöscht, wird er mit der Revision des Tombstones wiederbelebt.
 
-Diese Regeln sind in `store.test.ts` gegen einen nachgebauten Server getestet.
+Bei `409 key_rotated` gibt es keinen automatischen zweiten Versuch (siehe [Sync](/melonapp/server/sync/)).
 
 ## Schutzmaßnahmen
 
 | Maßnahme | Warum |
 |---|---|
 | Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. `style-src` erlaubt `'unsafe-inline'` für MUI ([warum](/melonapp/entscheidungen/0008-mui/#folge-für-die-content-security-policy)). |
-| Links in Einträgen nur mit `http:`/`https:` | verhindert `javascript:`-Links in gespeicherten URLs |
+| Links in Einträgen nur mit `http(s):`, `mailto:`, `tel:` | verhindert `javascript:`-Links in gespeicherten Feldern |
+| Einladungs-Token im URL-Fragment (`/#/invite/…`) | landet nie in Server- oder Proxy-Logs |
 | Auto-Lock nach 5 Minuten ohne Eingabe | Schlüssel liegen nicht unbegrenzt im Speicher |
 | Zwischenablage wird 30 s nach dem Kopieren geleert, wenn sie noch das Passwort enthält | Passwörter bleiben nicht im Clipboard-Verlauf |
 | Kein Token, kein Schlüssel im `localStorage` | nach Neuladen ist der Tresor gesperrt. Gemerkt wird nur die E-Mail. |

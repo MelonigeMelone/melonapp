@@ -44,7 +44,7 @@ Aus dem Master-Key entstehen per HKDF-SHA256 (Master-Key direkt als PRK) zwei un
 | Label | Schlüssel | Verwendung |
 |---|---|---|
 | `melon/v1/auth` | `AuthKey` | wird an den Server gesendet und dort nochmal gehasht |
-| `melon/v1/wrap` | Wrap-Key | verschlüsselt den Vault-Key |
+| `melon/v1/wrap` | Wrap-Key | verschlüsselt den Konto-Schlüssel |
 
 ## Verschlüsselung (`cipher.rs`)
 
@@ -67,25 +67,59 @@ und konstant in der Laufzeit, auch in WASM.
 
 ### Zusatzdaten (AAD)
 
-Jeder Chiffretext ist per AAD an seinen Kontext gebunden:
+Jeder Chiffretext ist per AAD an seinen Platz gebunden:
 
-| Daten | AAD |
-|---|---|
-| Vault-Key | `melon/v1/vault-key` |
-| Item | `melon/v1/item\0<modul>\0<item-id>` |
+| Daten | Schlüssel | AAD |
+|---|---|---|
+| Konto-Schlüssel | Wrap-Key | `melon/v2/account-key` |
+| privater Schlüssel | Konto-Schlüssel | `melon/v2/private-key` |
+| Tresor-Name | Tresor-Schlüssel | `melon/v2/vault-meta\0<tresor>\0<version>` |
+| Eintrag | Tresor-Schlüssel | `melon/v2/item\0<tresor>\0<eintrag>\0<version>` |
 
-Damit kann der Server keine Chiffretexte zwischen Items oder Modulen vertauschen. Die
-Entschlüsselung würde fehlschlagen. Deshalb vergibt der Client die Item-ID, und der Server
-erlaubt keinen Modulwechsel eines bestehenden Items.
+Damit kann der Server keine Chiffretexte zwischen Einträgen, Tresoren oder Schlüsselversionen
+vertauschen, ohne dass die Entschlüsselung fehlschlägt. Die Trennung per `\0` verhindert, dass
+`("v", "ab")` und `("va", "b")` dieselben Bytes ergeben. Deshalb vergibt der Client die IDs.
 
 ### Fehler
 
 `CryptoError` ist absichtlich grob. `Decrypt` sagt nicht, ob der Schlüssel falsch, die
 Daten manipuliert oder der Kontext falsch war. So verrät der Fehler einem Angreifer nichts.
 
+## Teilen (`sharing.rs`)
+
+### Schlüsselpaar
+
+Jede Person hat ein **X25519-Schlüsselpaar** (`KeyPair`). Der private Schlüssel wird mit dem
+Konto-Schlüssel verschlüsselt gespeichert, der öffentliche liegt im Klartext auf dem Server.
+
+### Tresor-Schlüssel verteilen: HPKE
+
+Tresor-Schlüssel werden mit **HPKE** (RFC 9180) für den öffentlichen Schlüssel jedes Mitglieds
+verschlüsselt: Base-Modus, `DHKEM(X25519, HKDF-SHA256)`, `HKDF-SHA256`, `ChaCha20Poly1305`,
+Crate `hpke` 0.13. HPKE ist der IETF-Standard für „verschlüssle für einen öffentlichen
+Schlüssel“. Eine eigene Konstruktion aus X25519 + HKDF wäre selbst gebaute Kryptografie.
+
+Der HPKE-`info`-Parameter bindet jede Kopie an ihren Zweck:
+
+```text
+melon/v2/vault-key\0<tresor-id>\0<nutzer-id>\0<schlüsselversion>
+```
+
+Eine Kopie für Bob lässt sich also weder einer anderen Person noch einem anderen Tresor oder
+einer anderen Schlüsselversion unterschieben.
+
+Format `SealedKey`: `h1.<base64url(encapped_key[32] ‖ ciphertext[32] ‖ tag[16])>`, genau 80 Byte.
+Der Server prüft beim Speichern nur dieses Format.
+
+### Zufall
+
+HPKE braucht `rand_core` 0.9, der Rest der Crate nutzt 0.6. Beide holen ihren Zufall aus dem
+Betriebssystem. In WASM liefert ihn `getrandom` 0.3 über `crypto.getRandomValues`, eingestellt
+per `getrandom_backend="wasm_js"` in `.cargo/config.toml`.
+
 ## Speicherhygiene
 
-`MasterKey`, `AuthKey` und `SymmetricKey` werden beim Verlassen des Gültigkeitsbereichs
+`MasterKey`, `AuthKey`, `SymmetricKey` und der private Schlüssel werden beim Verlassen des Gültigkeitsbereichs
 genullt (`zeroize`) und implementieren kein `Debug`. Klartexte kommen als
 `Zeroizing<Vec<u8>>` zurück.
 

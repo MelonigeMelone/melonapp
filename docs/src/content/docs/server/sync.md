@@ -5,18 +5,20 @@ sidebar:
   order: 3
 ---
 
+## Ablauf
+
+1. `GET /vaults` liefert alle Tresore, in denen man Mitglied ist, mit Mitgliedern und der
+   eigenen Kopie des Tresor-Schlüssels. Ein Tresor, der fehlt, wurde gelöscht oder man wurde
+   entfernt. Die App verwirft ihn dann lokal.
+2. Für jeden Tresor mit Schlüssel: `GET /vaults/{id}/items?since=<letzte Revision dieses Tresors>`.
+
 ## Revisionen
 
-Jede Änderung an irgendeinem Item zieht eine neue Nummer aus der globalen Sequenz
-`item_revision_seq`. Jedes Gerät merkt sich die höchste Revision, die es kennt, und fragt nur
-danach:
+Jede Änderung an einem Tresor, einem Mitglied oder einem Eintrag zieht eine neue Nummer aus
+der globalen Sequenz `revision_seq`. Lücken sind egal, weil nur „größer als“ zählt.
 
-```text
-GET /vault/items?since=<letzte bekannte Revision>
-```
-
-Eine globale Sequenz statt eines Zählers pro Nutzer ist einfacher und braucht keine
-Sperren. Lücken in der Nummernfolge sind egal, weil nur „größer als“ zählt.
+Hat ein Tresor einen **neuen Schlüssel** bekommen (`key_version` gestiegen), lädt die App ihn
+komplett neu ab Revision 0, weil alle Einträge neu verschlüsselt wurden.
 
 ## Konflikte (Optimistic Concurrency)
 
@@ -33,8 +35,13 @@ Web-App lässt die gerade gespeicherte Änderung gewinnen und legt das Passwort 
 Seite im Verlauf ab ([Details](/melonapp/clients/web/#konflikte)).
 
 Anlegen (`base_revision: null`) einer schon existierenden ID ist ebenfalls ein `409`.
-Der Modulname eines Items lässt sich nicht ändern, weil er Teil der
-[AAD](/melonapp/sicherheit/kryptografie/#zusatzdaten-aad) ist.
+
+**Veralteter Schlüssel:** Wurde der Tresor-Schlüssel inzwischen gewechselt, antwortet der Server
+mit `409 key_rotated`. Die App wiederholt dann nicht blind, sondern synchronisiert zuerst. Der
+Eintrag wird nie mit einem Schlüssel gespeichert, den die übrigen Mitglieder nicht mehr haben.
+
+**Verschieben** zwischen Tresoren ist „im Ziel neu anlegen, im Quell-Tresor löschen“, weil die
+Tresor-ID Teil der [AAD](/melonapp/sicherheit/kryptografie/#zusatzdaten-aad) ist.
 
 ## Löschen
 

@@ -22,20 +22,28 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Eigenschaft | Test |
 |---|---|
 | Manipulierter Chiffretext wird erkannt | `cipher::tests::tampering_is_detected` |
-| Chiffretext lässt sich nicht in anderes Item/Modul verschieben | `cipher::tests::wrong_context_fails` |
+| Chiffretext lässt sich nicht in anderen Eintrag/Tresor/Schlüsselversion verschieben | `sharing::tests::item_aad_separates_contexts`, `api::personal_vault_flow` |
+| Geteilter Tresor-Schlüssel ist an Tresor, Person und Version gebunden | `sharing::tests::sealed_key_is_bound_to_vault_user_and_version` |
+| Nur der Empfänger öffnet seine Schlüssel-Kopie | `sharing::tests::other_person_cannot_open` |
 | Server kann KDF nicht abschwächen | `kdf::tests::weak_or_absurd_params_are_rejected` |
 | Gleiches Passwort auf allen Plattformen | `kdf::tests::unicode_is_normalized` |
-| Nutzer sehen und ändern keine fremden Items | `api::users_are_isolated` |
-| Server speichert keinen Klartext | `api::full_vault_flow` |
+| Fremde sehen keine Tresore, persönliche Tresore sind nicht teilbar | `api::sharing_respects_roles_and_isolation` |
+| Betrachter können nicht schreiben, Bearbeiter keine Mitglieder verwalten | `api::sharing_respects_roles_and_isolation` |
+| Einladung: an E-Mail gebunden, einmalig, Registrierung sonst geschlossen | `api::invite_link_registration_and_key_grant` |
+| Entfernen erzwingt Schlüsselwechsel über alle Einträge und Mitglieder | `api::removing_a_member_rotates_the_key` |
+| Schreiben mit altem Schlüssel wird abgelehnt | `api::removing_a_member_rotates_the_key`, `store.test.ts` |
+| Letzter Besitzer kann nicht gehen | `api::leaving_flags_rotation_and_last_owner_stays` |
+| Server speichert keinen Klartext | `api::personal_vault_flow` |
 | Login-Sperre nach Fehlversuchen | `api::wrong_password_and_lockout` |
 | `prelogin` verrät keine Konten | `api::prelogin_does_not_reveal_accounts` |
-| Abgemeldete Tokens sind ungültig | `api::full_vault_flow` |
+| Abgemeldete Tokens sind ungültig | `api::personal_vault_flow` |
 | Sicherheits-Header sind gesetzt | `api::security_headers_are_set` |
 | Konflikt verliert kein Passwort | `store.test.ts: resolves a conflicting edit` |
 | Unlesbare Items brechen den Sync nicht ab | `store.test.ts: skips items it cannot decrypt` |
-| Keine `javascript:`-Links aus Einträgen | `entry.test.ts: only links http and https urls` |
-| Ganzer Ablauf im echten Browser, falsches Passwort wird abgelehnt | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
-| Datenbank enthält nach dem Browser-Test keinen Klartext | CI-Job `e2e`, Schritt „no plaintext“ |
+| Keine `javascript:`-Links aus Einträgen | `item.test.ts: only creates safe links` |
+| Verborgene Felder sind nicht durchsuchbar | `item.test.ts`, CI-Job `e2e` |
+| Zwei Personen im echten Browser: Einladen, automatische Freigabe, Entfernen mit Schlüsselwechsel, Zugriff danach weg | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
+| Datenbank enthält nach dem Browser-Test keinen Klartext, auch keine Tresor-Namen | CI-Job `e2e`, Schritt „no plaintext“ |
 
 ## Lokal ausführen
 

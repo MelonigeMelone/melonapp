@@ -6,6 +6,12 @@ import { useIdle } from './useIdle';
 const loadVault = () => import('./screens/VaultScreen');
 const VaultScreen = lazy(() => loadVault().then((m) => ({ default: m.VaultScreen })));
 
+const INVITE = /^#\/invite\/([A-Za-z0-9_-]{20,})$/;
+
+function inviteFromUrl(): string | null {
+  return INVITE.exec(window.location.hash)?.[1] ?? null;
+}
+
 const AUTO_LOCK_MS = 5 * 60 * 1000;
 const EMAIL_KEY = 'melon.email';
 
@@ -29,11 +35,14 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [email, setEmail] = useState(rememberedEmail);
+  const [inviteToken, setInviteToken] = useState(inviteFromUrl);
 
   const onSession = useCallback((s: Session) => {
     rememberEmail(s.email);
     setEmail(s.email);
     setNotice(null);
+    setInviteToken(null);
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
     setSession(s);
   }, []);
 
@@ -59,6 +68,6 @@ export function App() {
       <VaultScreen session={session} onLock={onLock} />
     </Suspense>
   ) : (
-    <AuthScreen initialEmail={email} notice={notice} onSession={onSession} />
+    <AuthScreen initialEmail={email} notice={notice} inviteToken={inviteToken} onSession={onSession} />
   );
 }

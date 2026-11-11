@@ -33,17 +33,23 @@ Für die AutoFill-Extension, TestFlight und das Signieren ist ein Apple-Develope
 
 ## Datenformat eines Eintrags
 
-Ein Eintrag ist ein Item im Modul `passwords`. Das folgende JSON liegt **verschlüsselt**
-im Feld `data` (siehe [Sync](/melonapp/server/sync/)):
+Ein Login-Eintrag. Das folgende JSON liegt **verschlüsselt** im Feld `data` (siehe
+[Web-App → Datenmodell](/melonapp/clients/web/#datenmodell)):
 
 ```json
 {
+  "type": "login",
   "title": "GitHub",
-  "username": "melone",
-  "password": "…",
-  "urls": ["https://github.com"],
+  "fields": [
+    { "id": "username", "label": "Benutzername", "kind": "text", "value": "melone" },
+    { "id": "password", "label": "Passwort", "kind": "concealed", "value": "…" },
+    { "id": "website", "label": "Website", "kind": "url", "value": "https://github.com" }
+  ],
+  "sections": [
+    { "id": "…", "title": "", "fields": [{ "id": "…", "label": "Recovery-Code", "kind": "concealed", "value": "…" }] }
+  ],
   "notes": "",
-  "totp": null
+  "history": []
 }
 ```
 

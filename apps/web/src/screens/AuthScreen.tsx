@@ -7,7 +7,8 @@ import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { api } from '../api';
 import { MelonMark } from '../components/Brand';
 import { describeError, login, register, type Session } from '../session';
 
@@ -17,18 +18,33 @@ const MIN_LENGTH = 12;
 export function AuthScreen({
   initialEmail,
   notice,
+  inviteToken,
   onSession,
 }: {
   initialEmail: string;
   notice: string | null;
+  inviteToken: string | null;
   onSession: (s: Session) => void;
 }) {
-  const [mode, setMode] = useState<Mode>('login');
+  const [mode, setMode] = useState<Mode>(inviteToken ? 'register' : 'login');
+  const [inviter, setInviter] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState(false);
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    api
+      .invitePreview(inviteToken)
+      .then((p) => {
+        setEmail(p.email);
+        setInviter(p.invited_by);
+      })
+      .catch(() => setInviteError(true));
+  }, [inviteToken]);
 
   const switchMode = (m: Mode) => {
     setMode(m);
@@ -51,7 +67,10 @@ export function AuthScreen({
     }
     setBusy(true);
     try {
-      const session = await (mode === 'login' ? login : register)(email.trim(), password);
+      const session =
+        mode === 'login'
+          ? await login(email.trim(), password)
+          : await register(email.trim(), password, inviter ? inviteToken : null);
       setPassword('');
       setConfirm('');
       onSession(session);
@@ -101,6 +120,14 @@ export function AuthScreen({
           </Tabs>
 
           {notice && mode === 'login' && <Alert severity="info">{notice}</Alert>}
+          {inviter && mode === 'register' && (
+            <Alert severity="success">
+              {inviter} hat dich eingeladen. Leg dein Konto an, dann bekommst du Zugriff auf den geteilten Tresor.
+            </Alert>
+          )}
+          {inviteError && (
+            <Alert severity="warning">Der Einladungslink ist abgelaufen oder wurde schon benutzt. Bitte um einen neuen.</Alert>
+          )}
 
           <TextField
             label="E-Mail"
@@ -108,6 +135,7 @@ export function AuthScreen({
             autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            slotProps={{ htmlInput: { readOnly: !!inviter && mode === 'register' } }}
             fullWidth
           />
           <TextField

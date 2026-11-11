@@ -6,97 +6,175 @@ sidebar:
 ---
 
 Basis: `https://<deine-domain>/api/v1`. Bodies sind JSON. Authentifizierte Endpunkte
-erwarten `Authorization: Bearer <token>`.
+erwarten `Authorization: Bearer <token>`. Fehler sind immer `{ "error": "<code>" }`.
 
-| Methode | Pfad | Auth | Zweck |
+Formate: `EncString` = `1.<base64url>` (XChaCha20-Poly1305), `SealedKey` = `h1.<base64url>`
+(HPKE), öffentliche Schlüssel und Salts als Standard-Base64. Siehe [Kryptografie](/melonapp/sicherheit/kryptografie/).
+
+## Übersicht
+
+| Methode | Pfad | Wer | Zweck |
 |---|---|---|---|
-| GET | `/health` (ohne `/api/v1`) | – | Lebenszeichen, antwortet `ok` |
-| POST | `/auth/prelogin` | – | KDF-Parameter + Salt zu einer E-Mail |
-| POST | `/auth/register` | – | Konto anlegen |
-| POST | `/auth/login` | – | Sitzungstoken + verschlüsselter Vault-Key |
-| POST | `/auth/logout` | ✓ | Sitzung beenden |
-| GET | `/vault/items?since=N` | ✓ | Änderungen seit Revision N |
-| PUT | `/vault/items/{id}` | ✓ | Item anlegen oder ändern |
-| DELETE | `/vault/items/{id}?base_revision=N` | ✓ | Item löschen |
+| GET | `/health` (ohne `/api/v1`) | alle | Lebenszeichen |
+| POST | `/auth/prelogin` | alle | KDF-Parameter + Salt |
+| POST | `/auth/register` | alle* | Konto + persönlicher Tresor |
+| POST | `/auth/login` | alle | Sitzung + verschlüsseltes Schlüsselmaterial |
+| POST | `/auth/logout` | angemeldet | Sitzung beenden |
+| POST | `/auth/invites/preview` | alle | E-Mail und Einladender zu einem Einladungslink |
+| GET | `/users/lookup?email=` | angemeldet | Nutzer-ID und öffentlicher Schlüssel |
+| GET | `/vaults` | angemeldet | eigene Tresore mit Mitgliedern |
+| POST | `/vaults` | angemeldet | geteilten Tresor anlegen |
+| PUT | `/vaults/{id}` | Besitzer | Name ändern |
+| DELETE | `/vaults/{id}` | Besitzer | geteilten Tresor löschen |
+| GET | `/vaults/{id}/items?since=N` | Mitglied mit Schlüssel | Änderungen seit Revision N |
+| PUT | `/vaults/{id}/items/{item}` | Bearbeiter, Besitzer | Eintrag anlegen/ändern |
+| DELETE | `/vaults/{id}/items/{item}?base_revision=N` | Bearbeiter, Besitzer | Eintrag löschen |
+| POST | `/vaults/{id}/members` | Besitzer | bestehendes Konto hinzufügen |
+| PUT | `/vaults/{id}/members/{user}` | Besitzer | Rolle ändern |
+| PUT | `/vaults/{id}/members/{user}/key` | Besitzer | Schlüssel für wartendes Mitglied hinterlegen |
+| DELETE | `/vaults/{id}/members/{user}` | selbst / Besitzer | verlassen bzw. wartendes Mitglied entfernen |
+| POST | `/vaults/{id}/rotate` | Besitzer | neuer Tresor-Schlüssel, optional Mitglieder entfernen |
+| GET/POST | `/vaults/{id}/invites` | Besitzer | Einladungen auflisten / erzeugen |
+| DELETE | `/vaults/{id}/invites/{invite}` | Besitzer | Einladung zurückziehen |
+
+\* Registrierung nur bei `MELON_ALLOW_REGISTRATION=true` oder mit gültigem Einladungs-Token.
+
+Wer kein Mitglied ist, bekommt für einen Tresor immer `404 vault_not_found`, auch wenn es ihn
+gibt. So verrät die API nicht, welche Tresore existieren.
 
 ## Auth
-
-### `POST /auth/prelogin`
-
-```json
-{ "email": "max@example.com" }
-```
-
-→ `200`
-
-```json
-{ "kdf": { "memory_kib": 65536, "iterations": 3, "parallelism": 4 }, "salt": "<base64>" }
-```
-
-Für unbekannte E-Mails gibt es ein stabiles Fake-Salt ([warum](/melonapp/server/authentifizierung/#prelogin)).
 
 ### `POST /auth/register`
 
 ```json
 {
+  "user_id": "<uuid, vom Client erzeugt>",
   "email": "max@example.com",
   "kdf": { "memory_kib": 65536, "iterations": 3, "parallelism": 4 },
   "salt": "<base64, 16–64 Byte>",
   "auth_key": "<base64, 32 Byte>",
-  "wrapped_vault_key": "1.<…>"
+  "wrapped_account_key": "1.<…>",
+  "public_key": "<base64, 32 Byte X25519>",
+  "encrypted_private_key": "1.<…>",
+  "personal_vault": { "id": "<uuid>", "encrypted_meta": "1.<…>", "encrypted_vault_key": "h1.<…>" },
+  "invite_token": null
 }
 ```
 
-→ `201 { "user_id": "<uuid>" }` · `403 registration_disabled` · `409 email_taken` · `400 invalid_*`
+→ `201 { "user_id" }` · `403 registration_disabled` · `409 email_taken` ·
+`400 invalid_invite | invite_email_mismatch | invalid_*`
+
+Die Nutzer-ID kommt vom Client, weil der Tresor-Schlüssel des persönlichen Tresors schon
+bei der Registrierung an sie gebunden wird. Mit Einladungs-Token wird die Person zusätzlich
+**wartendes Mitglied** des einladenden Tresors.
 
 ### `POST /auth/login`
 
-```json
-{ "email": "max@example.com", "auth_key": "<base64>" }
-```
-
-→ `200`
+`{ "email", "auth_key" }` → `200`
 
 ```json
-{ "token": "<base64url>", "expires_in_seconds": 1209600, "user_id": "<uuid>", "wrapped_vault_key": "1.<…>" }
+{ "token": "…", "expires_in_seconds": 1209600, "user_id": "…",
+  "wrapped_account_key": "1.<…>", "public_key": "…", "encrypted_private_key": "1.<…>" }
 ```
 
 `401 unauthorized` · `429 too_many_requests`
 
-### `POST /auth/logout`
+### `POST /auth/invites/preview`
 
-→ `204`
+`{ "token" }` → `200 { "email", "invited_by" }` · `404 invite_not_found`
 
-## Vault
+Der Token steht im Link hinter `#`. Browser schicken diesen Teil nie an den Server, er landet
+also nicht in Server- oder Proxy-Logs. Die Web-App sendet ihn nur im Body dieser Anfrage.
 
-### `GET /vault/items?since=N`
+## Tresore
 
-→ `200`
+### `GET /vaults`
+
+```json
+{ "vaults": [{
+  "id": "…", "personal": false, "encrypted_meta": "1.<…>", "key_version": 2,
+  "revision": 41, "rotation_needed": false,
+  "role": "owner", "encrypted_vault_key": "h1.<…>", "member_key_version": 2,
+  "members": [{ "user_id": "…", "email": "…", "role": "editor", "public_key": "…",
+                "has_key": true, "key_version": 2 }]
+}]}
+```
+
+`encrypted_vault_key: null` heißt: wartendes Mitglied, der Schlüssel fehlt noch.
+
+### `POST /vaults`
+
+`{ "id", "encrypted_meta", "encrypted_vault_key" }` → `201 { "revision" }` · `409 vault_exists`
+
+### `PUT /vaults/{id}`
+
+`{ "encrypted_meta", "key_version" }` → `200 { "revision" }` · `409 key_rotated`
+
+## Einträge
+
+### `GET /vaults/{id}/items?since=N`
+
+```json
+{ "items": [{ "id": "…", "data": "1.<…>", "key_version": 2, "revision": 42, "deleted": false }],
+  "latest_revision": 42, "has_more": false }
+```
+
+Höchstens 1000 pro Antwort. `403 vault_key_pending` für wartende Mitglieder.
+
+### `PUT /vaults/{id}/items/{item}`
+
+`{ "data", "key_version", "base_revision": null | N }` → `200 { "revision" }`
+
+`409 revision_mismatch` (anderes Gerät war schneller) · `409 key_rotated` (Schlüssel veraltet) ·
+`403 read_only` (Betrachter) · `400 item_too_large` (über 64 KiB)
+
+## Mitglieder
+
+### `POST /vaults/{id}/members`
+
+`{ "user_id", "role", "encrypted_vault_key", "key_version" }` → `201`
+· `409 member_exists_or_unknown_user` · `400 personal_vault`
+
+### `PUT /vaults/{id}/members/{user}`
+
+`{ "role" }` → `204` · `409 last_owner`
+
+### `DELETE /vaults/{id}/members/{user}`
+
+- **eigene ID:** Tresor verlassen. Setzt `rotation_needed`. `409 last_owner`, wenn man der
+  letzte Besitzer ist.
+- **fremde ID:** nur für wartende Mitglieder ohne Schlüssel. Wer den Schlüssel hat, wird über
+  `rotate` entfernt: `409 rotation_required`.
+
+### `POST /vaults/{id}/rotate`
 
 ```json
 {
-  "items": [{ "id": "<uuid>", "module": "passwords", "data": "1.<…>", "revision": 42, "deleted": false }],
-  "latest_revision": 42,
-  "has_more": false
+  "key_version": 3,
+  "encrypted_meta": "1.<…>",
+  "members": [{ "user_id": "…", "encrypted_vault_key": "h1.<…>" }],
+  "items": [{ "id": "…", "data": "1.<…>" }],
+  "remove_user_ids": ["…"]
 }
 ```
 
-Höchstens 1000 Items pro Antwort. Bei `has_more: true` mit `since=latest_revision` erneut abfragen.
+→ `204`. Der Server übernimmt alles in **einer** Transaktion, aber nur, wenn
 
-### `PUT /vault/items/{id}`
+- `key_version` genau eins höher ist als bisher (`409 key_version_mismatch`),
+- `members` genau alle verbleibenden Mitglieder mit Schlüssel enthält (`409 members_changed`),
+- `items` genau alle nicht gelöschten Einträge enthält (`409 items_changed`).
 
-```json
-{ "module": "passwords", "data": "1.<…>", "base_revision": null }
-```
+So kann niemand versehentlich Mitglieder ausschließen oder Einträge mit altem Schlüssel
+zurücklassen.
 
-`base_revision: null` legt an, eine Zahl ändert. → `200 { "revision": 43 }` ·
-`409 revision_mismatch` · `400 invalid_module | item_too_large` (max. 64 KiB)
+## Einladungen
 
-### `DELETE /vault/items/{id}?base_revision=N`
+### `POST /vaults/{id}/invites`
 
-→ `200 { "revision": 44 }` · `409 revision_mismatch`
+`{ "email", "role" }` → `201 { "id", "token", "expires_in_days": 7 }` · `409 user_exists`
 
-## Fehler
+Der Token wird nur dieses eine Mal zurückgegeben. Gespeichert ist nur sein SHA-256-Hash.
 
-Fehler sind immer `{ "error": "<code>" }` mit einem stabilen Code. Details landen nur
-im Server-Log, damit Antworten nichts über Interna verraten.
+### `GET /vaults/{id}/invites`
+
+→ `{ "invites": [{ "id", "email", "role", "expires_in_hours" }] }` (nur offene)

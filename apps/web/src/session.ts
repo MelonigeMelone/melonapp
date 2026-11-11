@@ -1,25 +1,17 @@
-import { api, ApiError, DEFAULT_KDF, NetworkError } from './api';
+import { api, ApiError, authed, DEFAULT_KDF, NetworkError } from './api';
 import { cryptoCall } from './crypto/client';
-import { VaultStore } from './vault/store';
+import { newId } from './vault/item';
+import { VaultsManager } from './vault/manager';
 
 export interface Session {
   email: string;
+  userId: string;
   token: string;
-  store: VaultStore;
+  vaults: VaultsManager;
 }
 
-function openStore(token: string): VaultStore {
-  return new VaultStore(
-    {
-      encrypt: (module, id, plaintext) => cryptoCall('encrypt', { module, id, plaintext }),
-      decryptMany: (module, items) => cryptoCall('decryptMany', { module, items }),
-    },
-    {
-      list: (since) => api.listItems(token, since),
-      put: (id, body) => api.putItem(token, id, body),
-      remove: (id, base) => api.deleteItem(token, id, base),
-    },
-  );
+function open(email: string, userId: string, token: string): Session {
+  return { email, userId, token, vaults: new VaultsManager(userId, authed(token), cryptoCall) };
 }
 
 export async function login(email: string, password: string): Promise<Session> {
@@ -27,22 +19,46 @@ export async function login(email: string, password: string): Promise<Session> {
   const authKey = await cryptoCall('derive', { password, salt: pre.salt, kdf: pre.kdf });
   try {
     const res = await api.login({ email, auth_key: authKey });
-    await cryptoCall('unlock', { wrapped: res.wrapped_vault_key });
-    return { email, token: res.token, store: openStore(res.token) };
+    await cryptoCall('unlock', {
+      wrappedAccountKey: res.wrapped_account_key,
+      encryptedPrivateKey: res.encrypted_private_key,
+    });
+    return open(email, res.user_id, res.token);
   } catch (e) {
     await cryptoCall('lock');
     throw e;
   }
 }
 
-export async function register(email: string, password: string): Promise<Session> {
+export async function register(email: string, password: string, inviteToken: string | null): Promise<Session> {
   const salt = await cryptoCall('generateSalt');
   const authKey = await cryptoCall('derive', { password, salt, kdf: DEFAULT_KDF });
+  const userId = newId();
+  const personalVaultId = newId();
   try {
-    const wrapped = await cryptoCall('createVault');
-    await api.register({ email, kdf: DEFAULT_KDF, salt, auth_key: authKey, wrapped_vault_key: wrapped });
+    const account = await cryptoCall('createAccount', {
+      userId,
+      personalVaultId,
+      meta: JSON.stringify({ name: 'Persönlich' }),
+    });
+    await api.register({
+      user_id: userId,
+      email,
+      kdf: DEFAULT_KDF,
+      salt,
+      auth_key: authKey,
+      wrapped_account_key: account.wrappedAccountKey,
+      public_key: account.publicKey,
+      encrypted_private_key: account.encryptedPrivateKey,
+      personal_vault: {
+        id: personalVaultId,
+        encrypted_meta: account.personalVault.encryptedMeta,
+        encrypted_vault_key: account.personalVault.encryptedVaultKey,
+      },
+      invite_token: inviteToken,
+    });
     const res = await api.login({ email, auth_key: authKey });
-    return { email, token: res.token, store: openStore(res.token) };
+    return open(email, res.user_id, res.token);
   } catch (e) {
     await cryptoCall('lock');
     throw e;
@@ -58,11 +74,21 @@ const messages: Record<string, string> = {
   unauthorized: 'E-Mail oder Master-Passwort ist falsch.',
   too_many_requests: 'Zu viele Fehlversuche. Warte 15 Minuten und versuche es dann erneut.',
   registration_disabled:
-    'Auf diesem Server ist die Registrierung ausgeschaltet. Setze MELON_ALLOW_REGISTRATION=true und starte den Server neu.',
+    'Auf diesem Server ist die Registrierung ausgeschaltet. Du brauchst einen Einladungslink, oder der Betreiber setzt MELON_ALLOW_REGISTRATION=true.',
   email_taken: 'Für diese E-Mail gibt es schon ein Konto. Melde dich an.',
   invalid_email: 'Gib eine gültige E-Mail-Adresse ein.',
+  invalid_invite: 'Der Einladungslink ist abgelaufen oder wurde schon benutzt. Bitte um einen neuen.',
+  invite_email_mismatch: 'Die Einladung gilt für eine andere E-Mail-Adresse.',
   item_too_large: 'Der Eintrag ist zu groß. Kürze die Notizen.',
   revision_mismatch: 'Der Eintrag wurde gleichzeitig auf einem anderen Gerät geändert. Versuche es erneut.',
+  key_rotated: 'Der Tresor hat gerade einen neuen Schlüssel bekommen. Speichere noch einmal.',
+  read_only: 'Du darfst in diesem Tresor nur lesen.',
+  owner_only: 'Das darf nur ein Besitzer des Tresors.',
+  last_owner: 'Ein Tresor braucht mindestens einen Besitzer. Mach zuerst jemand anderen zum Besitzer.',
+  member_exists_or_unknown_user: 'Diese Person ist schon Mitglied.',
+  user_exists: 'Für diese E-Mail gibt es schon ein Konto. Sie wird direkt hinzugefügt.',
+  vault_key_pending: 'Ein Besitzer muss dir den Zugang noch freigeben. Das passiert automatisch, sobald er die App öffnet.',
+  vault_not_found: 'Diesen Tresor gibt es nicht mehr, oder du hast keinen Zugriff mehr.',
 };
 
 export function describeError(e: unknown): string {

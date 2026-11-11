@@ -1,6 +1,6 @@
 import Typography from '@mui/material/Typography';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { charClass, type CharClass } from '../vault/entry';
+import { charClass, type CharClass } from '../vault/item';
 
 const MASK = '••••••••••••';
 

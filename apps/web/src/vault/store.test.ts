@@ -1,26 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, type PutBody, type RemoteItem, type SyncPage } from '../api';
-import { emptyEntry, type PasswordEntry } from './entry';
-import { VaultStore, type CryptoPort, type RemotePort } from './store';
+import { ApiError, type ItemPage, type PutBody, type RemoteItem } from '../api';
+import { emptyItem, fieldValue, type Item } from './item';
+import { VaultStore, type ItemCrypto, type ItemRemote } from './store';
 
 class FakeServer {
   rows = new Map<string, RemoteItem>();
+  keyVersion = 1;
   private seq = 0;
 
-  port(): RemotePort {
+  port(): ItemRemote {
     return {
-      list: async (since): Promise<SyncPage> => {
-        const items = [...this.rows.values()]
-          .filter((r) => r.revision > since)
-          .sort((a, b) => a.revision - b.revision);
+      list: async (since): Promise<ItemPage> => {
+        const items = [...this.rows.values()].filter((r) => r.revision > since).sort((a, b) => a.revision - b.revision);
         return { items, latest_revision: items.at(-1)?.revision ?? since, has_more: false };
       },
       put: async (id, body: PutBody) => {
+        if (body.key_version !== this.keyVersion) throw new ApiError(409, 'key_rotated');
         const row = this.rows.get(id);
         const ok = body.base_revision === null ? !row : row?.revision === body.base_revision;
         if (!ok) throw new ApiError(409, 'revision_mismatch');
         const revision = ++this.seq;
-        this.rows.set(id, { id, module: body.module, data: body.data, revision, deleted: false });
+        this.rows.set(id, { id, data: body.data, key_version: body.key_version, revision, deleted: false });
         return { revision };
       },
       remove: async (id, base) => {
@@ -34,22 +34,24 @@ class FakeServer {
   }
 }
 
-const fakeCrypto: CryptoPort = {
-  encrypt: async (module, id, plaintext) => `${module}|${id}|${plaintext}`,
-  decryptMany: async (module, items) =>
-    items.map(({ id, data }) => {
-      const prefix = `${module}|${id}|`;
-      return data.startsWith(prefix)
-        ? { id, plaintext: data.slice(prefix.length) }
-        : { id, error: 'decryption failed' };
-    }),
+const fakeCrypto: ItemCrypto = {
+  encrypt: async (id, plaintext) => `${id}|${plaintext}`,
+  decrypt: async (items) =>
+    items.map(({ id, data }) =>
+      data.startsWith(`${id}|`) ? { id, plaintext: data.slice(id.length + 1) } : { id, error: 'decryption failed' },
+    ),
 };
 
-const entry = (over: Partial<PasswordEntry>): PasswordEntry => ({ ...emptyEntry(), ...over });
+function login(title: string, password: string): Item {
+  const item = emptyItem('login');
+  item.title = title;
+  item.fields = item.fields.map((f) => (f.id === 'password' ? { ...f, value: password } : f));
+  return item;
+}
 
 function device(server: FakeServer, ids: string[] = []) {
   let n = 0;
-  return new VaultStore(fakeCrypto, server.port(), () => ids[n++] ?? `id-${Math.random()}`);
+  return new VaultStore('vault', fakeCrypto, server.port(), () => 1, undefined, () => ids[n++] ?? `id-${Math.random()}`);
 }
 
 describe('VaultStore', () => {
@@ -57,54 +59,60 @@ describe('VaultStore', () => {
     const server = new FakeServer();
     const a = device(server, ['one']);
     const b = device(server);
-
-    const id = await a.save(null, entry({ title: 'GitHub', password: 'first' }));
-    await a.save(id, entry({ title: 'GitHub', password: 'second' }));
+    const id = await a.save(null, login('GitHub', 'first'));
+    await a.save(id, login('GitHub', 'second'));
     await b.sync();
-
     const seen = b.get(id);
-    expect(seen?.entry.password).toBe('second');
-    expect(seen?.entry.history.map((h) => h.password)).toEqual(['first']);
+    expect(fieldValue(seen!.item, 'password')).toBe('second');
+    expect(seen?.item.history.map((h) => h.value)).toEqual(['first']);
+    expect(seen?.vaultId).toBe('vault');
   });
 
   it('resolves a conflicting edit without losing the other password', async () => {
     const server = new FakeServer();
     const a = device(server, ['x']);
     const b = device(server);
-    const id = await a.save(null, entry({ title: 'Bank', password: 'base' }));
+    const id = await a.save(null, login('Bank', 'base'));
     await b.sync();
-
-    await a.save(id, entry({ title: 'Bank', password: 'from-a' }));
-    await b.save(id, entry({ title: 'Bank', password: 'from-b' }));
+    await a.save(id, login('Bank', 'from-a'));
+    await b.save(id, { ...b.get(id)!.item, fields: login('Bank', 'from-b').fields });
     await a.sync();
-
-    const result = a.get(id)?.entry;
-    expect(result?.password).toBe('from-b');
-    expect(result?.history.map((h) => h.password)).toContain('from-a');
-    expect(result?.history.map((h) => h.password)).toContain('base');
+    const result = a.get(id)!.item;
+    expect(fieldValue(result, 'password')).toBe('from-b');
+    expect(result.history.map((h) => h.value)).toEqual(expect.arrayContaining(['from-a', 'base']));
   });
 
   it('propagates deletions and can recreate an item deleted elsewhere', async () => {
     const server = new FakeServer();
     const a = device(server, ['gone']);
     const b = device(server);
-    const id = await a.save(null, entry({ title: 'Old' }));
+    const id = await a.save(null, login('Old', ''));
     await b.sync();
-
     await a.remove(id);
-    await b.save(id, entry({ title: 'Still needed' }));
+    await b.save(id, login('Still needed', ''));
     await a.sync();
-
-    expect(a.get(id)?.entry.title).toBe('Still needed');
+    expect(a.get(id)?.item.title).toBe('Still needed');
   });
 
-  it('skips items it cannot decrypt instead of failing the sync', async () => {
+  it('does not retry writes made with an outdated vault key', async () => {
     const server = new FakeServer();
-    server.rows.set('bad', { id: 'bad', module: 'passwords', data: 'garbage', revision: 1, deleted: false });
-    server.rows.set('other', { id: 'other', module: 'notes', data: 'x', revision: 2, deleted: false });
+    const a = device(server, ['k']);
+    await a.save(null, login('A', ''));
+    server.keyVersion = 2;
+    await expect(a.save('k', login('B', ''))).rejects.toMatchObject({ code: 'key_rotated' });
+  });
+
+  it('skips items it cannot decrypt and starts over after reset', async () => {
+    const server = new FakeServer();
+    server.rows.set('bad', { id: 'bad', data: 'garbage', key_version: 1, revision: 1, deleted: false });
     const a = device(server);
     await a.sync();
-    expect(a.getSnapshot()).toEqual([]);
+    expect(a.list()).toEqual([]);
     expect(a.unreadableCount).toBe(1);
+    server.rows.set('bad', { id: 'bad', data: 'bad|{"title":"Repariert"}', key_version: 1, revision: 1, deleted: false });
+    a.reset();
+    await a.sync();
+    expect(a.get('bad')?.item.title).toBe('Repariert');
+    expect(a.unreadableCount).toBe(0);
   });
 });
