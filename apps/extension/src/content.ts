@@ -262,6 +262,16 @@ function reportSubmit(form: HTMLFormElement | null) {
   if (identifier?.username) void ask({ type: 'identifier', username: identifier.username.value.trim() });
 }
 
+document.addEventListener(
+  'change',
+  (e) => {
+    const input = e.target;
+    if (!(input instanceof HTMLInputElement) || !input.value.trim()) return;
+    if (findIdentifierFields(document).some((f) => f.username === input)) void ask({ type: 'identifier', username: input.value.trim() });
+  },
+  true,
+);
+
 document.addEventListener('submit', (e) => reportSubmit(e.target instanceof HTMLFormElement ? e.target : null), true);
 document.addEventListener(
   'click',

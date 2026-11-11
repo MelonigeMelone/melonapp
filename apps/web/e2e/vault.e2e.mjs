@@ -33,6 +33,7 @@ const step = async (name, fn) => {
   } catch (e) {
     await current.screenshot({ path: `${OUT}/fail.png`, animations: 'disabled' });
     const errs = await current.locator('.MuiAlert-message').allInnerTexts();
+    console.log(`::error title=E2E failed::${name}: ${String(e?.message ?? e).split(String.fromCharCode(10))[0]}`);
     console.log('FAILED', name, errs, problems);
     throw e;
   }

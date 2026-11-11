@@ -62,6 +62,7 @@ const step = async (name, fn) => {
     await fn();
   } catch (e) {
     if (current) await current.screenshot({ path: `${OUT}/ext-fail.png` });
+    console.log(`::error title=E2E failed::${name}: ${String(e?.message ?? e).split(String.fromCharCode(10))[0]}`);
     console.log('FAILED', name, problems);
     throw e;
   }
