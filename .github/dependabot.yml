@@ -5,6 +5,8 @@ updates:
     schedule:
       interval: weekly
     groups:
+      rustcrypto:
+        patterns: [aead, argon2, chacha20poly1305, digest, hkdf, hmac, password-hash, sha2, blake2]
       rust-minor:
         update-types: [minor, patch]
   - package-ecosystem: github-actions
