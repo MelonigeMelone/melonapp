@@ -121,7 +121,7 @@ pub fn assert_passkey(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use p256::ecdsa::signature::Verifier;
+    use p256::ecdsa::{VerifyingKey, signature::Verifier};
 
     #[test]
     fn registration_and_assertion_verify_and_bind_challenge() {
@@ -142,7 +142,22 @@ mod tests {
         assert_eq!(&data[53..55], &[0, 32]);
         assert_eq!(&data[55..87], registration.credential_id);
         let cose: Value = ciborium::de::from_reader(&data[87..]).unwrap();
-        assert_eq!(cose.as_map().unwrap().len(), 5);
+        let cose_fields = cose.as_map().unwrap();
+        assert_eq!(cose_fields.len(), 5);
+        let field = |label: i32| {
+            &cose_fields
+                .iter()
+                .find(|(key, _)| key.as_integer() == Some(label.into()))
+                .unwrap()
+                .1
+        };
+        assert_eq!(field(1).as_integer(), Some(2.into()));
+        assert_eq!(field(3).as_integer(), Some((-7).into()));
+        assert_eq!(field(-1).as_integer(), Some(1.into()));
+        let mut public = vec![4];
+        public.extend_from_slice(field(-2).as_bytes().unwrap());
+        public.extend_from_slice(field(-3).as_bytes().unwrap());
+        let verifier = VerifyingKey::from_sec1_bytes(&public).unwrap();
         let assertion = assert_passkey(
             &key,
             "example.com",
@@ -151,19 +166,12 @@ mod tests {
             &[9; 32],
         )
         .unwrap();
-        let private = key
-            .decrypt(
-                &EncString::parse(&registration.encrypted_key).unwrap(),
-                &aad("example.com", &registration.credential_id),
-            )
-            .unwrap();
-        let signer = SigningKey::from_slice(&private).unwrap();
         let mut message = assertion.authenticator_data.clone();
         message.extend_from_slice(&[9; 32]);
         let signature = Signature::from_der(&assertion.signature).unwrap();
-        assert!(signer.verifying_key().verify(&message, &signature).is_ok());
+        assert!(verifier.verify(&message, &signature).is_ok());
         message[40] ^= 1;
-        assert!(signer.verifying_key().verify(&message, &signature).is_err());
+        assert!(verifier.verify(&message, &signature).is_err());
         assert_eq!(assertion.authenticator_data[32], 0x05);
     }
 
