@@ -13,6 +13,11 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true,
     target: 'es2022',
-    rollupOptions: { input: { popup: fileURLToPath(new URL('./src/popup.html', import.meta.url)) } },
+    rollupOptions: {
+      input: {
+        popup: fileURLToPath(new URL('./src/popup.html', import.meta.url)),
+        save: fileURLToPath(new URL('./src/save.html', import.meta.url)),
+      },
+    },
   },
 });

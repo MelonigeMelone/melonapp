@@ -21,8 +21,10 @@ Zeit. Ein Entsperren mit Master-Passwort bei jedem Klick wäre unbenutzbar.
 2. **Ausfüllen nur nach Klick** auf das Symbol im Feld oder im Popup. Nie automatisch.
 3. **Adresse vom Browser:** Treffer und Zugangsdaten gibt der Hintergrund nur für die Adresse heraus,
    die der Browser für den Tab meldet.
-4. **Speichern über das Popup:** Nach dem Absenden merkt sich der Hintergrund den Login, das Symbol
-   zeigt eine 1. Gespeichert wird im Popup mit dem normalen Sync.
+4. **Speichern über eine Karte auf der Seite:** Nach dem Absenden merkt sich der Hintergrund den
+   Login. Auf derselben Domain blendet das Content-Script eine **Erweiterungsseite als iframe** ein
+   (`save.html`), die mit dem normalen Sync speichert. Die Karte fragt nie nach dem Master-Passwort.
+   Ist MelonApp gesperrt, verweist sie auf das Symbol in der Leiste.
 5. **Generator in TypeScript** (`crypto.getRandomValues`, Rejection Sampling, jede Zeichenklasse
    mindestens einmal), weil der Hintergrund kein WASM lädt.
 
@@ -33,8 +35,11 @@ Zeit. Ein Entsperren mit Master-Passwort bei jedem Klick wäre unbenutzbar.
 - **Bei jedem Öffnen neu entsperren:** maximal sicher, praktisch unbenutzbar.
 - **Automatisches Ausfüllen beim Laden** (wie früher üblich): bequemer, aber genau das nutzen Angriffe
   mit unsichtbaren Formularen aus.
-- **Speicher-Dialog direkt in der Seite:** wie bei 1Password, kommt später. Ein Dialog in fremden
-  Seiten braucht mehr Abwehr gegen Clickjacking.
+- **Speicher-Dialog als HTML direkt in der Seite** (statt iframe): Die Website könnte ihn lesen,
+  verändern oder Klicks fälschen.
+- **Entsperren in der Karte:** bequemer, aber genau so würde eine nachgebaute Karte das
+  Master-Passwort abgreifen. Deshalb bleibt Entsperren dem Popup in der Browserleiste vorbehalten,
+  an das keine Website herankommt.
 
 ## Folgen
 
@@ -42,6 +47,8 @@ Zeit. Ein Entsperren mit Master-Passwort bei jedem Klick wäre unbenutzbar.
   Browser-Prozess auslesen kann, kommt an die Daten. Gegen Websites, andere Erweiterungen und
   Festplatten-Zugriff schützt `storage.session` (nur im Speicher, nur für eigene Seiten).
 - Auto-Lock nach 30 Minuten ohne Nutzung und beim Schließen des Browsers.
+- Eine Website könnte die Karte überdecken und so einen Klick auf „Speichern“ erzwingen. Schlimmstenfalls
+  landet dann ein Login im eigenen Bereich, nichts wird preisgegeben.
 - Die Zwischenablage wird im Popup nicht automatisch geleert, weil das Popup dafür zu kurz lebt.
   Ausfüllen ist deshalb der empfohlene Weg.
 - Der Generator existiert zweimal (Rust und TypeScript). Beide sind getestet. Schlüssel erzeugt der

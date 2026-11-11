@@ -117,12 +117,13 @@ await step('generate a password on sign-up and save the new login', async () => 
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/done/);
 
-  current = popup;
-  await popup.reload();
-  await popup.getByText('Neuen Login für signup.example.test speichern?').waitFor({ timeout: 15000 });
-  await popup.screenshot({ path: `${OUT}/ext-3-save.png` });
-  await popup.getByRole('button', { name: 'Speichern' }).click();
-  await popup.getByText('2 Logins', { exact: false }).waitFor({ timeout: 15000 });
+  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  await prompt.getByText('Neuen Login für signup.example.test speichern?').waitFor({ timeout: 15000 });
+  await prompt.getByText('neu@example.test').waitFor();
+  await site.screenshot({ path: `${OUT}/ext-3-save-in-page.png` });
+  await prompt.getByRole('button', { name: 'Speichern' }).click();
+  await prompt.getByText('Gespeichert.').waitFor({ timeout: 15000 });
+  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
 
   current = web;
   await web.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -131,6 +132,27 @@ await step('generate a password on sign-up and save the new login', async () => 
   const pw = web.locator('.concealed-field').first();
   await pw.getByRole('button', { name: 'Anzeigen' }).click();
   if ((await pw.locator('.concealed-value .pw').innerText()) !== generated) throw new Error('saved password differs');
+});
+
+await step('a changed password offers an update, and "never" silences the site', async () => {
+  current = site;
+  await site.goto('https://login.example.test/');
+  await site.locator('#user').fill('mia@example.test');
+  await site.locator('#pw').fill('neues-passwort-2');
+  await site.getByRole('button', { name: 'Weiter' }).click();
+  await site.waitForURL(/done/);
+  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  await prompt.getByText('Passwort für login.example.test aktualisieren?').waitFor({ timeout: 15000 });
+  await prompt.getByRole('button', { name: 'Nie für diese Seite' }).click();
+  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
+
+  await site.goto('https://login.example.test/');
+  await site.locator('#user').fill('mia@example.test');
+  await site.locator('#pw').fill('noch-ein-passwort-3');
+  await site.getByRole('button', { name: 'Weiter' }).click();
+  await site.waitForURL(/done/);
+  await site.waitForTimeout(2500);
+  if (await site.locator('iframe[name="melonapp-save"]').count()) throw new Error('prompt shown despite "never"');
 });
 
 await step('locking the extension stops autofill', async () => {

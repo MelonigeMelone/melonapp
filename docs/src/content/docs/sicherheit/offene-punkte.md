@@ -23,6 +23,7 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | CSP erlaubt `style-src 'unsafe-inline'` (MUI/Emotion) | auf Pigment CSS umsteigen, sobald stabil ([ADR 0008](/melonapp/entscheidungen/0008-mui/)) |
 | Erweiterung hält Logins und Bereichs-Schlüssel in `storage.session` | bewusst, siehe [ADR 0013](/melonapp/entscheidungen/0013-browser-erweiterung/). Später für Chromium: Offscreen-Dokument. |
 | Erweiterung leert die Zwischenablage nicht automatisch | Ausfüllen statt Kopieren nutzen |
+| „Nie für diese Seite“ lässt sich noch nicht rückgängig machen | Einstellungsseite der Erweiterung, später |
 | Erweiterung nicht in Chrome Web Store / Mozilla Add-ons | Veröffentlichen mit Signatur, später |
 | RustCrypto-Major-Updates (sha2 0.11, hkdf 0.13, hmac 0.13, chacha20poly1305 0.11) | gemeinsam als ein Update einspielen, Dependabot gruppiert sie |
 

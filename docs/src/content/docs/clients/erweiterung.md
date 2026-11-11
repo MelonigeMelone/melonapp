@@ -30,8 +30,12 @@ Master-Passwort.
 
 - **Ausfüllen:** In ein Login-Feld klicken → kleines Melonen-Symbol im Feld → Login wählen. Alternativ
   Symbol in der Browserleiste → „Ausfüllen“.
-- **Neue Logins:** Nach dem Absenden eines Formulars mit Passwort zeigt das Symbol in der Leiste eine
-  rote **1**. Ein Klick darauf fragt „Neuen Login speichern?“ bzw. „Passwort aktualisieren?“.
+- **Neue Logins:** Nach dem Anmelden oder Registrieren erscheint oben rechts auf der Seite eine Karte
+  „Neuen Login speichern?“ bzw. „Passwort aktualisieren?“ mit **Speichern**, **Nicht jetzt** und
+  **Nie für diese Seite**. Das klappt auch auf Seiten, die nicht neu laden (z. B. Web-Apps). Zusätzlich
+  zeigt das Symbol in der Leiste eine rote **1**, im Popup lässt sich der Login ebenfalls speichern.
+- **Gesperrt?** Dann sagt die Karte nur, dass man über das Symbol in der Leiste entsperren soll. Nach
+  dem Master-Passwort fragt sie nie.
 - **Generator:** In Registrierungs-Formularen bietet das Melonen-Symbol „Sicheres Passwort vorschlagen“
   an und füllt beide Passwortfelder.
 - **Sperren:** Schloss-Symbol im Popup, automatisch nach 30 Minuten ohne Nutzung und beim Schließen
@@ -43,7 +47,9 @@ Master-Passwort.
 apps/extension/src
 ├── popup/          React + MUI, nutzt Krypto-Worker, Sync und Modelle der Web-App (@web/…)
 ├── background.ts   Vermittlung, Treffer-Suche, Badge, Auto-Lock (kein WASM)
-├── content.ts      Formular-Erkennung, Symbol und Menü im Shadow DOM, Ausfüllen, Absenden erkennen
+├── content.ts      Formular-Erkennung, Symbol und Menü im Shadow DOM, Ausfüllen, Absenden erkennen,
+│                   Speicher-Karte einblenden
+├── save/           Speicher-Karte (eigene Erweiterungsseite, als iframe in der Website)
 ├── content/form.ts Erkennung von Benutzername/Passwort, sichtbare Felder, Ausfüllen
 └── shared/         Nachrichten, URL-Abgleich, Passwort-Generator
 ```
@@ -79,6 +85,10 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 | Symbol und Menü im Shadow DOM | Seiten-CSS und -Skripte, die das Menü umgestalten wollen |
 | Nachrichten nur von der eigenen Erweiterung (`sender.id`) | andere Erweiterungen |
 | CSP der Erweiterungsseiten: `script-src 'self' 'wasm-unsafe-eval'` | eingeschleuster Code im Popup |
+| Speicher-Karte ist eine Erweiterungsseite im iframe, keine HTML-Einfügung in die Seite | Website liest oder verändert die Karte |
+| Speicher-Karte fragt **nie** nach dem Master-Passwort | Websites, die eine täuschend echte Karte nachbauen, um das Master-Passwort abzugreifen |
+| `use_dynamic_url` für die Karte (Chromium) | Websites erkennen nicht dauerhaft, dass MelonApp installiert ist |
+| Karte nur auf derselben Domain wie der abgesendete Login und höchstens 5 Minuten lang | Karte taucht auf fremden Seiten auf |
 
 ## Tests
 
@@ -86,5 +96,6 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 - `form.test.ts`: Formular-Erkennung, versteckte/deaktivierte Felder, Ausfüllen mit Events.
 - **E2E** (`apps/extension/e2e/extension.e2e.mjs`, CI-Job `e2e`): echtes Chromium mit geladener
   Erweiterung gegen den kompletten Stack. Kein Ausfüllen ohne Klick, Ausfüllen auf passender
-  Domain, nichts auf fremder Domain, Generator, Speichern eines neuen Logins (danach in der Web-App
-  sichtbar), Sperren beendet das Ausfüllen.
+  Domain, nichts auf fremder Domain, Generator, Speichern über die Karte auf der Seite (danach in der
+  Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, Sperren
+  beendet das Ausfüllen.

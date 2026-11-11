@@ -8,8 +8,6 @@ import InputAdornment from '@mui/material/InputAdornment';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import MenuItem from '@mui/material/MenuItem';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
@@ -24,19 +22,15 @@ import { ApiError } from '@web/api';
 import { MelonMark } from '@web/components/Brand';
 import { count } from '@web/layout';
 import { describeError } from '@web/session';
-import { withHistory } from '@web/vault/item';
 import { anyUrlMatches, hostOf } from '../shared/match';
 import type { Login, PendingSave, TabMessage } from '../shared/messages';
+import { PendingCard } from './PendingCard';
 import {
   activeTab,
-  dismissPending,
-  existingFor,
-  itemFromPending,
   loadPrefs,
   lockAll,
   normalizeServer,
   pendingSave,
-  refresh,
   restore,
   unlock,
   type Unlocked,
@@ -130,68 +124,6 @@ function LoginRow({ login, onFill, onCopy }: { login: Login; onFill?: () => void
   );
 }
 
-function PendingCard({ unlocked, pending, onDone }: { unlocked: Unlocked; pending: PendingSave; onDone: (u: Unlocked) => void }) {
-  const writable = unlocked.snapshot.spaces.filter((s) => s.canWrite);
-  const existing = existingFor(unlocked.snapshot, pending);
-  const [space, setSpace] = useState(existing?.vaultId ?? writable[0]?.id ?? '');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const host = hostOf(pending.url) ?? pending.url;
-
-  const save = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      if (existing) {
-        const current = unlocked.manager.item(existing.vaultId, existing.id);
-        if (!current) throw new ApiError(404, 'vault_not_found');
-        const next = { ...current.item, fields: current.item.fields.map((f) => (f.id === 'password' ? { ...f, value: pending.password } : f)) };
-        await unlocked.manager.saveItem(existing.vaultId, existing.id, withHistory(current.item, next));
-      } else {
-        await unlocked.manager.saveItem(space, null, itemFromPending(pending));
-      }
-      await dismissPending();
-      onDone(await refresh(unlocked));
-    } catch (e) {
-      setError(describeError(e));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Paper variant="outlined" sx={{ p: 2, borderRadius: '14px', borderColor: 'primary.main' }}>
-      <Stack spacing={1.5}>
-        <Typography sx={{ fontWeight: 700 }}>
-          {existing ? `Passwort für ${host} aktualisieren?` : `Neuen Login für ${host} speichern?`}
-        </Typography>
-        {pending.username && (
-          <Typography variant="body2" color="text.secondary">
-            {pending.username}
-          </Typography>
-        )}
-        {!existing && writable.length > 1 && (
-          <TextField select size="small" label="Bereich" value={space} onChange={(e) => setSpace(e.target.value)}>
-            {writable.map((s) => (
-              <MenuItem key={s.id} value={s.id}>
-                {s.name}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
-        {error && <Alert severity="error">{error}</Alert>}
-        <Stack direction="row" spacing={1}>
-          <Button variant="contained" size="small" loading={busy} onClick={() => void save()} disabled={!existing && !space}>
-            {existing ? 'Aktualisieren' : 'Speichern'}
-          </Button>
-          <Button size="small" onClick={() => void dismissPending().then(() => onDone(unlocked))} disabled={busy}>
-            Verwerfen
-          </Button>
-        </Stack>
-      </Stack>
-    </Paper>
-  );
-}
-
 function Vault({ unlocked, onLock, onChange }: { unlocked: Unlocked; onLock: () => void; onChange: (u: Unlocked) => void }) {
   const [tab, setTab] = useState<chrome.tabs.Tab | undefined>();
   const [pending, setPending] = useState<PendingSave | null>(null);
@@ -249,6 +181,7 @@ function Vault({ unlocked, onLock, onChange }: { unlocked: Unlocked; onLock: () 
             setPending(null);
             onChange(u);
           }}
+          onNever={() => void chrome.runtime.sendMessage({ type: 'neverSave' }).then(() => setPending(null))}
         />
       )}
 

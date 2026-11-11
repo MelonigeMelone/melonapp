@@ -39,11 +39,19 @@ const base = {
   content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
 };
 
+const exposed = ['save.html', 'assets/*', 'icons/*'];
+
 const targets = {
-  chromium: { ...base, background: { service_worker: 'background.js' }, minimum_chrome_version: '120' },
+  chromium: {
+    ...base,
+    background: { service_worker: 'background.js' },
+    minimum_chrome_version: '120',
+    web_accessible_resources: [{ resources: exposed, matches: ['http://*/*', 'https://*/*'], use_dynamic_url: true }],
+  },
   firefox: {
     ...base,
     background: { scripts: ['background.js'] },
+    web_accessible_resources: [{ resources: exposed, matches: ['http://*/*', 'https://*/*'] }],
     browser_specific_settings: { gecko: { id: 'melonapp@melonigemelone.de', strict_min_version: '128.0' } },
   },
 };

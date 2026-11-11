@@ -25,6 +25,37 @@ shadow.innerHTML = `<style>${STYLE}</style>`;
 let attached = false;
 let active: LoginFields | null = null;
 let anchor: HTMLInputElement | null = null;
+let saveFrame: HTMLIFrameElement | null = null;
+
+function showSavePrompt() {
+  if (saveFrame?.isConnected) return;
+  const frame = document.createElement('iframe');
+  frame.name = 'melonapp-save';
+  frame.title = 'MelonApp: Login speichern';
+  frame.src = chrome.runtime.getURL('save.html');
+  frame.setAttribute('allowtransparency', 'true');
+  Object.assign(frame.style, {
+    position: 'fixed',
+    top: '16px',
+    right: '16px',
+    width: '380px',
+    maxWidth: 'calc(100vw - 32px)',
+    height: '200px',
+    border: '0',
+    borderRadius: '16px',
+    boxShadow: '0 12px 32px rgb(0 0 0 / .22)',
+    zIndex: '2147483647',
+    colorScheme: 'normal',
+    background: 'transparent',
+  });
+  document.documentElement.append(frame);
+  saveFrame = frame;
+}
+
+async function checkPending() {
+  const r = await ask<{ show: boolean } | null>({ type: 'pendingForPage' });
+  if (r?.show) showSavePrompt();
+}
 
 function ask<T>(msg: ContentRequest): Promise<T> {
   return chrome.runtime.sendMessage(msg) as Promise<T>;
@@ -168,7 +199,9 @@ window.addEventListener('resize', reposition);
 function reportSubmit(form: HTMLFormElement | null) {
   const fields = findLoginFields(form ?? document).find((f) => f.password.value);
   if (!fields) return;
-  void ask({ type: 'submitted', username: fields.username?.value ?? '', password: fields.password.value });
+  void ask({ type: 'submitted', username: fields.username?.value ?? '', password: fields.password.value }).then(() =>
+    setTimeout(() => void checkPending(), 1200),
+  );
 }
 
 document.addEventListener('submit', (e) => reportSubmit(e.target instanceof HTMLFormElement ? e.target : null), true);
@@ -184,7 +217,19 @@ document.addEventListener(
 );
 
 chrome.runtime.onMessage.addListener((msg: TabMessage, sender) => {
-  if (sender.id !== chrome.runtime.id || msg.type !== 'fill' || !anyUrlMatches(location.href, msg.urls)) return;
+  if (sender.id !== chrome.runtime.id) return;
+  if (msg.type === 'closeSave') {
+    saveFrame?.remove();
+    saveFrame = null;
+    return;
+  }
+  if (msg.type === 'resizeSave') {
+    if (saveFrame) saveFrame.style.height = `${msg.height}px`;
+    return;
+  }
+  if (msg.type !== 'fill' || !anyUrlMatches(location.href, msg.urls)) return;
   const target = active ?? findLoginFields(document)[0];
   if (target) fill(target, msg.username, msg.password);
 });
+
+void checkPending();

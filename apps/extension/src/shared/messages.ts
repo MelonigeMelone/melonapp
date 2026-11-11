@@ -36,12 +36,20 @@ export type ContentRequest =
   | { type: 'matches' }
   | { type: 'credentials'; vaultId: string; id: string }
   | { type: 'submitted'; username: string; password: string }
-  | { type: 'generate' };
+  | { type: 'generate' }
+  | { type: 'pendingForPage' };
+
+export type FrameRequest = { type: 'closeSavePrompt' } | { type: 'resizeSavePrompt'; height: number } | { type: 'neverSave' };
 
 export type MatchesResponse = { locked: true } | { locked: false; matches: Match[] };
 
-export type TabMessage = { type: 'fill'; username: string; password: string; urls: string[] };
+export type TabMessage =
+  | { type: 'fill'; username: string; password: string; urls: string[] }
+  | { type: 'closeSave' }
+  | { type: 'resizeSave'; height: number };
 
 export const SESSION_KEY = 'snapshot';
 export const PENDING_KEY = 'pendingSave';
+export const NEVER_KEY = 'neverSave';
 export const AUTO_LOCK_MINUTES = 30;
+export const PROMPT_MAX_AGE_MS = 5 * 60_000;
