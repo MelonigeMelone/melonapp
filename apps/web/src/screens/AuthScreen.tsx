@@ -113,7 +113,7 @@ export function AuthScreen({
           MelonApp
         </Typography>
         <Typography variant="h3" component="p" color="text.secondary" sx={{ mt: 1.5, maxWidth: '30ch', fontFamily: 'inherit', fontWeight: 400, fontSize: '1.25rem', lineHeight: 1.5 }}>
-          Deine Passwörter, nur für dich lesbar. Verschlüsselt wird auf diesem Gerät, der Server sieht nichts davon.
+          Deine persönliche App für Passwörter und mehr. Verschlüsselt wird auf diesem Gerät, der Server sieht nichts davon.
         </Typography>
       </Box>
 
@@ -125,7 +125,7 @@ export function AuthScreen({
                 Master-Passwort vergessen
               </Typography>
               <Typography color="text.secondary" variant="body2">
-                Mit dem Recovery-Key aus deinem Notfall-Kit setzt du ein neues Master-Passwort. Deine Tresore bleiben erhalten.
+                Mit dem Recovery-Key aus deinem Notfall-Kit setzt du ein neues Master-Passwort. Deine Bereiche und Einträge bleiben erhalten.
               </Typography>
             </Stack>
           ) : (
@@ -143,7 +143,7 @@ export function AuthScreen({
           {notice && mode === 'login' && <Alert severity="info">{notice}</Alert>}
           {inviter && mode === 'register' && (
             <Alert severity="success">
-              {inviter} hat dich eingeladen. Leg dein Konto an, dann bekommst du Zugriff auf den geteilten Tresor.
+              {inviter} hat dich eingeladen. Leg dein Konto an, dann bekommst du Zugriff auf den geteilten Bereich.
             </Alert>
           )}
           {inviteError && (
@@ -204,7 +204,7 @@ export function AuthScreen({
           )}
 
           <Button type="submit" variant="contained" size="large" loading={busy} fullWidth>
-            {mode === 'login' ? 'Tresor öffnen' : mode === 'recover' ? 'Neues Master-Passwort setzen' : 'Konto erstellen'}
+            {mode === 'login' ? 'Entsperren' : mode === 'recover' ? 'Neues Master-Passwort setzen' : 'Konto erstellen'}
           </Button>
           {mode === 'login' && (
             <Button onClick={() => switchMode('recover')} sx={{ alignSelf: 'center', color: 'text.secondary' }}>

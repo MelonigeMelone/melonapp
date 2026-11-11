@@ -18,12 +18,12 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import EditIcon from '@mui/icons-material/Edit';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEffect, useState } from 'react';
-import { CLIPBOARD_CLEAR_SECONDS, copySecret } from '../clipboard';
-import { FieldView } from '../components/FieldView';
-import { PasswordText } from '../components/PasswordText';
-import { TYPE_ICONS } from '../components/TypeIcon';
-import { TEMPLATES, type VaultItem } from '../vault/item';
-import type { VaultView } from '../vault/manager';
+import { CLIPBOARD_CLEAR_SECONDS, copySecret } from '../../clipboard';
+import { FieldView } from '../../components/FieldView';
+import { PasswordText } from '../../components/PasswordText';
+import { TYPE_ICONS } from '../../components/TypeIcon';
+import { TEMPLATES, type VaultItem } from '../../vault/item';
+import type { VaultView } from '../../vault/manager';
 
 const dateFormat = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 

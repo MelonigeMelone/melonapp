@@ -44,7 +44,7 @@ export function inviteLink(token: string): string {
   return `${window.location.origin}/#/invite/${token}`;
 }
 
-export function NewVaultDialog({
+export function NewSpaceDialog({
   open,
   onClose,
   onCreate,
@@ -75,12 +75,12 @@ export function NewVaultDialog({
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
       <form onSubmit={submit}>
-        <DialogTitle>Neuer Tresor</DialogTitle>
+        <DialogTitle>Neuer Bereich</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <TextField label="Name" placeholder="z. B. Familie" value={name} onChange={(e) => setName(e.target.value)} autoFocus fullWidth />
             <Typography variant="body2" color="text.secondary">
-              Danach kannst du andere einladen. Jeder Tresor hat einen eigenen Schlüssel.
+              Ein Bereich gilt für alle Module: Wer Mitglied ist, sieht darin Passwörter und alles, was später dazukommt. Jeder Bereich hat einen eigenen Schlüssel.
             </Typography>
             {error && <Alert severity="error">{error}</Alert>}
           </Stack>
@@ -88,7 +88,7 @@ export function NewVaultDialog({
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button onClick={onClose}>Abbrechen</Button>
           <Button type="submit" variant="contained" loading={busy} disabled={!name.trim()}>
-            Tresor anlegen
+            Bereich anlegen
           </Button>
         </DialogActions>
       </form>
@@ -96,7 +96,7 @@ export function NewVaultDialog({
   );
 }
 
-export function VaultDialog({
+export function SpaceDialog({
   vault,
   manager,
   me,
@@ -166,8 +166,8 @@ export function VaultDialog({
   const owners = vault.members.filter((m) => m.role === 'owner' && m.has_key).length;
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="vault-dialog-title">
-      <DialogTitle id="vault-dialog-title" sx={{ pr: 7 }}>
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="space-dialog-title">
+      <DialogTitle id="space-dialog-title" sx={{ pr: 7 }}>
         {vault.name}
         <IconButton aria-label="Schließen" onClick={onClose} sx={{ position: 'absolute', right: 12, top: 12 }}>
           <CloseIcon />
@@ -317,12 +317,12 @@ export function VaultDialog({
           <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
             {!(vault.isOwner && owners <= 1) && (
               <Button color="error" onClick={() => setConfirm({ kind: 'leave' })}>
-                Tresor verlassen
+                Bereich verlassen
               </Button>
             )}
             {vault.isOwner && (
               <Button color="error" onClick={() => setConfirm({ kind: 'delete' })}>
-                Tresor löschen
+                Bereich löschen
               </Button>
             )}
           </Stack>
@@ -366,7 +366,7 @@ export function VaultDialog({
         <DialogContent>
           {codeFor && <SecurityCode code={codeFor.code} />}
           <Typography color="text.secondary" variant="body2">
-            Vergleiche ihn mit dem Code, den diese Person unter „Konto“ sieht. Weicht er ab, entferne sie aus dem Tresor.
+            Vergleiche ihn mit dem Code, den diese Person unter „Konto“ sieht. Weicht er ab, entferne sie aus dem Bereich.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
@@ -380,11 +380,11 @@ export function VaultDialog({
             <DialogTitle>{confirm.email} entfernen?</DialogTitle>
             <DialogContent>
               <Typography>
-                Der Tresor bekommt einen neuen Schlüssel, und alle Einträge werden neu verschlüsselt. Danach sieht {confirm.email} keine
+                Der Bereich bekommt einen neuen Schlüssel, und alle Einträge werden neu verschlüsselt. Danach sieht {confirm.email} keine
                 neuen Änderungen mehr.
               </Typography>
               <Typography sx={{ mt: 1.5 }} color="text.secondary">
-                Was schon gesehen wurde, kann abgeschrieben worden sein. Ändere wichtige Passwörter in diesem Tresor.
+                Was schon gesehen wurde, kann abgeschrieben worden sein. Ändere wichtige Passwörter in diesem Bereich.
               </Typography>
             </DialogContent>
           </>
@@ -393,7 +393,7 @@ export function VaultDialog({
           <>
             <DialogTitle>„{vault.name}“ verlassen?</DialogTitle>
             <DialogContent>
-              <Typography>Du verlierst den Zugriff auf alle Einträge in diesem Tresor.</Typography>
+              <Typography>Du verlierst den Zugriff auf alle Einträge in diesem Bereich.</Typography>
             </DialogContent>
           </>
         )}

@@ -35,6 +35,14 @@ sidebar:
 
 Warum diese Technik gewählt wurde, steht in den [Entscheidungen](/melonapp/entscheidungen/).
 
+## Begriffe
+
+| Oberfläche | Code und API | Bedeutung |
+|---|---|---|
+| Bereich | `vault` | verschlüsselter, teilbarer Behälter für alle Module |
+| Eintrag | `item` | ein Objekt in einem Bereich, Typ steht verschlüsselt darin |
+| Modul | `modules/registry.ts` | eine Ansicht auf bestimmte Eintragstypen |
+
 ## Grundprinzip: dummer Server
 
 Der Server speichert Konten, Sitzungen und undurchsichtige Items. Er kann nichts

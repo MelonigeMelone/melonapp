@@ -154,14 +154,14 @@ const messages: Record<string, string> = {
   invite_email_mismatch: 'Die Einladung gilt für eine andere E-Mail-Adresse.',
   item_too_large: 'Der Eintrag ist zu groß. Kürze die Notizen.',
   revision_mismatch: 'Der Eintrag wurde gleichzeitig auf einem anderen Gerät geändert. Versuche es erneut.',
-  key_rotated: 'Der Tresor hat gerade einen neuen Schlüssel bekommen. Speichere noch einmal.',
-  read_only: 'Du darfst in diesem Tresor nur lesen.',
-  owner_only: 'Das darf nur ein Besitzer des Tresors.',
-  last_owner: 'Ein Tresor braucht mindestens einen Besitzer. Mach zuerst jemand anderen zum Besitzer.',
+  key_rotated: 'Der Bereich hat gerade einen neuen Schlüssel bekommen. Speichere noch einmal.',
+  read_only: 'In diesem Bereich darfst du nur lesen.',
+  owner_only: 'Das darf nur ein Besitzer des Bereichs.',
+  last_owner: 'Ein Bereich braucht mindestens einen Besitzer. Mach zuerst jemand anderen zum Besitzer.',
   member_exists_or_unknown_user: 'Diese Person ist schon Mitglied.',
   user_exists: 'Für diese E-Mail gibt es schon ein Konto. Sie wird direkt hinzugefügt.',
   vault_key_pending: 'Ein Besitzer muss dir den Zugang noch freigeben. Das passiert automatisch, sobald er die App öffnet.',
-  vault_not_found: 'Diesen Tresor gibt es nicht mehr, oder du hast keinen Zugriff mehr.',
+  vault_not_found: 'Diesen Bereich gibt es nicht mehr, oder du hast keinen Zugriff mehr.',
 };
 
 export function describeError(e: unknown): string {

@@ -18,11 +18,11 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useState, type FormEvent } from 'react';
-import { Generator } from '../components/Generator';
-import { describeError } from '../session';
-import { monoFont } from '../theme';
-import { cleanItem, KIND_LABELS, newId, TEMPLATES, type Field, type FieldKind, type Item } from '../vault/item';
-import type { VaultView } from '../vault/manager';
+import { Generator } from '../../components/Generator';
+import { describeError } from '../../session';
+import { monoFont } from '../../theme';
+import { cleanItem, KIND_LABELS, newId, TEMPLATES, type Field, type FieldKind, type Item } from '../../vault/item';
+import type { VaultView } from '../../vault/manager';
 
 const KIND_ORDER: FieldKind[] = ['text', 'concealed', 'url', 'email', 'phone', 'date', 'multiline'];
 type Path = { section: number | null; index: number };
@@ -217,10 +217,10 @@ export function ItemEditor({
       {writable.length > 1 && (
         <TextField
           select
-          label="Tresor"
+          label="Bereich"
           value={target}
           onChange={(e) => setTarget(e.target.value)}
-          helperText={!isNew && target !== vaultId ? 'Der Eintrag wird beim Speichern in diesen Tresor verschoben.' : undefined}
+          helperText={!isNew && target !== vaultId ? 'Der Eintrag wird beim Speichern in diesen Bereich verschoben.' : undefined}
           fullWidth
         >
           {writable.map((v) => (

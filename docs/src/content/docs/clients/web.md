@@ -12,9 +12,14 @@ derselben Domain wie die API, ohne CORS.
 
 ```text
 apps/web/src
+├── Shell.tsx      App-Rahmen: Navigation, Konto, Sperren, Sync, Bereiche-Dialoge
+├── layout.ts      gemeinsame Maße und Zähl-Texte
+├── modules/
+│   ├── registry.ts    alle Module mit Name, Symbol, Pfad und Eintragstypen
+│   └── passwords/     Passwortmanager: Liste, Eintrag, Editor
 ├── crypto/        Web Worker mit melon-crypto (WASM) + kleines RPC
 ├── vault/         Datenmodell (item.ts), Sync je Tresor (store.ts), alle Tresore (manager.ts)
-├── screens/       Anmelden, Tresore, Eintrag, Editor, Tresor-Dialog (Mitglieder, Einladungen)
+├── screens/       Anmelden, Startbildschirm, Konto, Bereich-Dialog (Mitglieder, Einladungen)
 ├── components/    Generator, Passwortanzeige, Logo
 ├── theme.ts       MUI-Theme: Wassermelonen-Farben, Schriften, Formen, Hell/Dunkel
 ├── api.ts         HTTP-Client für die Server-API
@@ -22,6 +27,19 @@ apps/web/src
 ├── clipboard.ts   Kopieren mit automatischem Leeren
 └── useIdle.ts     Auto-Lock
 ```
+
+## App-Rahmen und Module
+
+Nach dem Anmelden zeigt `Shell` den **Startbildschirm** (`#/`) mit Modulen und Bereichen. Module
+haben eigene Pfade, der Passwortmanager liegt unter `#/passwoerter`. Desktop: Tabs oben. Mobil:
+Leiste unten.
+
+Der Rahmen besitzt alles Modulübergreifende: Sync (ein `VaultsManager` für alle Module), Konto,
+Notfall-Kit, Sperren und das Anlegen und Verwalten von Bereichen. Ein Modul bekommt den Zustand
+als `ShellContext` und filtert die Einträge auf seine Typen. Begründung:
+[ADR 0012](/melonapp/entscheidungen/0012-app-shell-und-bereiche/).
+
+Im Code heißt ein Bereich weiterhin `vault` (`VaultsManager`, `VaultView`).
 
 ## Krypto im Web Worker
 

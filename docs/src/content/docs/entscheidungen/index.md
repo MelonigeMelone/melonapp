@@ -23,5 +23,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0009](/melonapp/entscheidungen/0009-tresor-schluessel/) | Tresor-Schlüssel und Schlüsselpaare (HPKE) | angenommen |
 | [0010](/melonapp/entscheidungen/0010-keine-logos/) | Keine Logos von Websites | angenommen |
 | [0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/) | Recovery-Key und Sicherheitscode | angenommen |
+| [0012](/melonapp/entscheidungen/0012-app-shell-und-bereiche/) | App-Rahmen, Module und Bereiche | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.

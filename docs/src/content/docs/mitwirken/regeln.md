@@ -24,6 +24,7 @@ sidebar:
 | Migration | `server/datenbank.md` |
 | Umgebungsvariable | `server/konfiguration.md` und `betrieb/selbst-hosten.md` |
 | Web-App: Verhalten, Sync, Schutzmaßnahmen, Design | `clients/web.md` |
+| Neues Modul | `konzept/module.md`, Eintrag in `modules/registry.ts` |
 | Workflow | `betrieb/pipelines.md` |
 | Neuer Sicherheitstest | Tabelle in `sicherheit/pruefungen.md` |
 | Bekannte Lücke | `sicherheit/offene-punkte.md` |

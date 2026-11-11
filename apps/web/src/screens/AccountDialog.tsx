@@ -19,7 +19,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { cryptoCall } from '../crypto/client';
 import { changePassword, describeError, setupRecovery, type Account, type Session } from '../session';
 import { monoFont } from '../theme';
-import { SecurityCode } from './VaultDialog';
+import { SecurityCode } from './SpaceDialog';
 
 const MIN_LENGTH = 12;
 
@@ -93,7 +93,7 @@ export function RecoveryKitDialog({
           <DialogContent>
             <Stack spacing={2}>
               <Typography>
-                Mit dem Recovery-Key setzt du ein neues Master-Passwort, falls du deins vergisst. Ohne ihn ist dein Tresor dann
+                Mit dem Recovery-Key setzt du ein neues Master-Passwort, falls du deins vergisst. Ohne ihn sind deine Daten dann
                 verloren, auch für den Betreiber des Servers.
               </Typography>
               {session.hasRecovery && (
@@ -247,7 +247,7 @@ export function AccountDialog({
             </Typography>
             <SecurityCode code={code} />
             <Typography color="text.secondary" variant="body2">
-              Wenn dich jemand zu einem Tresor hinzufügt, sieht diese Person deinen Code. Vergleicht ihn zusammen, damit niemand
+              Wenn dich jemand zu einem Bereich hinzufügt, sieht diese Person deinen Code. Vergleicht ihn zusammen, damit niemand
               unbemerkt einen falschen Schlüssel unterschieben kann.
             </Typography>
           </section>
@@ -259,9 +259,9 @@ export function AccountDialog({
               Notfall-Kit
             </Typography>
             {session.hasRecovery ? (
-              <Alert severity="success">Du hast ein Notfall-Kit. Damit kommst du auch ohne Master-Passwort wieder an deinen Tresor.</Alert>
+              <Alert severity="success">Du hast ein Notfall-Kit. Damit kommst du auch ohne Master-Passwort wieder an deine Daten.</Alert>
             ) : (
-              <Alert severity="warning">Noch kein Notfall-Kit. Vergisst du dein Master-Passwort, ist dein Tresor verloren.</Alert>
+              <Alert severity="warning">Noch kein Notfall-Kit. Vergisst du dein Master-Passwort, sind deine Daten verloren.</Alert>
             )}
             <Button variant="outlined" onClick={onCreateKit} sx={{ alignSelf: 'flex-start' }}>
               {session.hasRecovery ? 'Neues Notfall-Kit erstellen' : 'Notfall-Kit erstellen'}

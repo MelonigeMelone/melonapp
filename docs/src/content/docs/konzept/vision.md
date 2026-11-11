@@ -9,6 +9,10 @@ MelonApp ist **eine persönliche App für alles, was einem im Alltag fehlt**. Es
 gemeinsamen Rahmen (Konto, Geräte, Sync, Sicherheit), in den **Module** eingesteckt werden.
 Das erste Modul ist ein [Passwortmanager](/melonapp/konzept/passwortmanager/).
 
+Nach dem Anmelden kommt ein **Startbildschirm** mit allen Modulen und Bereichen. Ein **Bereich**
+(„Persönlich“, „Familie“) ist ein verschlüsselter, teilbarer Behälter, den alle Module gemeinsam
+nutzen ([Bereiche & Teilen](/melonapp/konzept/tresore/)).
+
 ## Ziele
 
 - **Sicher:** Der Server sieht nie Klartext. Wer den Server komplett übernimmt, bekommt

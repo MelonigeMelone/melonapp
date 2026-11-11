@@ -63,7 +63,7 @@ await step('alice registers', async () => {
   await a.getByRole('tab', { name: 'Konto erstellen' }).click();
   await a.getByLabel('E-Mail').fill(alice.email);
   await register(a, alice);
-  await a.getByText('Noch keine Einträge.').waitFor({ timeout: 30000 });
+  await a.getByRole('heading', { name: 'Start', level: 1 }).waitFor({ timeout: 30000 });
 });
 
 let recoveryKey = '';
@@ -81,6 +81,13 @@ await step('emergency kit', async () => {
   await kit.getByLabel('Ich habe den Recovery-Key sicher aufbewahrt.').check();
   await kit.getByRole('button', { name: 'Fertig' }).click();
   await a.getByText('Noch kein Notfall-Kit.', { exact: false }).first().waitFor({ state: 'detached' });
+  await a.getByText('Persönlich').first().waitFor();
+  await shot(a, '2b-home');
+});
+
+await step('open the password module from the home screen', async () => {
+  await a.getByRole('button', { name: 'Passwörter öffnen' }).click();
+  await a.getByText('Noch keine Einträge.').waitFor();
 });
 
 let generated = '';
@@ -137,9 +144,9 @@ await step('editing a password keeps the old one', async () => {
 
 let inviteLink = '';
 await step('shared vault and invite link', async () => {
-  await a.getByRole('button', { name: 'Neuer Tresor' }).click();
+  await a.getByRole('button', { name: 'Neuer Bereich' }).click();
   await a.getByLabel('Name').fill('Familie');
-  await a.getByRole('button', { name: 'Tresor anlegen' }).click();
+  await a.getByRole('button', { name: 'Bereich anlegen' }).click();
   const dialog = a.getByRole('dialog', { name: 'Familie' });
   await dialog.waitFor();
   await dialog.getByLabel('E-Mail').fill(bob.email);
@@ -161,7 +168,7 @@ await step('entry in the shared vault', async () => {
   await a.locator('#field-password').fill('wlan-geheim-12345');
   await a.getByRole('button', { name: 'Speichern' }).click();
   await a.getByRole('heading', { name: 'WLAN Zuhause', level: 2 }).waitFor();
-  await a.getByText('Familie', { exact: true }).first().waitFor();
+  await a.locator('main .MuiChip-label', { hasText: /^Familie$/ }).waitFor();
 });
 
 const b = await newPage();
@@ -180,6 +187,7 @@ await step('alice grants the key automatically, bob sees the entry', async () =>
   await sync(a);
   await a.waitForTimeout(1500);
   current = b;
+  await b.getByRole('tab', { name: 'Passwörter' }).click();
   for (let i = 0; i < 10 && !(await b.locator('.entry-row', { hasText: 'WLAN Zuhause' }).count()); i++) {
     await sync(b);
     await b.waitForTimeout(700);
@@ -247,7 +255,7 @@ await step('alice reads the re-encrypted vault after unlocking again', async () 
   await a.reload();
   if ((await a.getByLabel('E-Mail').inputValue()) !== alice.email) throw new Error('email not remembered');
   await a.getByLabel('Master-Passwort', { exact: true }).fill(alice.master);
-  await a.getByRole('button', { name: 'Tresor öffnen' }).click();
+  await a.getByRole('button', { name: 'Entsperren' }).click();
   await a.locator('.entry-row', { hasText: 'WLAN Zuhause' }).waitFor({ timeout: 30000 });
   await a.locator('.entry-row', { hasText: 'WLAN Zuhause' }).click();
   const pw = a.locator('.concealed-field').first();
@@ -275,7 +283,7 @@ await step('wrong password is rejected', async () => {
   expect401 = true;
   await a.getByRole('button', { name: 'Sperren' }).click();
   await a.getByLabel('Master-Passwort', { exact: true }).fill('falsches passwort hier');
-  await a.getByRole('button', { name: 'Tresor öffnen' }).click();
+  await a.getByRole('button', { name: 'Entsperren' }).click();
   await a.getByText('E-Mail oder Master-Passwort ist falsch.').waitFor({ timeout: 30000 });
 });
 
@@ -301,10 +309,13 @@ await step('mobile and dark mode', async () => {
   await m.goto(BASE);
   await m.getByLabel('E-Mail').fill(alice.email);
   await m.getByLabel('Master-Passwort', { exact: true }).fill(alice.master);
-  await m.getByRole('button', { name: 'Tresor öffnen' }).click();
+  await m.getByRole('button', { name: 'Entsperren' }).click();
+  await m.getByRole('heading', { name: 'Start', level: 1 }).waitFor({ timeout: 30000 });
+  await shot(m, '10a-mobile-home');
+  await m.getByRole('button', { name: 'Passwörter', exact: true }).click();
   await m.locator('.entry-row', { hasText: 'GitHub' }).waitFor({ timeout: 30000 });
   await shot(m, '10-mobile-list');
-  await m.getByRole('button', { name: 'Tresore anzeigen' }).click();
+  await m.getByRole('button', { name: 'Bereiche anzeigen' }).click();
   await m.getByRole('button', { name: /^Familie/ }).first().waitFor();
   await shot(m, '11-mobile-drawer');
 });

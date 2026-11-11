@@ -3,8 +3,8 @@ import { AuthScreen } from './screens/AuthScreen';
 import { lock, type Account, type Session } from './session';
 import { useIdle } from './useIdle';
 
-const loadVault = () => import('./screens/VaultScreen');
-const VaultScreen = lazy(() => loadVault().then((m) => ({ default: m.VaultScreen })));
+const loadShell = () => import('./Shell');
+const Shell = lazy(() => loadShell().then((m) => ({ default: m.Shell })));
 
 const INVITE = /^#\/invite\/([A-Za-z0-9_-]{20,})$/;
 
@@ -42,7 +42,7 @@ export function App() {
     setEmail(s.email);
     setNotice(null);
     setInviteToken(null);
-    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+    if (window.location.hash.startsWith('#/invite/')) window.history.replaceState(null, '', `${window.location.pathname}#/`);
     setSession(s);
   }, []);
 
@@ -60,16 +60,16 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void loadVault();
+    void loadShell();
   }, []);
 
   useIdle(AUTO_LOCK_MS, () => {
-    if (session) onLock('Der Tresor wurde nach 5 Minuten ohne Aktivität gesperrt.');
+    if (session) onLock('MelonApp wurde nach 5 Minuten ohne Aktivität gesperrt.');
   });
 
   return session ? (
     <Suspense fallback={null}>
-      <VaultScreen session={session} onLock={onLock} onUpdate={onUpdate} />
+      <Shell session={session} onLock={onLock} onUpdate={onUpdate} />
     </Suspense>
   ) : (
     <AuthScreen initialEmail={email} notice={notice} inviteToken={inviteToken} onSession={onSession} />

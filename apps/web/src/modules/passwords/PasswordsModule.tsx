@@ -1,5 +1,4 @@
 import Alert from '@mui/material/Alert';
-import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Drawer from '@mui/material/Drawer';
@@ -15,85 +14,45 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
-import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import AddIcon from '@mui/icons-material/Add';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import MenuIcon from '@mui/icons-material/Menu';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { ApiError } from '../api';
-import { Brand } from '../components/Brand';
-import { ItemAvatar, TYPE_ICONS } from '../components/TypeIcon';
-import { describeError, type Account, type Session } from '../session';
-import { AccountDialog, RecoveryKitDialog } from './AccountDialog';
-import { emptyItem, matchesSearch, subtitle, TEMPLATES, type Item, type ItemType } from '../vault/item';
+import { useEffect, useMemo, useState } from 'react';
+import { ItemAvatar, TYPE_ICONS } from '../../components/TypeIcon';
+import { describeError } from '../../session';
+import { count, entries, TOOLBAR } from '../../layout';
+import type { ShellContext } from '../../Shell';
+import { emptyItem, matchesSearch, subtitle, TEMPLATES, type Item, type ItemType } from '../../vault/item';
+import type { ModuleDef } from '../registry';
 import { ItemDetail } from './ItemDetail';
 import { ItemEditor } from './ItemEditor';
-import { NewVaultDialog, VaultDialog } from './VaultDialog';
 
-const SYNC_INTERVAL_MS = 30_000;
-const TOOLBAR = 68;
 const ALL = 'all';
-const TYPE_ORDER: ItemType[] = ['login', 'note', 'card', 'identity', 'wifi'];
-
-const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-const entries = (n: number) => count(n, 'Eintrag', 'Einträge');
 
 type Selection = { vaultId: string; id: string } | null;
 type Editing = { vaultId: string; id: string | null; item: Item } | null;
 
-export function VaultScreen({
-  session,
-  onLock,
-  onUpdate,
-}: {
-  session: Session;
-  onLock: (notice?: string) => void;
-  onUpdate: (update: Partial<Account>) => void;
-}) {
+export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: ModuleDef }) {
+  const { session, snapshot, loaded, syncError, openSpace, createSpace } = ctx;
   const manager = session.vaults;
-  const { vaults, items } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
+  const { vaults } = snapshot;
+  const items = useMemo(() => snapshot.items.filter((i) => module.types.includes(i.item.type)), [snapshot.items, module.types]);
   const [scope, setScope] = useState<string>(ALL);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Selection>(null);
   const [editing, setEditing] = useState<Editing>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [newMenu, setNewMenu] = useState<HTMLElement | null>(null);
-  const [vaultDialog, setVaultDialog] = useState<string | null>(null);
-  const [creatingVault, setCreatingVault] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [kitOpen, setKitOpen] = useState(false);
   const wide = useMediaQuery((t) => t.breakpoints.up('md'), { noSsr: true });
-
-  useEffect(() => {
-    const run = () =>
-      manager
-        .sync()
-        .then(() => setSyncError(null))
-        .catch((e: unknown) => {
-          if (e instanceof ApiError && e.status === 401) onLock('Deine Sitzung ist abgelaufen. Melde dich erneut an.');
-          else setSyncError(describeError(e));
-        })
-        .finally(() => setLoaded(true));
-    void run();
-    const timer = setInterval(run, SYNC_INTERVAL_MS);
-    window.addEventListener('focus', run);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('focus', run);
-    };
-  }, [manager, onLock]);
 
   useEffect(() => {
     if (scope !== ALL && !vaults.some((v) => v.id === scope)) setScope(ALL);
@@ -109,6 +68,8 @@ export function VaultScreen({
   const defaultVault = scopeVault?.canWrite ? scopeVault.id : (writable[0]?.id ?? null);
   const showDetail = editing !== null || current !== null;
   const vaultName = (id: string) => vaults.find((v) => v.id === id)?.name ?? '';
+  const inSpace = (id: string) => items.filter((i) => i.vaultId === id).length;
+  const types = module.types as ItemType[];
 
   const startNew = (type: ItemType) => {
     setNewMenu(null);
@@ -127,17 +88,17 @@ export function VaultScreen({
       await manager.removeItem(vaultId, id);
       setSelected(null);
     } catch (e) {
-      setSyncError(describeError(e));
+      setActionError(describeError(e));
     }
   };
 
   const nav = (
-    <Box component="nav" aria-label="Tresore" sx={{ width: { xs: 280, md: 'auto' }, p: 1.5 }}>
+    <Box component="nav" aria-label="Bereiche" sx={{ width: { xs: 280, md: 'auto' }, p: 1.5 }}>
       <List
         disablePadding
         subheader={
           <ListSubheader disableSticky sx={{ bgcolor: 'transparent', lineHeight: 2.5, px: 1 }}>
-            Tresore
+            Bereiche
           </ListSubheader>
         }
         sx={{ display: 'grid', gap: 0.25 }}
@@ -176,15 +137,15 @@ export function VaultScreen({
                     v.waitingForKey
                       ? 'Wartet auf Freigabe'
                       : v.personal
-                        ? entries(v.itemCount)
-                        : `${entries(v.itemCount)}, ${count(v.members.length, 'Person', 'Personen')}`
+                        ? entries(inSpace(v.id))
+                        : `${entries(inSpace(v.id))}, ${count(v.members.length, 'Person', 'Personen')}`
                   }
                   slotProps={{ primary: { noWrap: true } }}
                 />
               </ListItemButton>
               {!v.personal && (
                 <Tooltip title="Mitglieder und Einstellungen">
-                  <IconButton aria-label={`${v.name}: Mitglieder und Einstellungen`} onClick={() => setVaultDialog(v.id)}>
+                  <IconButton aria-label={`${v.name}: Mitglieder und Einstellungen`} onClick={() => openSpace(v.id)}>
                     <SettingsOutlinedIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
@@ -193,46 +154,56 @@ export function VaultScreen({
           );
         })}
       </List>
-      <Button startIcon={<AddIcon />} onClick={() => setCreatingVault(true)} sx={{ mt: 1, color: 'text.secondary' }}>
-        Neuer Tresor
+      <Button startIcon={<AddIcon />} onClick={() => createSpace((id) => setScope(id))} sx={{ mt: 1, color: 'text.secondary' }}>
+        Neuer Bereich
       </Button>
     </Box>
   );
 
   const listPane = (
     <Stack spacing={1.5}>
-      <TextField
-        type="search"
-        placeholder={scopeVault ? `In „${scopeVault.name}“ suchen` : 'Suchen'}
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoComplete="off"
-        size="small"
-        fullWidth
-        slotProps={{
-          htmlInput: { 'aria-label': 'Einträge durchsuchen' },
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
-          },
-        }}
-      />
-      {!session.hasRecovery && (
-        <Alert
-          severity="warning"
-          action={
-            <Button color="inherit" size="small" onClick={() => setKitOpen(true)}>
-              Erstellen
-            </Button>
-          }
-        >
-          Noch kein Notfall-Kit. Ohne es ist dein Tresor verloren, wenn du dein Master-Passwort vergisst.
-        </Alert>
-      )}
-      {syncError && <Alert severity="warning">{syncError}</Alert>}
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        {!wide && (
+          <Tooltip title="Bereiche">
+            <IconButton aria-label="Bereiche anzeigen" onClick={() => setDrawer(true)} edge="start">
+              <FilterListIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+        <TextField
+          type="search"
+          placeholder={scopeVault ? `In „${scopeVault.name}“ suchen` : 'Passwörter durchsuchen'}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoComplete="off"
+          size="small"
+          fullWidth
+          slotProps={{
+            htmlInput: { 'aria-label': 'Einträge durchsuchen' },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+        <Tooltip title="Neuer Eintrag">
+          <span>
+            <IconButton
+              aria-label="Neuer Eintrag"
+              aria-haspopup="menu"
+              onClick={(e) => setNewMenu(e.currentTarget)}
+              disabled={!defaultVault}
+              sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
+            >
+              <AddIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Stack>
+      {(actionError ?? syncError) && <Alert severity="warning">{actionError ?? syncError}</Alert>}
       {vaults.some((v) => v.unreadable > 0) && (
         <Alert severity="warning">Einige Einträge ließen sich nicht entschlüsseln und werden ausgeblendet.</Alert>
       )}
@@ -306,53 +277,12 @@ export function VaultScreen({
     </Box>
   );
 
-  const dialogVault = vaults.find((v) => v.id === vaultDialog);
+  const sticky = { position: { md: 'sticky' }, top: { md: TOOLBAR }, height: { md: `calc(100dvh - ${TOOLBAR}px)` }, overflowY: { md: 'auto' } } as const;
 
   return (
-    <Box sx={{ minHeight: '100dvh' }}>
-      <AppBar>
-        <Toolbar sx={{ minHeight: TOOLBAR, gap: 1 }}>
-          {!wide && (
-            <IconButton aria-label="Tresore anzeigen" onClick={() => setDrawer(true)} edge="start">
-              <MenuIcon />
-            </IconButton>
-          )}
-          <Brand />
-          <Box sx={{ flex: 1 }} />
-          {wide ? (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={(e) => setNewMenu(e.currentTarget)}
-              disabled={!defaultVault}
-              aria-haspopup="menu"
-            >
-              Neuer Eintrag
-            </Button>
-          ) : (
-            <IconButton
-              aria-label="Neuer Eintrag"
-              onClick={(e) => setNewMenu(e.currentTarget)}
-              disabled={!defaultVault}
-              sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } }}
-            >
-              <AddIcon />
-            </IconButton>
-          )}
-          <Tooltip title="Konto">
-            <IconButton aria-label="Konto" onClick={() => setAccountOpen(true)}>
-              <AccountCircleOutlinedIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Tresor sperren">
-            <IconButton aria-label="Sperren" onClick={() => onLock()}>
-              <LockOutlinedIcon />
-            </IconButton>
-          </Tooltip>
-        </Toolbar>
-      </AppBar>
+    <>
       <Menu anchorEl={newMenu} open={newMenu !== null} onClose={() => setNewMenu(null)}>
-        {TYPE_ORDER.map((t) => {
+        {types.map((t) => {
           const Icon = TYPE_ICONS[t];
           return (
             <MenuItem key={t} onClick={() => startNew(t)}>
@@ -371,31 +301,10 @@ export function VaultScreen({
         </Drawer>
       )}
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'minmax(14rem, 17rem) minmax(16rem, 22rem) minmax(0, 1fr)' },
-        }}
-      >
-        {wide && (
-          <Box sx={{ borderRight: 1, borderColor: 'divider', position: 'sticky', top: TOOLBAR, height: `calc(100dvh - ${TOOLBAR}px)`, overflowY: 'auto' }}>
-            {nav}
-          </Box>
-        )}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(14rem, 17rem) minmax(16rem, 22rem) minmax(0, 1fr)' } }}>
+        {wide && <Box sx={{ borderRight: 1, borderColor: 'divider', ...sticky }}>{nav}</Box>}
         {(wide || !showDetail) && (
-          <Box
-            component="aside"
-            aria-label="Einträge"
-            sx={{
-              borderRight: { md: 1 },
-              borderColor: { md: 'divider' },
-              p: 1.5,
-              position: { md: 'sticky' },
-              top: { md: TOOLBAR },
-              height: { md: `calc(100dvh - ${TOOLBAR}px)` },
-              overflowY: { md: 'auto' },
-            }}
-          >
+          <Box component="aside" aria-label="Einträge" sx={{ borderRight: { md: 1 }, borderColor: { md: 'divider' }, p: 1.5, ...sticky }}>
             {listPane}
           </Box>
         )}
@@ -405,38 +314,6 @@ export function VaultScreen({
           </Box>
         )}
       </Box>
-
-      <NewVaultDialog
-        open={creatingVault}
-        onClose={() => setCreatingVault(false)}
-        onCreate={async (name) => {
-          const id = await manager.createVault(name);
-          setScope(id);
-          setVaultDialog(id);
-        }}
-      />
-      {accountOpen && (
-        <AccountDialog
-          session={session}
-          onUpdate={onUpdate}
-          onClose={() => setAccountOpen(false)}
-          onCreateKit={() => {
-            setAccountOpen(false);
-            setKitOpen(true);
-          }}
-        />
-      )}
-      {kitOpen && (
-        <RecoveryKitDialog
-          session={session}
-          onClose={() => setKitOpen(false)}
-          onDone={(update) => {
-            onUpdate(update);
-            setKitOpen(false);
-          }}
-        />
-      )}
-      {dialogVault && <VaultDialog vault={dialogVault} manager={manager} me={session.userId} onClose={() => setVaultDialog(null)} />}
-    </Box>
+    </>
   );
 }

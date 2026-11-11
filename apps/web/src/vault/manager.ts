@@ -75,7 +75,7 @@ export class VaultsManager {
   private emit = () => {
     const views: VaultView[] = [...this.vaults.values()].map(({ remote, name, store }) => ({
       id: remote.id,
-      name: remote.personal ? name || PERSONAL_NAME : name || 'Tresor',
+      name: remote.personal ? name || PERSONAL_NAME : name || 'Bereich',
       personal: remote.personal,
       role: remote.role,
       members: remote.members,
