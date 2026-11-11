@@ -2,6 +2,7 @@ mod cipher;
 mod error;
 mod generator;
 mod kdf;
+mod passkey;
 mod recovery;
 mod sharing;
 
@@ -14,3 +15,5 @@ pub use sharing::{
     KeyPair, PublicKey, SealedKey, VaultKeyContext, item_aad, seal_vault_key, unwrap_account_key,
     vault_meta_aad, wrap_account_key,
 };
+
+pub use passkey::{PasskeyAssertion, PasskeyRegistration, assert_passkey, create_passkey};

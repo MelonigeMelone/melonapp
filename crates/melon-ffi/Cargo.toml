@@ -1,0 +1,26 @@
+[package]
+name = "melon-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+bindgen = ["uniffi/cli"]
+
+[dependencies]
+melon-crypto = { path = "../melon-crypto" }
+uniffi = "0.31"
+thiserror = "2"
+zeroize = "1"
+
+[[bin]]
+name = "melon-bindgen"
+path = "src/bin/bindgen.rs"
+required-features = ["bindgen"]
+
+[lints]
+workspace = true
