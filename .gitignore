@@ -6,3 +6,4 @@ dist/
 .DS_Store
 /packages/melon-wasm/pkg
 /tmp
+/apps/extension/build

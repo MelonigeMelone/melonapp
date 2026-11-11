@@ -14,7 +14,8 @@ melonapp/
 │       ├── migrations/    SQL-Migrationen (sqlx)
 │       └── tests/         End-to-End-Tests gegen echtes PostgreSQL
 ├── apps/
-│   └── web/               Web-App (React), Dockerfile, E2E-Test
+│   ├── web/               Web-App (React), Dockerfile, E2E-Test
+│   └── extension/         Browser-Erweiterung (Chromium, Firefox), E2E-Test
 ├── packages/
 │   └── melon-wasm/        npm-Paket mit dem gebauten WASM (pkg/ wird generiert)
 ├── scripts/build-wasm.sh  baut melon-wasm und erzeugt die JS-Bindings

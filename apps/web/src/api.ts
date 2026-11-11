@@ -106,13 +106,19 @@ export class ApiError extends Error {
   }
 }
 
+let apiBase = '';
+
+export function setApiBase(base: string) {
+  apiBase = base.replace(/\/+$/, '');
+}
+
 async function request<T>(method: string, path: string, opts: { token?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers['content-type'] = 'application/json';
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
   let res: Response;
   try {
-    res = await fetch(`/api/v1${path}`, {
+    res = await fetch(`${apiBase}/api/v1${path}`, {
       method,
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),

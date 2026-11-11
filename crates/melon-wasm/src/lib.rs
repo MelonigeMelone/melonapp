@@ -149,6 +149,19 @@ impl VaultKey {
         VaultKey(SymmetricKey::generate())
     }
 
+    #[wasm_bindgen(js_name = exportRaw)]
+    pub fn export_raw(&self) -> Vec<u8> {
+        self.0.as_bytes().to_vec()
+    }
+
+    #[wasm_bindgen(js_name = fromRaw)]
+    pub fn from_raw(bytes: &[u8]) -> Result<VaultKey, JsError> {
+        let arr: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| JsError::new("invalid key length"))?;
+        Ok(VaultKey(SymmetricKey::from_bytes(arr)))
+    }
+
     #[wasm_bindgen(js_name = encryptItem)]
     pub fn encrypt_item(
         &self,

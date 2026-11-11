@@ -60,9 +60,16 @@ jobs:
       - run: npm ci
       - run: npm test -w web
       - run: npm run build -w web
+      - run: npm test -w extension
+      - run: npm run build -w extension
+      - uses: actions/upload-artifact@v4
+        with:
+          name: melonapp-extension
+          path: apps/extension/build
 
   e2e:
     name: End-to-end (browser against full stack)
+    needs: web
     runs-on: ubuntu-latest
     env:
       COMPOSE: docker compose -p melon-e2e --env-file apps/web/e2e/e2e.env -f deploy/docker-compose.yml -f apps/web/e2e/compose.override.yml
@@ -79,6 +86,16 @@ jobs:
           -v "$PWD/apps/web/e2e:/e2e" -v "$RUNNER_TEMP:/out" -w /work
           mcr.microsoft.com/playwright:v1.65.0-noble
           bash -c "npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.65.0 >/dev/null && cp /e2e/vault.e2e.mjs . && node vault.e2e.mjs"
+      - uses: actions/download-artifact@v4
+        with:
+          name: melonapp-extension
+          path: extension-build
+      - name: Run extension test
+        run: >-
+          docker run --rm --network container:melon-e2e-caddy-1
+          -v "$PWD/apps/extension/e2e:/e2e" -v "$PWD/extension-build/chromium:/ext" -v "$RUNNER_TEMP:/out" -w /work
+          mcr.microsoft.com/playwright:v1.65.0-noble
+          bash -c "npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.65.0 >/dev/null && cp /e2e/extension.e2e.mjs . && node extension.e2e.mjs"
       - name: Check that the database holds no plaintext
         run: |
           hits=$(docker exec melon-e2e-db-1 psql -U melon -d melon -tAc "SELECT count(*) FROM items JOIN vaults ON vaults.id = items.vault_id WHERE data ILIKE '%github%' OR data ILIKE '%melone%' OR data ILIKE '%wlan-geheim%' OR data ILIKE '%recovery-code%' OR encrypted_meta ILIKE '%familie%'")

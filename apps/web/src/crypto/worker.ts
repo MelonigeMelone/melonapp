@@ -203,6 +203,12 @@ const handlers: CryptoMethods = {
   fingerprint({ publicKey }) {
     return fingerprint(publicKey);
   },
+  exportVaultKeys() {
+    return [...vaults.entries()].map(([vaultId, v]) => ({ vaultId, version: v.version, raw: [...v.key.exportRaw()] }));
+  },
+  importVaultKeys({ keys }) {
+    for (const k of keys) setVault(k.vaultId, VaultKey.fromRaw(new Uint8Array(k.raw)), k.version);
+  },
   lock() {
     pendingRecovery?.free();
     pendingRecovery = null;
