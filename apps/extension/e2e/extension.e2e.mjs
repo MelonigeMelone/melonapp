@@ -10,7 +10,10 @@ const page = (title, extra = '') => `<!doctype html><html><head><title>${title}<
   <h1>${title}</h1>
   <form method="get" action="/done" style="display:grid;gap:8px;width:320px">
     <input id="user" name="username" autocomplete="username" placeholder="E-Mail">
-    <input id="pw" name="password" type="password" ${extra} placeholder="Passwort">
+    <div style="position:relative">
+      <input id="pw" name="password" type="password" ${extra} placeholder="Passwort" style="width:100%;box-sizing:border-box;height:36px;padding-right:40px">
+      <button id="eye" type="button" aria-label="Passwort zeigen" style="position:absolute;right:6px;top:6px;width:24px;height:24px">o</button>
+    </div>
     <button type="submit">Weiter</button>
   </form></body></html>`;
 
@@ -110,20 +113,32 @@ await step('fill a matching site only after a click', async () => {
   await site.goto('https://login.example.test/');
   await site.waitForTimeout(300);
   if ((await site.locator('#pw').inputValue()) !== '') throw new Error('filled without user action');
+  await site.locator('#pw').focus();
+  const melon = site.getByRole('button', { name: 'Mit MelonApp ausfüllen' });
+  await melon.waitFor();
+  const a = await melon.boundingBox();
+  const b = await site.locator('#eye').boundingBox();
+  if (!a || !b) throw new Error('missing boxes');
+  if (a.x < b.x + b.width && b.x < a.x + a.width) throw new Error('melon icon covers the page\'s own icon');
+  await site.locator('#eye').click();
+  await site.waitForTimeout(400);
+  if (await site.locator('iframe[name="melonapp-save"]').count()) throw new Error('show-password click triggered a save prompt');
   await site.locator('#user').focus();
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
+  await melon.waitFor();
+  await site.screenshot({ path: `${OUT}/ext-2a-icon.png`, clip: { x: 0, y: 0, width: 520, height: 260 } });
+  await melon.click();
   await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').waitFor();
-  await site.screenshot({ path: `${OUT}/ext-2-menu.png` });
+  await site.screenshot({ path: `${OUT}/ext-2-menu.png`, clip: { x: 0, y: 0, width: 520, height: 300 } });
   await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').click();
   if ((await site.locator('#user').inputValue()) !== 'mia@example.test') throw new Error('username not filled');
   if ((await site.locator('#pw').inputValue()) !== 'alt-passwort-1') throw new Error('password not filled');
 });
 
-await step('other domains get nothing', async () => {
+await step('other domains get nothing, not even the icon', async () => {
   await site.goto('https://evil.example.test/');
   await site.locator('#pw').focus();
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
-  await site.getByText('Kein Login für diese Seite gespeichert.').waitFor();
+  await site.waitForTimeout(800);
+  if (await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).count()) throw new Error('icon shown without a matching login');
   const leaked = await sw.evaluate(async () => 'x');
   if (!leaked) throw new Error('service worker unreachable');
 });

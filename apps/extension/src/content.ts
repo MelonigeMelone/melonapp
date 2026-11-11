@@ -2,21 +2,28 @@ import { findIdentifierFields, findLoginFields, isVisible, setValue, type LoginF
 import { anyUrlMatches } from './shared/match';
 import type { ContentRequest, Match, MatchesResponse, TabMessage } from './shared/messages';
 
-const ICON = `<svg viewBox="1 11 30 16" width="20" height="11" aria-hidden="true"><path d="M2 12a14 14 0 0 0 28 0Z" fill="#2E6A43"/><path d="M5 12a11 11 0 0 0 22 0Z" fill="#A7D3A0"/><path d="M7 12a9 9 0 0 0 18 0Z" fill="#E2365F"/></svg>`;
+const ICON = `<svg viewBox="1 11 30 16" aria-hidden="true"><path d="M2 12a14 14 0 0 0 28 0Z" fill="#2E6A43"/><path d="M5 12a11 11 0 0 0 22 0Z" fill="#A7D3A0"/><path d="M7 12a9 9 0 0 0 18 0Z" fill="#E2365F"/></svg>`;
 
 const STYLE = `
   :host { all: initial; }
-  .btn { position: fixed; z-index: 2147483646; width: 28px; height: 28px; border: 0; border-radius: 8px;
-    background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .25); display: grid; place-items: center; cursor: pointer; padding: 0; }
-  .btn:focus-visible { outline: 3px solid #1F6B8F; }
-  .menu { position: fixed; z-index: 2147483647; min-width: 260px; max-width: 340px; background: #fff; color: #17231C;
-    border: 1px solid #D3E0D2; border-radius: 12px; box-shadow: 0 8px 24px rgb(0 0 0 / .18); padding: 6px;
+  .btn { position: fixed; z-index: 2147483646; border: 0; border-radius: 6px; padding: 0; margin: 0;
+    background: transparent; display: grid; place-items: center; cursor: pointer; opacity: .9;
+    transition: background-color .12s ease, opacity .12s ease; }
+  .btn svg { width: 78%; height: auto; display: block; }
+  .btn:hover { background: rgb(226 54 95 / .12); opacity: 1; }
+  .btn:focus-visible { outline: 2px solid #1F6B8F; outline-offset: 1px; opacity: 1; }
+  .btn.locked { opacity: .55; filter: grayscale(.6); }
+  .menu { position: fixed; z-index: 2147483647; box-sizing: border-box; background: #fff; color: #17231C;
+    border: 1px solid #D3E0D2; border-radius: 12px; box-shadow: 0 10px 28px rgb(23 35 28 / .16); padding: 6px;
     font: 14px/1.4 "Atkinson Hyperlegible", system-ui, sans-serif; }
+  .head { display: flex; align-items: center; gap: 6px; padding: 4px 10px 6px; color: #5B6B61; font-size: 12px; font-weight: 700; }
+  .head svg { width: 18px; height: auto; }
   .menu button { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
   .menu button:hover, .menu button:focus-visible { background: #E6EFE5; }
   .title { font-weight: 700; }
   .sub { color: #5B6B61; font-size: 12px; }
-  .note { padding: 8px 10px; color: #5B6B61; }
+  .note { padding: 6px 10px 8px; color: #5B6B61; }
+  @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 `;
 
 const host = document.createElement('melon-autofill');
@@ -72,15 +79,28 @@ function clear() {
   shadow.querySelectorAll('.btn, .menu').forEach((n) => n.remove());
 }
 
-function place(el: HTMLElement, input: HTMLInputElement, below: boolean) {
+function placeButton(btn: HTMLElement, input: HTMLInputElement) {
   const r = input.getBoundingClientRect();
-  if (below) {
-    el.style.top = `${r.bottom + 4}px`;
-    el.style.left = `${Math.max(4, r.right - 300)}px`;
-  } else {
-    el.style.top = `${r.top + (r.height - 28) / 2}px`;
-    el.style.left = `${r.right - 34}px`;
+  const size = Math.round(Math.min(26, Math.max(18, r.height - 10)));
+  const cy = r.top + r.height / 2;
+  let left = r.right - size - 8;
+  btn.style.display = 'none';
+  const below = document.elementFromPoint(left + size / 2, cy);
+  if (below && below !== input && !below.contains(input) && !host.contains(below)) {
+    const other = below.getBoundingClientRect();
+    if (other.left > r.left + r.width / 2) left = other.left - size - 4;
   }
+  btn.style.display = '';
+  Object.assign(btn.style, { width: `${size}px`, height: `${size}px`, top: `${cy - size / 2}px`, left: `${left}px` });
+}
+
+function placeMenu(menu: HTMLElement, input: HTMLInputElement) {
+  const r = input.getBoundingClientRect();
+  const width = Math.min(360, Math.max(r.width, 260));
+  const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+  const height = menu.offsetHeight || 160;
+  const top = r.bottom + 6 + height > window.innerHeight && r.top - 6 - height > 0 ? r.top - 6 - height : r.bottom + 6;
+  Object.assign(menu.style, { width: `${width}px`, left: `${left}px`, top: `${top}px` });
 }
 
 function fill(fields: LoginFields, username: string, password: string) {
@@ -112,8 +132,12 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
   menu.className = 'menu';
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', 'MelonApp');
-  place(menu, input, true);
+  const head = document.createElement('div');
+  head.className = 'head';
+  head.innerHTML = `${ICON}<span>MelonApp</span>`;
+  menu.append(head);
   shadow.append(menu);
+  placeMenu(menu, input);
 
   const res = await ask<MatchesResponse | null>({ type: 'matches' });
   if (!res || res.locked) {
@@ -121,6 +145,7 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
     n.className = 'note';
     n.textContent = 'MelonApp ist gesperrt. Klicke oben in der Leiste auf das MelonApp-Symbol und entsperre.';
     menu.append(n);
+    placeMenu(menu, input);
     return;
   }
   for (const m of res.matches as Match[]) {
@@ -149,23 +174,36 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
     n.textContent = 'Kein Login für diese Seite gespeichert.';
     menu.append(n);
   }
+  placeMenu(menu, input);
 }
 
-function showButton(fields: LoginFields, input: HTMLInputElement) {
+let cached: { at: number; res: MatchesResponse | null } | null = null;
+
+async function matchesForPage(): Promise<MatchesResponse | null> {
+  if (cached && Date.now() - cached.at < 15_000) return cached.res;
+  const res = await ask<MatchesResponse | null>({ type: 'matches' });
+  cached = { at: Date.now(), res };
+  return res;
+}
+
+function showButton(fields: LoginFields, input: HTMLInputElement, locked: boolean) {
   ensureHost();
   clear();
   active = fields;
   anchor = input;
   const btn = document.createElement('button');
-  btn.className = 'btn';
+  btn.className = locked ? 'btn locked' : 'btn';
   btn.type = 'button';
   btn.title = 'Mit MelonApp ausfüllen';
   btn.setAttribute('aria-label', 'Mit MelonApp ausfüllen');
   btn.innerHTML = ICON;
   btn.addEventListener('mousedown', (e) => e.preventDefault());
-  btn.addEventListener('click', () => void openMenu(fields, input));
-  place(btn, input, false);
+  btn.addEventListener('click', () => {
+    cached = null;
+    void openMenu(fields, input);
+  });
   shadow.append(btn);
+  placeButton(btn, input);
 }
 
 function fieldsFor(input: HTMLInputElement): LoginFields | undefined {
@@ -181,7 +219,13 @@ document.addEventListener(
     const input = e.target;
     if (!(input instanceof HTMLInputElement)) return;
     const fields = fieldsFor(input);
-    if (fields) showButton(fields, input);
+    if (!fields) return;
+    void matchesForPage().then((res) => {
+      if (document.activeElement !== input) return;
+      const locked = !res || res.locked;
+      const useful = locked || (res.locked === false && res.matches.length > 0) || (fields.isNew && !!fields.password);
+      if (useful) showButton(fields, input, locked);
+    });
   },
   true,
 );
@@ -197,10 +241,10 @@ document.addEventListener(
 
 const reposition = () => {
   const btn = shadow.querySelector<HTMLElement>('.btn');
-  if (btn && anchor && isVisible(anchor)) place(btn, anchor, false);
+  if (btn && anchor && isVisible(anchor)) placeButton(btn, anchor);
   else clear();
   const menu = shadow.querySelector<HTMLElement>('.menu');
-  if (menu && anchor) place(menu, anchor, true);
+  if (menu && anchor) placeMenu(menu, anchor);
 };
 window.addEventListener('scroll', reposition, true);
 window.addEventListener('resize', reposition);
@@ -222,7 +266,7 @@ document.addEventListener('submit', (e) => reportSubmit(e.target instanceof HTML
 document.addEventListener(
   'click',
   (e) => {
-    const el = e.target instanceof Element ? e.target.closest('button, input[type="submit"]') : null;
+    const el = e.target instanceof Element ? e.target.closest('button[type="submit"], button:not([type]), input[type="submit"]') : null;
     if (!el || e.composedPath().includes(host)) return;
     const form = (el as HTMLButtonElement).form ?? null;
     const scope = form ?? document;

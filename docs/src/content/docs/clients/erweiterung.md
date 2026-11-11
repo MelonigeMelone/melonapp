@@ -28,8 +28,11 @@ Master-Passwort.
 
 ## Bedienung
 
-- **Ausfüllen:** In ein Login-Feld klicken → kleines Melonen-Symbol im Feld → Login wählen. Alternativ
-  Symbol in der Browserleiste → „Ausfüllen“.
+- **Ausfüllen:** In ein Login-Feld klicken → kleines Melonen-Symbol rechts im Feld → Login wählen. Das
+  Menü öffnet sich bündig unter dem Feld. Alternativ Symbol in der Browserleiste → „Ausfüllen“.
+- **Wann das Symbol erscheint:** nur, wenn es für die Seite einen Login gibt, bei Registrierungsfeldern
+  (für den Generator) oder ausgegraut, wenn MelonApp gesperrt ist. Es passt sich der Feldhöhe an und
+  weicht eigenen Symbolen der Seite aus, etwa dem Auge zum Passwort-Anzeigen.
 - **Anmeldung in zwei Schritten** (erst E-Mail-Seite, dann Passwort-Seite, wie bei Google oder
   Microsoft): Das Symbol erscheint schon im E-Mail-Feld und füllt nur die E-Mail. Auf der
   Passwort-Seite steht der gewählte Login oben („eben gewählt“). Beim Speichern übernimmt die Karte
@@ -81,6 +84,7 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 | Maßnahme | Wogegen |
 |---|---|
 | Ausfüllen **nur nach Klick**, nie automatisch beim Laden | unsichtbare Formulare, die beim Seitenaufruf Passwörter abgreifen |
+| Nur echte Absende-Knöpfe lösen die Speicher-Karte aus, nicht z. B. „Passwort zeigen“ | Speicher-Karten mit halb eingegebenen Passwörtern |
 | Nur sichtbare, aktivierte Felder werden erkannt und befüllt | versteckte Felder |
 | Nur im Hauptframe, nicht in iframes | fremde, eingebettete Seiten |
 | Der Hintergrund prüft die Adresse über `sender.tab.url` (vom Browser), nicht über Angaben der Seite | eine Seite, die sich als andere ausgibt |
