@@ -1127,3 +1127,96 @@ async fn recovering_with_the_recovery_key() {
         b"vor dem vergessen"
     );
 }
+
+#[tokio::test]
+async fn native_client_registers_unlocks_and_roundtrips_items() {
+    let Some(app) = app(true).await else { return };
+    let mut native = melon_native::Session::default();
+    let user = Uuid::new_v4().to_string();
+    let vault = Uuid::new_v4().to_string();
+    let email = format!("native-{user}@example.com");
+    let salt = native.call("generateSalt", Value::Null).unwrap();
+    let derive =
+        json!({"password":"native-test-password", "salt":salt, "kdf":KdfParams::minimum()});
+    let auth = native.call("derive", derive.clone()).unwrap();
+    let account = native
+        .call(
+            "createAccount",
+            json!({"userId":user,"personalVaultId":vault,"meta":"{\"name\":\"Native\"}"}),
+        )
+        .unwrap();
+    let mut registration = json!({"user_id":user,"email":email,"salt":salt,"kdf":KdfParams::minimum(),"auth_key":auth,"wrapped_account_key":account["wrappedAccountKey"],"public_key":account["publicKey"],"encrypted_private_key":account["encryptedPrivateKey"],"personal_vault":{"id":vault,"encrypted_meta":account["personalVault"]["encryptedMeta"],"encrypted_vault_key":account["personalVault"]["encryptedVaultKey"]}});
+    native.resolve_auth_proofs(&mut registration).unwrap();
+    assert_eq!(
+        call(
+            &app,
+            "POST",
+            "/api/v1/auth/register",
+            None,
+            Some(registration)
+        )
+        .await
+        .0,
+        StatusCode::CREATED
+    );
+    native.lock();
+    let auth = native.call("derive", derive).unwrap();
+    let mut login = json!({"email":email,"auth_key":auth});
+    native.resolve_auth_proofs(&mut login).unwrap();
+    let (status, login) = call(&app, "POST", "/api/v1/auth/login", None, Some(login)).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = login["token"].as_str().unwrap();
+    native.call("unlock",json!({"wrappedAccountKey":login["wrapped_account_key"],"encryptedPrivateKey":login["encrypted_private_key"]})).unwrap();
+    let (_, vaults) = call(&app, "GET", "/api/v1/vaults", Some(token), None).await;
+    let remote = &vaults["vaults"][0];
+    native.call("openVault",json!({"vaultId":vault,"userId":user,"keyVersion":1,"sealed":remote["encrypted_vault_key"]})).unwrap();
+    let item = Uuid::new_v4().to_string();
+    let encrypted = native
+        .call(
+            "encryptItem",
+            json!({"vaultId":vault,"itemId":item,"plaintext":"native-secret"}),
+        )
+        .unwrap();
+    let (status, _) = call(
+        &app,
+        "PUT",
+        &format!("/api/v1/vaults/{vault}/items/{item}"),
+        Some(token),
+        Some(json!({"data":encrypted,"key_version":1,"base_revision":null})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, page) = call(
+        &app,
+        "GET",
+        &format!("/api/v1/vaults/{vault}/items?since=0"),
+        Some(token),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!page.to_string().contains("native-secret"));
+    let decrypted = native.call("decryptItems",json!({"vaultId":vault,"items":[{"id":item,"keyVersion":1,"data":page["items"][0]["data"]}]})).unwrap();
+    assert_eq!(decrypted[0]["plaintext"], "native-secret");
+    let recovery = native.call("setupRecovery",json!({"password":"native-test-password","salt":salt,"kdf":KdfParams::minimum(),"wrappedAccountKey":login["wrapped_account_key"]})).unwrap();
+    let mut body = json!({"current_auth_key":recovery["currentAuthKey"],"recovery_auth_key":recovery["recoveryAuthKey"],"recovery_wrapped_account_key":recovery["recoveryWrappedAccountKey"]});
+    native.resolve_auth_proofs(&mut body).unwrap();
+    assert_eq!(
+        call(
+            &app,
+            "PUT",
+            "/api/v1/account/recovery",
+            Some(token),
+            Some(body)
+        )
+        .await
+        .0,
+        StatusCode::NO_CONTENT
+    );
+    native.lock();
+    assert!(
+        native
+            .call("decryptItems", json!({"vaultId":vault,"items":[]}))
+            .is_err()
+    );
+}

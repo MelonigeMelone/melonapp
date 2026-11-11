@@ -14,8 +14,10 @@ Auf dem Anmeldebildschirm die HTTPS-Adresse des eigenen Servers eintragen, ohne 
 HTTP ist ausschließlich für Loopback-Adressen erlaubt. Native HTTP-Anfragen folgen
 keinen Weiterleitungen und sind auf 30 Sekunden sowie 32 MiB Antwortgröße begrenzt.
 Die WebView kann keine beliebigen Netzverbindungen öffnen; der Rust-Transport bedient
-das bestehende API-Protokoll. Angezeigte Einträge und Authentifizierungsnachweise
-liegen weiterhin in React; Entschlüsselungsschlüssel nicht.
+das bestehende API-Protokoll. Angezeigte Einträge und Sitzungstokens liegen weiterhin in React. Authentifizierungs-
+und Entschlüsselungsschlüssel bleiben in Rust; der Login verwendet undurchsichtige
+Handles, die nur der native HTTP-Transport auflösen kann. Der ausdrücklich angezeigte
+Recovery-Key bleibt als Notfall-Kit für die Person sichtbar.
 
 ## Sperren und Cache
 
@@ -58,3 +60,31 @@ npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
 Die Bundle-IDs und App-Group stehen in [ADR 0015](/melonapp/entscheidungen/0015-native-apple-clients/).
 Die Oberfläche berücksichtigt Safe Areas und verwendet mindestens 16 px große
 Eingabeschrift, damit iOS Eingaben nicht automatisch vergrößert.
+
+## iOS AutoFill und Passkeys
+
+Unter „Konto“ veröffentlicht „Passwörter für iOS AutoFill aktualisieren“ nach einem
+Sync eine verschlüsselte Kopie der Login-Einträge in der App Group. Die Extension
+verwendet ausschließlich exakt passende HTTPS-Hosts und verlangt biometrisches
+Entsperren. Der Snapshot ist höchstens 24 Stunden gültig; Änderungen erfordern eine
+neue Veröffentlichung. Aktiviere anschließend MelonApp unter iOS **Einstellungen →
+Allgemein → Automatisch ausfüllen & Passwörter** (die Bezeichnung variiert je iOS-Version).
+
+Die Extension enthält iOS-17-Callbacks für Passkey-Registrierung und Assertions. Diese
+Passkeys bleiben gerätelokal: keine Synchronisation, kein Export, keine
+Wiederherstellungszusage. Biometrie, App-Group-Provisioning und echte Safari-Passkey-
+Abläufe sind vor Einsatz mit wichtigen Konten noch auf einem Gerät zu prüfen.
+
+Für Änderungen an der Extension:
+
+```sh
+bash scripts/test-apple-swift.sh
+bash scripts/build-apple-ffi.sh iphonesimulator
+xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
+npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
+```
+
+Nicht erneut `tauri ios init` ausführen, um eigene Extension-Einstellungen zu erhalten.
+Die Quelle des Xcode-Projekts ist `project.yml`; generierte UniFFI-Bindings und Libraries
+werden nicht eingecheckt. Nach einem frischen Checkout zunächst `build-apple-ffi.sh`
+ausführen, bevor XcodeGen das Projekt neu erzeugt.

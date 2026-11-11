@@ -123,7 +123,12 @@ pub async fn api_request(
     if let Some(token) = opts.token {
         request = request.bearer_auth(token);
     }
-    if let Some(body) = opts.body {
+    if let Some(mut body) = opts.body {
+        app.state::<Mutex<Session>>()
+            .lock()
+            .map_err(|_| "session_unavailable")?
+            .resolve_auth_proofs(&mut body)
+            .map_err(str::to_owned)?;
         request = request.json(&body);
     }
     let mut response = request.send().await.map_err(|_| "network_error")?;
@@ -245,5 +250,85 @@ mod tests {
             "https://example.com"
         );
         assert!(validated_server("http://127.0.0.1:8080").is_ok());
+    }
+}
+
+#[tauri::command]
+pub fn is_ios() -> bool {
+    cfg!(target_os = "ios")
+}
+
+#[tauri::command]
+pub async fn autofill_publish(
+    app: tauri::AppHandle,
+    user_id: String,
+    entries: Value,
+) -> Result<(), String> {
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app, user_id, entries);
+        Err("ios_only".into())
+    }
+    #[cfg(target_os = "ios")]
+    {
+        tauri::async_runtime::spawn_blocking(move || {
+            use objc2_foundation::{NSFileManager, NSString};
+            let group = "group.de.melonapp.shared";
+            let url = NSFileManager::defaultManager()
+                .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(group))
+                .ok_or("app_group_unavailable")?;
+            let directory = PathBuf::from(url.path().ok_or("app_group_unavailable")?.to_string());
+            let base = server(&app)?;
+            let scope = format!(
+                "{:x}",
+                Sha256::digest(format!("{base}/{user_id}").as_bytes())
+            );
+            let account = format!("autofill/v1/{scope}");
+            let created = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| "clock_error")?
+                .as_secs();
+            let data = Zeroizing::new(
+                serde_json::to_vec(&serde_json::json!({"createdAt":created,"passwords":entries}))
+                    .map_err(|_| "invalid_request")?,
+            );
+            let (key, ciphertext) = {
+                let state = app.state::<Mutex<Session>>();
+                let mut session = state.lock().map_err(|_| "session_unavailable")?;
+                (
+                    session.biometric_key().map_err(str::to_owned)?,
+                    session
+                        .cache_seal(&format!("{account}/passwords"), &data)
+                        .map_err(str::to_owned)?,
+                )
+            };
+            let mut config =
+                PasswordOptions::new_generic_password("de.melonapp.autofill.v1", &scope);
+            config.use_protected_keychain();
+            config.set_access_group(group);
+            config.set_access_synchronized(Some(false));
+            let access = SecAccessControl::create_with_protection(
+                Some(ProtectionMode::AccessibleWhenPasscodeSetThisDeviceOnly),
+                AccessControlOptions::BIOMETRY_CURRENT_SET.bits(),
+            )
+            .map_err(|_| "biometric_unavailable")?;
+            config.set_access_control(access);
+            passwords::set_generic_password_options(&key, config)
+                .map_err(|_| "biometric_unavailable")?;
+            fs::write(
+                directory.join(format!("{scope}.passwords.pending")),
+                ciphertext,
+            )
+            .map_err(|_| "storage_unavailable")?;
+            fs::rename(
+                directory.join(format!("{scope}.passwords.pending")),
+                directory.join(format!("{scope}.passwords.enc")),
+            )
+            .map_err(|_| "storage_unavailable")?;
+            fs::write(directory.join("active.txt"), scope).map_err(|_| "storage_unavailable")?;
+            Ok(())
+        })
+        .await
+        .map_err(|_| "autofill_unavailable")?
     }
 }

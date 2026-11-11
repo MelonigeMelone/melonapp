@@ -85,3 +85,15 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 |---|---|
 | Biometrischer Snapshot authentifiziert Schlüssel und Kontext; Ergebnis enthält nur UI-Metadaten | `biometric_restore_authenticates_snapshot_and_never_returns_keys` |
 | Server-Adresse erzwingt TLS außer Loopback und lehnt eingebettete Zugangsdaten ab | `platform::tests::server_requires_tls_except_loopback_and_rejects_credentials` |
+
+| Apple-Extension-Eigenschaft | Test |
+|---|---|
+| UniFFI-Cache: Roundtrip, falscher Schlüssel/Kontext und falsche Schlüssellänge | `swift_cache_roundtrip_and_attack_cases` |
+| Passkey-Registrierung/Assertion: Attestation, Signatur und Challenge-Bindung | `passkey::tests::registration_and_assertion_verify_and_bind_challenge` |
+| Passkey: falsche RP-ID, Schlüssel, Credential-ID, Hash und beschädigte Schlüsselhülle | `passkey::tests::wrong_rp_key_id_hash_and_tampered_key_fail` |
+| Swift: exakte HTTPS-Hosts, keine Eltern-/Subdomains, Cache-Ablauf und Aufrufe über echte UniFFI-Bindings | `bash scripts/test-apple-swift.sh` |
+
+| Native Authentifizierung | Test |
+|---|---|
+| React erhält nur zufällige Auth-Handles; fremde und gesperrte Handles werden verworfen | `auth_proofs_stay_native_and_handles_expire_on_lock` |
+| Nativer Client registriert und entsperrt gegen den echten Server mit PostgreSQL, liest verschlüsselte Items und richtet Recovery ein | `api::native_client_registers_unlocks_and_roundtrips_items` |

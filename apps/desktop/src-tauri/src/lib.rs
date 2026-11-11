@@ -27,7 +27,9 @@ pub fn run() {
             platform::api_request,
             platform::biometric_enable,
             platform::biometric_unlock,
-            platform::biometric_disable
+            platform::biometric_disable,
+            platform::autofill_publish,
+            platform::is_ios
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -47,10 +49,13 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(
+            let should_lock = matches!(
                 event,
                 tauri::WindowEvent::Focused(false) | tauri::WindowEvent::Destroyed
-            ) {
+            );
+            #[cfg(mobile)]
+            let should_lock = should_lock || matches!(event, tauri::WindowEvent::Suspended);
+            if should_lock {
                 if let Ok(mut session) = window.state::<Mutex<Session>>().lock() {
                     session.lock();
                 }

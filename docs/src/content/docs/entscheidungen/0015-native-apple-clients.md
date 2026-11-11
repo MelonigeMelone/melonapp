@@ -16,8 +16,9 @@ bereitstellen. AutoFill benötigt einen nativen Swift-Einstieg.
 `apps/desktop` baut die React-UI aus `apps/web`. `melon-native` verwaltet Schlüssel,
 Verschlüsselung und Sperrzustand im Rust-Prozess. Tauri reicht nur explizit erlaubte
 Operationen weiter; Import und Export roher Schlüssel sind dort ausgeschlossen.
-Die vorhandenen Authentifizierungsnachweise bleiben zunächst Teil des gemeinsamen
-Login-Protokolls; sie sind keine Entschlüsselungsschlüssel.
+Authentifizierungsschlüssel werden im gemeinsamen Login-Protokoll durch zufällige
+Handles ersetzt. Nur der native HTTP-Transport löst diese vor dem Versand auf.
+Sperren verwirft alle Handles.
 
 Der Cache wird mit `melon-crypto` authentifiziert verschlüsselt. Die Bindung an Konto
 und Format erfolgt über Additional Authenticated Data. Biometrisches Entsperren ist

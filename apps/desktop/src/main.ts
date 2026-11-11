@@ -8,6 +8,17 @@ import './mobile.css';
 setNativeRequest((method, path, opts) => invoke('api_request', { method, path, opts }));
 const platform = {
   server: await invoke<string>('get_server'),
+  supportsAutofill: await invoke<boolean>('is_ios'),
+  async publishAutofill(session: Session) {
+    await session.vaults.sync();
+    const entries = session.vaults.getSnapshot().items.filter((v) => v.item.type === 'login').map((v) => ({
+      id: `${v.vaultId}/${v.id}`,
+      user: v.item.fields.find((f) => f.id === 'username')?.value ?? '',
+      password: v.item.fields.find((f) => f.id === 'password')?.value ?? '',
+      urls: v.item.fields.filter((f) => f.kind === 'url').map((f) => f.value),
+    }));
+    await invoke('autofill_publish', { userId: session.userId, entries });
+  },
   async setServer(value: string) {
     await invoke('set_server', { value });
     platform.server = value;

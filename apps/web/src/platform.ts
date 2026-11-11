@@ -2,6 +2,8 @@ import type { Session } from './session';
 
 export interface NativePlatform {
   server: string;
+  supportsAutofill: boolean;
+  publishAutofill(session: Session): Promise<void>;
   setServer(server: string): Promise<void>;
   enableBiometric(session: Session): Promise<void>;
   unlockBiometric(): Promise<Session>;

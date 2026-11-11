@@ -208,6 +208,10 @@ export function AccountScreen({ ctx, onUpdate }: { ctx: ShellContext; onUpdate: 
       <Stack spacing={4}>
         {nativePlatform() && <Stack spacing={1}>
           <Typography variant="h6">Touch ID / Face ID</Typography>
+          {nativePlatform()!.supportsAutofill && <Button variant="outlined" onClick={async () => {
+            try { await nativePlatform()!.publishAutofill(session); window.alert('AutoFill-Cache für 24 Stunden aktualisiert. Aktiviere MelonApp in den iOS-Einstellungen für AutoFill.'); }
+            catch { window.alert('AutoFill konnte nicht vorbereitet werden. Prüfe App Group, Signierung und Biometrie.'); }
+          }}>Passwörter für iOS AutoFill aktualisieren</Button>}
           <Button variant="outlined" onClick={async () => {
             try { await nativePlatform()!.enableBiometric(session); window.alert('Biometrisches Entsperren aktiviert.'); }
             catch { window.alert('Biometrie konnte nicht aktiviert werden. Prüfe Signierung und biometrische Einstellungen.'); }

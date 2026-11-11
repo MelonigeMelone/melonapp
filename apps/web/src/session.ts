@@ -1,3 +1,4 @@
+import { nativePlatform } from './platform';
 import { api, ApiError, authed, DEFAULT_KDF, NetworkError, type Kdf } from './api';
 import { cryptoCall } from './crypto/client';
 import { newId } from './vault/item';
@@ -138,7 +139,7 @@ export async function recoverAccount(email: string, recoveryKey: string, newPass
 
 export async function lock(session: Session | null) {
   await cryptoCall('lock');
-  if (session) await api.logout(session.token).catch(() => undefined);
+  if (session && !nativePlatform()) await api.logout(session.token).catch(() => undefined);
 }
 
 const messages: Record<string, string> = {

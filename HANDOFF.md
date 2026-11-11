@@ -43,3 +43,15 @@ Implementierung, native Rust-Tests, Apple-Builds, Security-Review, CI und PR fol
 - Geprüft: Tauri-Plattformtest für Server-Validierung bestanden.
 - Geprüft: `tauri ios init` erzeugt das Projekt unter `apps/desktop/src-tauri/gen/apple`.
 - Entscheidung: Vorhandene Apple-Development-Identität erkannt, Team `S7FTFS4QRH`; Simulator wird ohne Signierung gebaut.
+
+- Geprüft: ARM64-iOS-Simulator-Bundle gebaut, im iPhone-17-Pro-Simulator (iOS 26.1) installiert und gestartet; Screenshot zeigt die funktionsfähig gerenderte Anmeldeseite.
+- Entscheidung: AutoFill benötigt einen ausdrücklich veröffentlichten Snapshot, exakte HTTPS-Hosts und erneute Biometrie; Passwort-Snapshot läuft nach 24 Stunden ab.
+- Entscheidung: Passkeys sind zunächst gerätelokal, ES256/RustCrypto, Attestation `none`, Zähler null; kein behaupteter Server-Sync oder Backup.
+- Entscheidung: App Group wird zugleich als Keychain-Zugriffsgruppe genutzt, ohne fest eincodierten persönlichen Team-Präfix.
+- Geprüft: Passkey-Kryptografietests und Swift-Tests gegen echte UniFFI-Bindings bestanden (Domain-Abgrenzung, Ablauf, Cache, falsche RP-ID).
+- Entscheidung: Native Sperre behält das serverseitige Sitzungstoken für biometrisches Wiederaufnehmen; serverseitiger Ablauf/Widerruf bleibt wirksam.
+
+- Entscheidung: Auch Authentifizierungsschlüssel bleiben nativ; React erhält nur zufällige Handles, die beim Sperren ungültig werden.
+- Geprüft: iOS-Bundle inklusive `PlugIns/MelonAutoFill.appex` gebaut, erneut im Simulator installiert und gestartet.
+- Geprüft: `cargo +1.85.0 check --workspace --locked` erfolgreich.
+- Blocker: T3-Geräteautomatisierung ist in den Umgebungseinstellungen ausgeschaltet; keine Umgehung oder Einstellungsänderung vorgenommen. Simulator-Build, Installation, Launch und Screenshot funktionieren über Xcode-Werkzeuge.

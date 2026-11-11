@@ -18,7 +18,12 @@ serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 sha2 = "0.10"
-zeroize = "1"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-foundation = { version = "0.3", features = ["NSFileManager", "NSString", "NSURL"] }
+
+[dependencies.zeroize]
+version = "1"
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
 security-framework = { version = "3", features = ["OSX_10_15"] }

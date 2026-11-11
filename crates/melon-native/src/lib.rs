@@ -25,6 +25,7 @@ pub struct Session {
     identity: Option<KeyPair>,
     recovery: Option<RecoveryKey>,
     vaults: HashMap<String, Vault>,
+    proofs: HashMap<String, Zeroizing<String>>,
     last_activity: Instant,
     timeout: Duration,
 }
@@ -37,6 +38,7 @@ impl Default for Session {
             identity: None,
             recovery: None,
             vaults: HashMap::new(),
+            proofs: HashMap::new(),
             last_activity: Instant::now(),
             timeout: Duration::from_secs(300),
         }
@@ -116,12 +118,15 @@ impl Session {
         self.identity = None;
         self.recovery = None;
         self.vaults.clear();
+        self.proofs.clear();
     }
 
     pub fn expire(&mut self) -> bool {
         if self.last_activity.elapsed() >= self.timeout {
+            let had_keys =
+                self.account.is_some() || self.wrapping.is_some() || self.recovery.is_some();
             self.lock();
-            return true;
+            return had_keys;
         }
         false
     }
@@ -209,7 +214,48 @@ impl Session {
     pub fn call(&mut self, method: &str, mut a: Value) -> Result<Value> {
         let result = self.call_inner(method, &a);
         wipe(&mut a);
-        result
+        let mut result = result?;
+        if matches!(method, "derive" | "recoveryAuth") {
+            self.hide_proof(&mut result)?;
+        } else if let Value::Object(fields) = &mut result {
+            for name in ["authKey", "currentAuthKey", "recoveryAuthKey"] {
+                if let Some(value) = fields.get_mut(name) {
+                    self.hide_proof(value)?;
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    fn hide_proof(&mut self, value: &mut Value) -> Result<()> {
+        if self.proofs.len() >= 32 {
+            return Err("too_many_pending_auth_requests");
+        }
+        let proof = value.as_str().ok_or("invalid_auth_proof")?.to_owned();
+        wipe(value);
+        let handle = format!(
+            "native-proof:{}",
+            STANDARD.encode(melon_crypto::generate_salt())
+        );
+        self.proofs.insert(handle.clone(), Zeroizing::new(proof));
+        *value = json!(handle);
+        Ok(())
+    }
+
+    pub fn resolve_auth_proofs(&mut self, body: &mut Value) -> Result<()> {
+        self.expire();
+        if let Value::Object(fields) = body {
+            for name in ["auth_key", "current_auth_key", "recovery_auth_key"] {
+                if let Some(value) = fields.get_mut(name) {
+                    let proof = self
+                        .proofs
+                        .get(value.as_str().ok_or("invalid_auth_handle")?)
+                        .ok_or("invalid_auth_handle")?;
+                    *value = json!(proof.as_str());
+                }
+            }
+        }
+        Ok(())
     }
 
     fn call_inner(&mut self, method: &str, a: &Value) -> Result<Value> {
@@ -438,6 +484,39 @@ mod tests {
             )
             .unwrap();
         (session, created)
+    }
+
+    #[test]
+    fn auth_proofs_stay_native_and_handles_expire_on_lock() {
+        let mut session = Session::default();
+        let handle = session.call("derive",json!({"password":"test-password", "salt":STANDARD.encode(b"0123456789abcdef"), "kdf":KdfParams::minimum()})).unwrap();
+        assert!(handle.as_str().unwrap().starts_with("native-proof:"));
+        let mut body = json!({"auth_key":handle});
+        session.resolve_auth_proofs(&mut body).unwrap();
+        assert!(
+            !body["auth_key"]
+                .as_str()
+                .unwrap()
+                .starts_with("native-proof:")
+        );
+        assert_eq!(
+            STANDARD
+                .decode(body["auth_key"].as_str().unwrap())
+                .unwrap()
+                .len(),
+            32
+        );
+        assert!(
+            session
+                .resolve_auth_proofs(&mut json!({"auth_key":"forged"}))
+                .is_err()
+        );
+        session.lock();
+        assert!(
+            session
+                .resolve_auth_proofs(&mut json!({"auth_key":handle}))
+                .is_err()
+        );
     }
 
     #[test]

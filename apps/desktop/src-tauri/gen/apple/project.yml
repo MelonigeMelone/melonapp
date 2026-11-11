@@ -57,6 +57,8 @@ targets:
         CFBundleVersion: "0.1.0"
     entitlements:
       path: melon-desktop_iOS/melon-desktop_iOS.entitlements
+      properties:
+        com.apple.security.application-groups: [group.de.melonapp.shared]
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full
@@ -72,6 +74,8 @@ targets:
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
       groups: [app]
     dependencies:
+      - target: MelonAutoFill
+        embed: true
       - framework: libapp.a
         embed: false
       - sdk: CoreGraphics.framework
@@ -89,3 +93,53 @@ targets:
         outputFiles:
           - $(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a
           - $(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a
+
+  MelonAutoFill:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: ../../../apple/AutoFill
+      - path: ../../../apple/Bindings/melon_ffi.swift
+    info:
+      path: MelonAutoFill/Info.plist
+      properties:
+        CFBundleDisplayName: MelonApp AutoFill
+        CFBundleShortVersionString: 0.1.0
+        CFBundleVersion: "0.1.0"
+        NSFaceIDUsageDescription: MelonApp entsperrt deine Zugangsdaten mit Face ID.
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.authentication-services-credential-provider-ui
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).CredentialProviderViewController
+          NSExtensionAttributes:
+            ASCredentialProviderExtensionCapabilities:
+              ProvidesPasswords: true
+              ProvidesPasskeys: true
+    entitlements:
+      path: MelonAutoFill/MelonAutoFill.entitlements
+      properties:
+        com.apple.security.application-groups: [group.de.melonapp.shared]
+        com.apple.developer.authentication-services.autofill-credential-provider: true
+    settings:
+      base:
+        ARCHS: [arm64]
+        VALID_ARCHS: arm64
+        PRODUCT_BUNDLE_IDENTIFIER: de.melonapp.app.autofill
+        PRODUCT_NAME: MelonAutoFill
+        SWIFT_VERSION: "5.0"
+        SWIFT_INCLUDE_PATHS: $(SRCROOT)/../../../apple/Bindings
+        OTHER_SWIFT_FLAGS: $(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../../../apple/Bindings/melon_ffiFFI.modulemap
+        LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]: $(SRCROOT)/../../../../../target/aarch64-apple-ios-sim/release
+        LIBRARY_SEARCH_PATHS[sdk=iphoneos*]: $(SRCROOT)/../../../../../target/aarch64-apple-ios/release
+        OTHER_LDFLAGS: $(inherited) -lmelon_ffi
+        APPLICATION_EXTENSION_API_ONLY: true
+        SKIP_INSTALL: true
+        CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - sdk: AuthenticationServices.framework
+      - sdk: Security.framework
+      - sdk: LocalAuthentication.framework
+    preBuildScripts:
+      - script: bash "$SRCROOT/../../../../../scripts/build-apple-ffi.sh" "$PLATFORM_NAME"
+        name: Build UniFFI
+        basedOnDependencyAnalysis: false
