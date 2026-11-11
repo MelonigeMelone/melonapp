@@ -46,6 +46,9 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Unlesbare Items brechen den Sync nicht ab | `store.test.ts: skips items it cannot decrypt` |
 | Keine `javascript:`-Links aus Einträgen | `item.test.ts: only creates safe links` |
 | Verborgene Felder sind nicht durchsuchbar | `item.test.ts`, CI-Job `e2e` |
+| Import liest alle Formate korrekt, auch schwierige CSV-Fälle und 1PUX | `import.test.ts` |
+| Import im Browser: Doppelte übersprungen, Sonderzeichen in Passwörtern bleiben erhalten | CI-Job `e2e`, Schritt „import“ |
+| Angezeigte Passwörter werden beim Wechsel zu einem anderen Eintrag wieder verborgen | CI-Job `e2e` |
 | Zwei Personen im echten Browser: Einladen, automatische Freigabe, Entfernen mit Schlüsselwechsel, Zugriff danach weg | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
 | Datenbank enthält nach dem Browser-Test keinen Klartext, auch keine Tresor-Namen | CI-Job `e2e`, Schritt „no plaintext“ |
 

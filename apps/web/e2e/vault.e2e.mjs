@@ -124,6 +124,32 @@ await step('card entry and search', async () => {
   await a.getByRole('searchbox').fill('');
 });
 
+await step('import from Apple Passwords, skipping duplicates', async () => {
+  await a.getByRole('button', { name: 'Importieren' }).click();
+  const dialog = a.getByRole('dialog', { name: 'Passwörter importieren' });
+  const csv = [
+    'Title,URL,Username,Password,Notes,OTPAuth',
+    'GitHub,https://github.com/,melone,irgendwas,,',
+    'Stadtwerke,https://stadtwerke.example,kunde-42,"strom,gas""2026",Zählernummer 7,',
+    'Bibliothek,https://bib.example,leser-7,buecher!,,otpauth://totp/Bib?secret=JBSWY3DP',
+  ].join('\n');
+  await dialog.getByLabel('Export-Datei').setInputFiles({ name: 'Passwords.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+  await dialog.getByText('Erkannt: Apple Passwörter, 3 Einträge', { exact: false }).waitFor();
+  await dialog.getByText('1 Eintrag gibt es schon', { exact: false }).waitFor();
+  await shot(a, '4a-import-preview');
+  await dialog.getByRole('button', { name: '2 Einträge importieren' }).click();
+  await dialog.getByText('2 Einträge importiert.', { exact: false }).waitFor({ timeout: 30000 });
+  await dialog.getByText('Lösche jetzt die Export-Datei', { exact: false }).waitFor();
+  await dialog.getByRole('button', { name: 'Fertig' }).click();
+  await a.locator('.entry-row', { hasText: 'Stadtwerke' }).click();
+  const pw = a.locator('.concealed-field').first();
+  await pw.getByRole('button', { name: 'Anzeigen' }).click();
+  if ((await pw.locator('.concealed-value .pw').innerText()) !== 'strom,gas"2026') throw new Error('imported password differs');
+  await a.locator('.entry-row', { hasText: 'Bibliothek' }).click();
+  await a.getByText('TOTP-Schlüssel').waitFor();
+  if ((await a.locator('.entry-row', { hasText: 'GitHub' }).count()) !== 1) throw new Error('duplicate was imported');
+});
+
 await step('reveal and copy password', async () => {
   await a.locator('.entry-row', { hasText: 'GitHub' }).click();
   const pw = a.locator('.concealed-field').first();

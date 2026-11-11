@@ -19,6 +19,7 @@ import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import AddIcon from '@mui/icons-material/Add';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
@@ -33,6 +34,7 @@ import type { ShellContext } from '../../Shell';
 import { emptyItem, matchesSearch, subtitle, TEMPLATES, type Item, type ItemType } from '../../vault/item';
 import type { ModuleDef } from '../registry';
 import { ItemDetail } from './ItemDetail';
+import { ImportDialog } from './ImportDialog';
 import { ItemEditor } from './ItemEditor';
 
 const ALL = 'all';
@@ -52,6 +54,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
   const [actionError, setActionError] = useState<string | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [newMenu, setNewMenu] = useState<HTMLElement | null>(null);
+  const [importing, setImporting] = useState(false);
   const wide = useMediaQuery((t) => t.breakpoints.up('md'), { noSsr: true });
 
   useEffect(() => {
@@ -154,9 +157,22 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
           );
         })}
       </List>
-      <Button startIcon={<AddIcon />} onClick={() => createSpace((id) => setScope(id))} sx={{ mt: 1, color: 'text.secondary' }}>
-        Neuer Bereich
-      </Button>
+      <Stack sx={{ mt: 1, alignItems: 'flex-start' }}>
+        <Button startIcon={<AddIcon />} onClick={() => createSpace((id) => setScope(id))} sx={{ color: 'text.secondary' }}>
+          Neuer Bereich
+        </Button>
+        <Button
+          startIcon={<FileUploadOutlinedIcon />}
+          onClick={() => {
+            setDrawer(false);
+            setImporting(true);
+          }}
+          disabled={!defaultVault}
+          sx={{ color: 'text.secondary' }}
+        >
+          Importieren
+        </Button>
+      </Stack>
     </Box>
   );
 
@@ -216,9 +232,14 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
         <Stack spacing={1.5} sx={{ alignItems: 'flex-start', p: 1 }}>
           <Typography color="text.secondary">Noch keine Einträge.</Typography>
           {defaultVault && (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => startNew('login')}>
-              Ersten Eintrag anlegen
-            </Button>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => startNew('login')}>
+                Ersten Eintrag anlegen
+              </Button>
+              <Button variant="outlined" startIcon={<FileUploadOutlinedIcon />} onClick={() => setImporting(true)}>
+                Aus anderem Passwortmanager importieren
+              </Button>
+            </Stack>
           )}
         </Stack>
       ) : (
@@ -294,6 +315,17 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
           );
         })}
       </Menu>
+
+      {importing && defaultVault && (
+        <ImportDialog
+          manager={manager}
+          vaults={vaults}
+          existing={items}
+          initialVault={defaultVault}
+          onClose={() => setImporting(false)}
+          onImported={(id) => setScope(id)}
+        />
+      )}
 
       {!wide && (
         <Drawer open={drawer} onClose={() => setDrawer(false)}>

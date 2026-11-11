@@ -15,7 +15,8 @@ sidebar:
    ein generiertes Passwort vor.
 3. **Desktop-App:** Schnellsuche per globalem Hotkey. Beim Kopieren wird die
    Zwischenablage nach 30 s automatisch geleert.
-4. **Umzug:** Import aus Apple Passwörter (CSV-Export), Bitwarden, 1Password und Chrome.
+4. **Umzug:** Import aus Apple Passwörter, 1Password (1PUX und CSV), Chrome/Edge/Brave, Firefox und
+   Bitwarden ✅ ([Details](/melonapp/clients/web/#import)).
 5. **Sicherheits-Check:** Doppelte und schwache Passwörter finden, optional mit
    Have-I-Been-Pwned-Abgleich über k-Anonymität. Dabei verlassen nur 5 Zeichen des
    SHA-1-Hashes das Gerät.

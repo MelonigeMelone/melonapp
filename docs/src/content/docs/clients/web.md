@@ -112,6 +112,34 @@ speichert erneut:
 
 Bei `409 key_rotated` gibt es keinen automatischen zweiten Versuch (siehe [Sync](/melonapp/server/sync/)).
 
+## Import
+
+Im Passwortmanager unter „Importieren“ (`modules/passwords/import/`). Unterstützt:
+
+| Quelle | Format | Erkennung |
+|---|---|---|
+| Apple Passwörter / Safari | CSV | Spalten `Title, URL, Username, Password` |
+| 1Password | **1PUX** (empfohlen) | ZIP mit `export.data` |
+| 1Password | CSV | zusätzlich Spalte `Archived` |
+| Chrome, Edge, Brave | CSV | `name, url, username, password` |
+| Firefox | CSV | zusätzlich `httpRealm` |
+| Bitwarden | CSV | `login_uri, login_username, login_password` |
+
+- Die Datei wird **nur im Browser** gelesen (`File.text()` bzw. `arrayBuffer()`, ZIP mit `fflate`).
+  Jeder Eintrag wird wie beim normalen Speichern im Worker verschlüsselt und einzeln hochgeladen.
+- Der CSV-Parser beherrscht Anführungszeichen, verdoppelte Anführungszeichen, Kommas und
+  Zeilenumbrüche in Feldern, BOM und Windows-Zeilenenden.
+- **1PUX** wird vollständig übernommen: Logins (mehrere URLs), Kreditkarten, Identitäten, WLAN und
+  sichere Notizen. Bekannte Felder landen in den Vorlagenfeldern, alles andere in eigenen Abschnitten
+  mit passender Feldart. Dazu kommt der Passwort-Verlauf. Andere Kategorien (Bankkonto, Ausweis …)
+  werden zu sicheren Notizen mit Abschnitten.
+- **2FA-Schlüssel** (TOTP) kommen als verborgenes Feld „TOTP-Schlüssel“ in den Abschnitt
+  „Einmalcode“, bis es ein eigenes 2FA-Modul gibt.
+- Archivierte Einträge (1Password) und interne Firefox-Logins werden übersprungen.
+- **Doppelte** (gleicher Typ, Titel, Benutzername und Website ohne `www.`) im Ziel-Bereich werden
+  standardmäßig übersprungen.
+- Danach erinnert die App daran, die Export-Datei zu löschen, weil sie unverschlüsselt ist.
+
 ## Konto
 
 Der Knopf „Konto“ oben rechts öffnet `AccountDialog`:

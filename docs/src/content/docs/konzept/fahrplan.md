@@ -12,10 +12,11 @@ sidebar:
 | **M3 – Tresore & Teilen** | persönlicher und geteilte Tresore mit eigenen Schlüsseln, Rollen (Besitzer/Bearbeiter/Betrachter), Einladungslinks, Schlüsselwechsel beim Entfernen, Eintragstypen, eigene Felder ([Konzept](/melonapp/konzept/tresore/)) | ✅ fertig |
 | **M4 – Konto absichern** | Recovery-Key (Notfall-Kit), Master-Passwort ändern, Sicherheitscode für geteilte Schlüssel | ✅ fertig |
 | **M4b – App-Rahmen** | Startbildschirm, Module als Unterbereiche, „Bereiche“ gelten für alle Module ([ADR 0012](/melonapp/entscheidungen/0012-app-shell-und-bereiche/)) | ✅ fertig |
+| **M4c – Import** | Apple Passwörter, 1Password (1PUX/CSV), Chrome, Firefox, Bitwarden, mit Vorschau und Erkennung von Doppelten | ✅ fertig |
 | M5 – Desktop | Tauri-App für Windows/Mac, lokaler verschlüsselter Cache, Hotkey, Windows Hello/Touch ID | als Nächstes |
 | M6 – Browser-Erweiterung | Autofill, Speichern-Dialog, Generator | geplant |
 | M7 – iOS | Tauri-iOS-App + Credential Provider Extension, Face ID, Passkeys | geplant |
-| M8 – Mehr | Personengruppen, eigene Symbole, 2FA-Codes, Sicherheits-Check, Anhänge, Import/Export | geplant |
+| M8 – Mehr | Personengruppen, eigene Symbole, 2FA-Codes, Sicherheits-Check, Anhänge, Export | geplant |
 | M9 – Android | Tauri-Android + Autofill Service | später |
 
 :::tip

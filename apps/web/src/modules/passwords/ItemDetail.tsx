@@ -89,7 +89,7 @@ export function ItemDetail({
       </Stack>
 
       {item.fields.map((f) => (
-        <FieldView key={f.id} field={f} onCopy={(v) => void copy(v)} />
+        <FieldView key={`${entry.vaultId}/${entry.id}/${f.id}`} field={f} onCopy={(v) => void copy(v)} />
       ))}
 
       {item.sections.map((s) => (
@@ -100,7 +100,7 @@ export function ItemDetail({
             </Typography>
           )}
           {s.fields.map((f) => (
-            <FieldView key={f.id} field={f} onCopy={(v) => void copy(v)} />
+            <FieldView key={`${entry.vaultId}/${entry.id}/${f.id}`} field={f} onCopy={(v) => void copy(v)} />
           ))}
         </Stack>
       ))}
