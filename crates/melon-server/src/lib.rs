@@ -1,14 +1,16 @@
+pub mod access;
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod members;
 pub mod state;
-pub mod vault;
+pub mod vaults;
 
 use axum::{
     Router,
     extract::DefaultBodyLimit,
     http::{HeaderName, HeaderValue, Method, header},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use sqlx::migrate::Migrator;
 use tower_http::{
@@ -23,6 +25,7 @@ pub use state::AppState;
 pub static MIGRATOR: Migrator = sqlx::migrate!();
 
 const BODY_LIMIT: usize = 1024 * 1024;
+const ROTATE_BODY_LIMIT: usize = 32 * 1024 * 1024;
 
 pub fn router(state: AppState) -> Router {
     let api = Router::new()
@@ -30,8 +33,42 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
         .route("/auth/logout", post(auth::logout))
-        .route("/vault/items", get(vault::list))
-        .route("/vault/items/{id}", put(vault::put).delete(vault::delete));
+        .route("/auth/invites/preview", post(auth::invite_preview))
+        .route("/users/lookup", get(members::lookup_user))
+        .route(
+            "/vaults",
+            get(vaults::list_vaults).post(vaults::create_vault),
+        )
+        .route(
+            "/vaults/{vault_id}",
+            put(vaults::update_vault).delete(vaults::delete_vault),
+        )
+        .route("/vaults/{vault_id}/items", get(vaults::list_items))
+        .route(
+            "/vaults/{vault_id}/items/{item_id}",
+            put(vaults::put_item).delete(vaults::delete_item),
+        )
+        .route("/vaults/{vault_id}/members", post(members::add_member))
+        .route(
+            "/vaults/{vault_id}/members/{user_id}",
+            put(members::change_role).delete(members::remove_member),
+        )
+        .route(
+            "/vaults/{vault_id}/members/{user_id}/key",
+            put(members::grant_key),
+        )
+        .route(
+            "/vaults/{vault_id}/rotate",
+            post(members::rotate).layer(DefaultBodyLimit::max(ROTATE_BODY_LIMIT)),
+        )
+        .route(
+            "/vaults/{vault_id}/invites",
+            get(members::list_invites).post(members::create_invite),
+        )
+        .route(
+            "/vaults/{vault_id}/invites/{invite_id}",
+            delete(members::delete_invite),
+        );
 
     let origins: Vec<HeaderValue> = state
         .config

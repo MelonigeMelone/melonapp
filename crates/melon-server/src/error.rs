@@ -13,6 +13,8 @@ pub enum ApiError {
     Unauthorized,
     #[error("forbidden: {0}")]
     Forbidden(&'static str),
+    #[error("not found: {0}")]
+    NotFound(&'static str),
     #[error("conflict: {0}")]
     Conflict(&'static str),
     #[error("too many requests")]
@@ -33,6 +35,7 @@ impl IntoResponse for ApiError {
             Self::BadRequest(c) => (StatusCode::BAD_REQUEST, *c),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             Self::Forbidden(c) => (StatusCode::FORBIDDEN, *c),
+            Self::NotFound(c) => (StatusCode::NOT_FOUND, *c),
             Self::Conflict(c) => (StatusCode::CONFLICT, *c),
             Self::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
             Self::Internal(e) => {

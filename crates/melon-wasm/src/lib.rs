@@ -1,12 +1,21 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
-    EncString, KdfParams, PasswordOptions, SymmetricKey, derive_master_key, item_aad,
-    unwrap_vault_key, wrap_vault_key,
+    EncString, KdfParams, KeyPair, PasswordOptions, PublicKey, SealedKey, SymmetricKey,
+    VaultKeyContext, derive_master_key, item_aad, unwrap_account_key, vault_meta_aad,
+    wrap_account_key,
 };
 use wasm_bindgen::prelude::*;
 
 fn js_err(e: impl std::fmt::Display) -> JsError {
     JsError::new(&e.to_string())
+}
+
+fn context<'a>(vault_id: &'a str, user_id: &'a str, key_version: u32) -> VaultKeyContext<'a> {
+    VaultKeyContext {
+        vault_id,
+        user_id,
+        key_version,
+    }
 }
 
 #[wasm_bindgen]
@@ -22,16 +31,16 @@ impl DerivedKeys {
         self.auth_key.clone()
     }
 
-    #[wasm_bindgen(js_name = wrapVaultKey)]
-    pub fn wrap_vault_key(&self, vault_key: &VaultKey) -> String {
-        wrap_vault_key(&self.wrapping_key, &vault_key.0).to_string()
+    #[wasm_bindgen(js_name = wrapAccountKey)]
+    pub fn wrap_account_key(&self, account_key: &AccountKey) -> String {
+        wrap_account_key(&self.wrapping_key, &account_key.0).to_string()
     }
 
-    #[wasm_bindgen(js_name = unwrapVaultKey)]
-    pub fn unwrap_vault_key(&self, wrapped: &str) -> Result<VaultKey, JsError> {
+    #[wasm_bindgen(js_name = unwrapAccountKey)]
+    pub fn unwrap_account_key(&self, wrapped: &str) -> Result<AccountKey, JsError> {
         let enc = EncString::parse(wrapped).map_err(js_err)?;
-        unwrap_vault_key(&self.wrapping_key, &enc)
-            .map(VaultKey)
+        unwrap_account_key(&self.wrapping_key, &enc)
+            .map(AccountKey)
             .map_err(js_err)
     }
 }
@@ -58,7 +67,81 @@ pub fn derive_keys(
 }
 
 #[wasm_bindgen]
+pub struct AccountKey(SymmetricKey);
+
+#[wasm_bindgen]
+impl AccountKey {
+    pub fn generate() -> AccountKey {
+        AccountKey(SymmetricKey::generate())
+    }
+}
+
+#[wasm_bindgen]
+pub struct Identity(KeyPair);
+
+#[wasm_bindgen]
+impl Identity {
+    pub fn generate() -> Identity {
+        Identity(KeyPair::generate())
+    }
+
+    pub fn open(account_key: &AccountKey, sealed: &str) -> Result<Identity, JsError> {
+        let enc = EncString::parse(sealed).map_err(js_err)?;
+        KeyPair::open_with(&account_key.0, &enc)
+            .map(Identity)
+            .map_err(js_err)
+    }
+
+    #[wasm_bindgen(getter, js_name = publicKey)]
+    pub fn public_key(&self) -> String {
+        self.0.public_key().to_base64()
+    }
+
+    pub fn seal(&self, account_key: &AccountKey) -> String {
+        self.0.seal_with(&account_key.0).to_string()
+    }
+
+    #[wasm_bindgen(js_name = openVaultKey)]
+    pub fn open_vault_key(
+        &self,
+        sealed: &str,
+        vault_id: &str,
+        user_id: &str,
+        key_version: u32,
+    ) -> Result<VaultKey, JsError> {
+        let sealed = SealedKey::parse(sealed).map_err(js_err)?;
+        self.0
+            .open_vault_key(&sealed, &context(vault_id, user_id, key_version))
+            .map(VaultKey)
+            .map_err(js_err)
+    }
+}
+
+#[wasm_bindgen(js_name = sealVaultKey)]
+pub fn seal_vault_key(
+    public_key: &str,
+    vault_key: &VaultKey,
+    vault_id: &str,
+    user_id: &str,
+    key_version: u32,
+) -> Result<String, JsError> {
+    let recipient = PublicKey::from_base64(public_key).map_err(js_err)?;
+    Ok(melon_crypto::seal_vault_key(
+        &recipient,
+        &vault_key.0,
+        &context(vault_id, user_id, key_version),
+    )
+    .to_string())
+}
+
+#[wasm_bindgen]
 pub struct VaultKey(SymmetricKey);
+
+fn decrypt_str(key: &SymmetricKey, data: &str, aad: &[u8]) -> Result<String, JsError> {
+    let enc = EncString::parse(data).map_err(js_err)?;
+    let plain = key.decrypt(&enc, aad).map_err(js_err)?;
+    String::from_utf8(plain.to_vec()).map_err(js_err)
+}
 
 #[wasm_bindgen]
 impl VaultKey {
@@ -66,19 +149,48 @@ impl VaultKey {
         VaultKey(SymmetricKey::generate())
     }
 
-    pub fn encrypt(&self, module: &str, id: &str, plaintext: &str) -> String {
+    #[wasm_bindgen(js_name = encryptItem)]
+    pub fn encrypt_item(
+        &self,
+        vault_id: &str,
+        item_id: &str,
+        key_version: u32,
+        plaintext: &str,
+    ) -> String {
         self.0
-            .encrypt(plaintext.as_bytes(), &item_aad(module, id))
+            .encrypt(
+                plaintext.as_bytes(),
+                &item_aad(vault_id, item_id, key_version),
+            )
             .to_string()
     }
 
-    pub fn decrypt(&self, module: &str, id: &str, data: &str) -> Result<String, JsError> {
-        let enc = EncString::parse(data).map_err(js_err)?;
-        let plain = self
-            .0
-            .decrypt(&enc, &item_aad(module, id))
-            .map_err(js_err)?;
-        String::from_utf8(plain.to_vec()).map_err(js_err)
+    #[wasm_bindgen(js_name = decryptItem)]
+    pub fn decrypt_item(
+        &self,
+        vault_id: &str,
+        item_id: &str,
+        key_version: u32,
+        data: &str,
+    ) -> Result<String, JsError> {
+        decrypt_str(&self.0, data, &item_aad(vault_id, item_id, key_version))
+    }
+
+    #[wasm_bindgen(js_name = encryptMeta)]
+    pub fn encrypt_meta(&self, vault_id: &str, key_version: u32, plaintext: &str) -> String {
+        self.0
+            .encrypt(plaintext.as_bytes(), &vault_meta_aad(vault_id, key_version))
+            .to_string()
+    }
+
+    #[wasm_bindgen(js_name = decryptMeta)]
+    pub fn decrypt_meta(
+        &self,
+        vault_id: &str,
+        key_version: u32,
+        data: &str,
+    ) -> Result<String, JsError> {
+        decrypt_str(&self.0, data, &vault_meta_aad(vault_id, key_version))
     }
 }
 

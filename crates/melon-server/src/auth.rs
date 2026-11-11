@@ -13,15 +13,17 @@ use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
 };
 use hmac::{Hmac, Mac};
-use melon_crypto::{EncString, KdfParams};
+use melon_crypto::{EncString, KdfParams, PublicKey, SealedKey};
 use rand::{RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::{
+    access::bump_vault,
     error::{ApiError, ApiResult},
     state::AppState,
+    vaults::MAX_META_LEN,
 };
 
 fn server_argon() -> Argon2<'static> {
@@ -43,11 +45,11 @@ fn verify_auth_key(auth_key: &[u8], phc: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn token_hash(token: &str) -> Vec<u8> {
+pub(crate) fn token_hash(token: &str) -> Vec<u8> {
     Sha256::digest(token.as_bytes()).to_vec()
 }
 
-fn normalize_email(raw: &str) -> ApiResult<String> {
+pub(crate) fn normalize_email(raw: &str) -> ApiResult<String> {
     let email = raw.trim().to_lowercase();
     let valid = email.len() <= 254
         && email
@@ -116,12 +118,24 @@ pub async fn prelogin(
 }
 
 #[derive(Deserialize)]
+pub struct PersonalVault {
+    id: Uuid,
+    encrypted_meta: EncString,
+    encrypted_vault_key: String,
+}
+
+#[derive(Deserialize)]
 pub struct RegisterRequest {
+    user_id: Uuid,
     email: String,
     kdf: KdfParams,
     salt: String,
     auth_key: String,
-    wrapped_vault_key: EncString,
+    wrapped_account_key: EncString,
+    public_key: String,
+    encrypted_private_key: EncString,
+    personal_vault: PersonalVault,
+    invite_token: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -129,14 +143,37 @@ pub struct RegisterResponse {
     user_id: Uuid,
 }
 
+const MAX_KEY_BLOB: usize = 512;
+
+type InviteRow = (Uuid, String, Uuid, String);
+
 pub async fn register(
     State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> ApiResult<(StatusCode, Json<RegisterResponse>)> {
-    if !state.config.allow_registration {
+    let email = normalize_email(&req.email)?;
+
+    let invite: Option<InviteRow> = match &req.invite_token {
+        Some(token) => {
+            let row: Option<InviteRow> = sqlx::query_as(
+                "SELECT id, email, vault_id, role FROM invites
+                 WHERE token_hash = $1 AND accepted_by IS NULL AND expires_at > now()",
+            )
+            .bind(token_hash(token))
+            .fetch_optional(&state.db)
+            .await?;
+            let row = row.ok_or(ApiError::BadRequest("invalid_invite"))?;
+            if row.1 != email {
+                return Err(ApiError::BadRequest("invite_email_mismatch"));
+            }
+            Some(row)
+        }
+        None => None,
+    };
+    if invite.is_none() && !state.config.allow_registration {
         return Err(ApiError::Forbidden("registration_disabled"));
     }
-    let email = normalize_email(&req.email)?;
+
     req.kdf
         .validate()
         .map_err(|_| ApiError::BadRequest("invalid_kdf"))?;
@@ -146,18 +183,27 @@ pub async fn register(
     }
     let auth_key =
         decode_auth_key(&req.auth_key).ok_or(ApiError::BadRequest("invalid_auth_key"))?;
-    if req.wrapped_vault_key.encoded_len() > 512 {
-        return Err(ApiError::BadRequest("invalid_wrapped_key"));
+    PublicKey::from_base64(&req.public_key)
+        .map_err(|_| ApiError::BadRequest("invalid_public_key"))?;
+    SealedKey::parse(&req.personal_vault.encrypted_vault_key)
+        .map_err(|_| ApiError::BadRequest("invalid_vault_key"))?;
+    if req.wrapped_account_key.encoded_len() > MAX_KEY_BLOB
+        || req.encrypted_private_key.encoded_len() > MAX_KEY_BLOB
+        || req.personal_vault.encrypted_meta.encoded_len() > MAX_META_LEN
+    {
+        return Err(ApiError::BadRequest("invalid_key_material"));
     }
 
     let auth_hash = tokio::task::spawn_blocking(move || hash_auth_key(&auth_key))
         .await
         .map_err(|e| anyhow!(e))??;
 
-    let user_id = Uuid::new_v4();
-    let result = sqlx::query(
-        "INSERT INTO users (id, email, kdf_memory_kib, kdf_iterations, kdf_parallelism, kdf_salt, auth_hash, wrapped_vault_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+    let user_id = req.user_id;
+    let mut tx = state.db.begin().await?;
+    let inserted = sqlx::query(
+        "INSERT INTO users (id, email, kdf_memory_kib, kdf_iterations, kdf_parallelism, kdf_salt,
+                            auth_hash, wrapped_account_key, public_key, encrypted_private_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
     )
     .bind(user_id)
     .bind(&email)
@@ -166,20 +212,63 @@ pub async fn register(
     .bind(req.kdf.parallelism as i32)
     .bind(&req.salt)
     .bind(&auth_hash)
-    .bind(req.wrapped_vault_key.to_string())
-    .execute(&state.db)
+    .bind(req.wrapped_account_key.to_string())
+    .bind(&req.public_key)
+    .bind(req.encrypted_private_key.to_string())
+    .execute(&mut *tx)
     .await;
-
-    match result {
-        Ok(_) => {
-            tracing::info!(%user_id, "account registered");
-            Ok((StatusCode::CREATED, Json(RegisterResponse { user_id })))
-        }
+    match inserted {
         Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
-            Err(ApiError::Conflict("email_taken"))
+            return Err(ApiError::Conflict("email_taken"));
         }
-        Err(e) => Err(e.into()),
+        other => {
+            other?;
+        }
     }
+
+    sqlx::query(
+        "INSERT INTO vaults (id, personal, encrypted_meta, revision)
+         VALUES ($1, true, $2, nextval('revision_seq'))",
+    )
+    .bind(req.personal_vault.id)
+    .bind(req.personal_vault.encrypted_meta.to_string())
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| match e {
+        sqlx::Error::Database(d) if d.is_unique_violation() => ApiError::Conflict("vault_exists"),
+        e => e.into(),
+    })?;
+    sqlx::query(
+        "INSERT INTO vault_members (vault_id, user_id, role, encrypted_vault_key, key_version)
+         VALUES ($1, $2, 'owner', $3, 1)",
+    )
+    .bind(req.personal_vault.id)
+    .bind(user_id)
+    .bind(&req.personal_vault.encrypted_vault_key)
+    .execute(&mut *tx)
+    .await?;
+
+    if let Some((invite_id, _, vault_id, role)) = invite {
+        sqlx::query("UPDATE invites SET accepted_by = $1, accepted_at = now() WHERE id = $2")
+            .bind(user_id)
+            .bind(invite_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO vault_members (vault_id, user_id, role) VALUES ($1, $2, $3)
+             ON CONFLICT DO NOTHING",
+        )
+        .bind(vault_id)
+        .bind(user_id)
+        .bind(role)
+        .execute(&mut *tx)
+        .await?;
+        bump_vault(&mut *tx, vault_id).await?;
+    }
+    tx.commit().await?;
+
+    tracing::info!(%user_id, "account registered");
+    Ok((StatusCode::CREATED, Json(RegisterResponse { user_id })))
 }
 
 #[derive(Deserialize)]
@@ -193,10 +282,12 @@ pub struct LoginResponse {
     token: String,
     expires_in_seconds: i64,
     user_id: Uuid,
-    wrapped_vault_key: String,
+    wrapped_account_key: String,
+    public_key: String,
+    encrypted_private_key: String,
 }
 
-type UserAuthRow = (Uuid, String, String);
+type UserAuthRow = (Uuid, String, String, String, String);
 
 pub async fn login(
     State(state): State<AppState>,
@@ -207,22 +298,26 @@ pub async fn login(
         return Err(ApiError::TooManyRequests);
     }
 
-    let user: Option<UserAuthRow> =
-        sqlx::query_as("SELECT id, auth_hash, wrapped_vault_key FROM users WHERE email = $1")
-            .bind(&email)
-            .fetch_optional(&state.db)
-            .await?;
+    let user: Option<UserAuthRow> = sqlx::query_as(
+        "SELECT id, auth_hash, wrapped_account_key, public_key, encrypted_private_key
+         FROM users WHERE email = $1",
+    )
+    .bind(&email)
+    .fetch_optional(&state.db)
+    .await?;
 
     let phc = user
         .as_ref()
-        .map_or_else(|| state.dummy_hash.clone(), |(_, h, _)| h.clone());
+        .map_or_else(|| state.dummy_hash.clone(), |u| u.1.clone());
     let key = decode_auth_key(&req.auth_key);
     let key_for_check = key.unwrap_or([0u8; 32]);
     let matches = tokio::task::spawn_blocking(move || verify_auth_key(&key_for_check, &phc))
         .await
         .map_err(|e| anyhow!(e))?;
 
-    let Some((user_id, _, wrapped_vault_key)) = user.filter(|_| matches && key.is_some()) else {
+    let Some((user_id, _, wrapped_account_key, public_key, encrypted_private_key)) =
+        user.filter(|_| matches && key.is_some())
+    else {
         state.limiter.record_failure(&email);
         tracing::info!("failed login");
         return Err(ApiError::Unauthorized);
@@ -251,8 +346,36 @@ pub async fn login(
         token,
         expires_in_seconds: i64::from(ttl_hours) * 3600,
         user_id,
-        wrapped_vault_key,
+        wrapped_account_key,
+        public_key,
+        encrypted_private_key,
     }))
+}
+
+#[derive(Deserialize)]
+pub struct InvitePreviewRequest {
+    token: String,
+}
+
+#[derive(Serialize)]
+pub struct InvitePreviewResponse {
+    email: String,
+    invited_by: String,
+}
+
+pub async fn invite_preview(
+    State(state): State<AppState>,
+    Json(req): Json<InvitePreviewRequest>,
+) -> ApiResult<Json<InvitePreviewResponse>> {
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT i.email, u.email FROM invites i JOIN users u ON u.id = i.created_by
+         WHERE i.token_hash = $1 AND i.accepted_by IS NULL AND i.expires_at > now()",
+    )
+    .bind(token_hash(&req.token))
+    .fetch_optional(&state.db)
+    .await?;
+    let (email, invited_by) = row.ok_or(ApiError::NotFound("invite_not_found"))?;
+    Ok(Json(InvitePreviewResponse { email, invited_by }))
 }
 
 pub async fn logout(State(state): State<AppState>, user: AuthUser) -> ApiResult<StatusCode> {

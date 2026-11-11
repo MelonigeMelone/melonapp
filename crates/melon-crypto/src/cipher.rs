@@ -14,7 +14,6 @@ use crate::CryptoError;
 const VERSION: &str = "1";
 const NONCE_LEN: usize = 24;
 const TAG_LEN: usize = 16;
-const AAD_VAULT_KEY: &[u8] = b"melon/v1/vault-key";
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SymmetricKey([u8; 32]);
@@ -118,30 +117,6 @@ impl From<EncString> for String {
     }
 }
 
-pub fn item_aad(module: &str, item_id: &str) -> Vec<u8> {
-    let mut aad = b"melon/v1/item\0".to_vec();
-    aad.extend_from_slice(module.as_bytes());
-    aad.push(0);
-    aad.extend_from_slice(item_id.as_bytes());
-    aad
-}
-
-pub fn wrap_vault_key(wrapping_key: &SymmetricKey, vault_key: &SymmetricKey) -> EncString {
-    wrapping_key.encrypt(vault_key.as_bytes(), AAD_VAULT_KEY)
-}
-
-pub fn unwrap_vault_key(
-    wrapping_key: &SymmetricKey,
-    wrapped: &EncString,
-) -> Result<SymmetricKey, CryptoError> {
-    let bytes = wrapping_key.decrypt(wrapped, AAD_VAULT_KEY)?;
-    let arr: [u8; 32] = bytes
-        .as_slice()
-        .try_into()
-        .map_err(|_| CryptoError::InvalidKey)?;
-    Ok(SymmetricKey::from_bytes(arr))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,13 +149,9 @@ mod tests {
     #[test]
     fn wrong_context_fails() {
         let key = SymmetricKey::generate();
-        let enc = key.encrypt(b"geheim", &item_aad("passwords", "a"));
+        let enc = key.encrypt(b"geheim", b"context-a");
         assert_eq!(
-            key.decrypt(&enc, &item_aad("passwords", "b")).err(),
-            Some(CryptoError::Decrypt)
-        );
-        assert_eq!(
-            key.decrypt(&enc, &item_aad("notes", "a")).err(),
+            key.decrypt(&enc, b"context-b").err(),
             Some(CryptoError::Decrypt)
         );
     }
@@ -221,15 +192,5 @@ mod tests {
             EncString::parse("1.AAAA").err(),
             Some(CryptoError::Malformed)
         );
-    }
-
-    #[test]
-    fn vault_key_wrap_roundtrip() {
-        let wrapping = SymmetricKey::generate();
-        let vault = SymmetricKey::generate();
-        let wrapped = wrap_vault_key(&wrapping, &vault);
-        let unwrapped = unwrap_vault_key(&wrapping, &wrapped).unwrap();
-        assert_eq!(unwrapped.as_bytes(), vault.as_bytes());
-        assert!(unwrap_vault_key(&SymmetricKey::generate(), &wrapped).is_err());
     }
 }
