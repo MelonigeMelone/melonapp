@@ -25,6 +25,6 @@ Passwortmanager. Die gesamte Doku liegt in `docs/src/content/docs/` (Starlight).
 
 ## Befehle
 
-Rust und Node ≥ 22 sind auf dem Entwicklungsrechner nicht installiert. Gebaut wird in Docker
+Native Entwicklung auf macOS und Docker werden unterstützt
 (Befehle in `docs/src/content/docs/betrieb/lokale-entwicklung.md`). Unter Git Bash vorher
 `export MSYS_NO_PATHCONV=1` setzen.
