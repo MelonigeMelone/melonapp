@@ -1,0 +1,7 @@
+target
+.git
+.github
+docs
+deploy
+**/*.md
+node_modules

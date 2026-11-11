@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Format, lint, test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: melon
+          POSTGRES_PASSWORD: melon
+          POSTGRES_DB: melon_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U melon"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MELON_TEST_DATABASE_URL: postgres://melon:melon@localhost:5432/melon_test
+      MELON_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+
+  wasm:
+    name: Crypto core builds for WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p melon-crypto --target wasm32-unknown-unknown --locked
+
+  msrv:
+    name: Minimum Rust version (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --locked

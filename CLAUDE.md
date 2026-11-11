@@ -1,0 +1,28 @@
+# MelonApp
+
+Persönliche All-in-One-App mit Modulen. Das erste Modul ist ein Ende-zu-Ende verschlüsselter
+Passwortmanager. Die gesamte Doku liegt in `docs/src/content/docs/` (Starlight).
+
+## Grundregeln
+
+- **Keine Kommentare im Code**, auch keine Doc-Comments. Das Warum gehört in `docs/`.
+  Siehe `docs/src/content/docs/entscheidungen/0005-docs-statt-kommentare.md`.
+- **Doku im selben Commit/PR aktualisieren**, wenn sich Verhalten, API, Datenmodell,
+  Konfiguration, Pipelines oder Sicherheit ändern. Welche Seite zu welcher Änderung gehört,
+  steht in `docs/src/content/docs/mitwirken/regeln.md`.
+- Neue Grundsatzentscheidung → neues ADR in `docs/src/content/docs/entscheidungen/`.
+- Sicherheitsregeln aus `mitwirken/regeln.md` gelten immer. Bei Änderungen an Krypto,
+  Auth oder Datenzugriff: Tests für den Angriffsfall und `/security-review` vor dem Abschluss.
+
+## Struktur
+
+- `crates/melon-crypto`: gesamte Kryptografie, nativ + WASM
+- `crates/melon-server`: axum + PostgreSQL, speichert nur Chiffretext
+- `docs/`: Starlight-Doku (npm-Workspace)
+- `deploy/`: Docker Compose für den eigenen Server
+
+## Befehle
+
+Rust und Node ≥ 22 sind auf dem Entwicklungsrechner nicht installiert. Gebaut wird in Docker
+(Befehle in `docs/src/content/docs/betrieb/lokale-entwicklung.md`). Unter Git Bash vorher
+`export MSYS_NO_PATHCONV=1` setzen.

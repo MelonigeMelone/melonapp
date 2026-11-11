@@ -1,0 +1,62 @@
+name: melonapp
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: melon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: melon
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U melon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  server:
+    image: ${MELON_IMAGE:-ghcr.io/melonigemelone/melonapp-server:latest}
+    build:
+      context: ..
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MELON_DATABASE_URL: postgres://melon:${POSTGRES_PASSWORD}@db:5432/melon
+      MELON_SERVER_SECRET: ${MELON_SERVER_SECRET:?set MELON_SERVER_SECRET in .env}
+      MELON_ALLOW_REGISTRATION: ${MELON_ALLOW_REGISTRATION:-false}
+      MELON_CORS_ORIGINS: ${MELON_CORS_ORIGINS:-}
+      RUST_LOG: info
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal, web]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      MELON_DOMAIN: ${MELON_DOMAIN:?set MELON_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [web]
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:
+    internal: true
+  web:

@@ -1,0 +1,8 @@
+{$MELON_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		-Server
+	}
+	reverse_proxy server:8080
+}

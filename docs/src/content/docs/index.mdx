@@ -1,0 +1,42 @@
+---
+title: MelonApp
+description: Persönliche All-in-One-App mit Ende-zu-Ende verschlüsseltem Passwortmanager.
+template: splash
+hero:
+  tagline: Eine App für alles, was dir fehlt. Zuerst ein schneller, selbst gehosteter Passwortmanager ohne Abo.
+  image:
+    file: ../../assets/icon.svg
+  actions:
+    - text: Konzept lesen
+      link: /melonapp/konzept/vision/
+      icon: right-arrow
+    - text: Selbst hosten
+      link: /melonapp/betrieb/selbst-hosten/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="Ende-zu-Ende verschlüsselt" icon="seti:lock">
+    Der Server sieht nie Klartext. Wer ihn komplett übernimmt, bekommt nur Chiffretext.
+  </Card>
+  <Card title="Überall" icon="laptop">
+    Windows, macOS, iPhone, Web und Browser-Erweiterung aus einer Codebasis.
+  </Card>
+  <Card title="Schnell" icon="rocket">
+    Rust im Kern, lokale Suche, Sync nur über Änderungen.
+  </Card>
+  <Card title="Erweiterbar" icon="puzzle">
+    Neue Module kommen ohne Server-Änderung dazu.
+  </Card>
+</CardGrid>
+
+## Wo finde ich was?
+
+<CardGrid>
+  <LinkCard title="Warum so gebaut?" href="/melonapp/entscheidungen/" description="Alle Architektur-Entscheidungen mit Begründung." />
+  <LinkCard title="Sicherheitsmodell" href="/melonapp/sicherheit/modell/" description="Schlüssel, Verschlüsselung und was der Server weiß." />
+  <LinkCard title="API" href="/melonapp/server/api/" description="Alle Endpunkte des Sync-Servers." />
+  <LinkCard title="Regeln fürs Mitwirken" href="/melonapp/mitwirken/regeln/" description="Code ohne Kommentare, das Warum steht hier." />
+</CardGrid>
