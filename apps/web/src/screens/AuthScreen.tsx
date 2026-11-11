@@ -14,6 +14,8 @@ import { monoFont } from '../theme';
 import { describeError, login, recoverAccount, register, type Session } from '../session';
 import { ApiError } from '../api';
 
+import { nativePlatform } from '../platform';
+
 type Mode = 'login' | 'register' | 'recover';
 const MIN_LENGTH = 12;
 
@@ -28,6 +30,8 @@ export function AuthScreen({
   inviteToken: string | null;
   onSession: (s: Session) => void;
 }) {
+  const platform = nativePlatform();
+  const [server, setServer] = useState(platform?.server ?? '');
   const [mode, setMode] = useState<Mode>(inviteToken ? 'register' : 'login');
   const [inviter, setInviter] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState(false);
@@ -70,6 +74,7 @@ export function AuthScreen({
     }
     setBusy(true);
     try {
+      if (platform) await platform.setServer(server);
       const session =
         mode === 'login'
           ? await login(email.trim(), password)
@@ -140,6 +145,13 @@ export function AuthScreen({
           </Tabs>
           )}
 
+          {platform && <TextField label="Server-Adresse (HTTPS)" value={server} onChange={(e) => setServer(e.target.value)} disabled={busy} fullWidth />}
+          {platform && mode === 'login' && <Button disabled={busy} onClick={async () => {
+            setBusy(true);
+            try { await platform.setServer(server); onSession(await platform.unlockBiometric()); }
+            catch { setError('Biometrisches Entsperren nicht verfügbar. Melde dich mit dem Master-Passwort an.'); }
+            finally { setBusy(false); }
+          }}>Mit Touch ID / Face ID entsperren</Button>}
           {notice && mode === 'login' && <Alert severity="info">{notice}</Alert>}
           {inviter && mode === 'register' && (
             <Alert severity="success">

@@ -33,3 +33,13 @@ Implementierung, native Rust-Tests, Apple-Builds, Security-Review, CI und PR fol
 - Entscheidung: Native Frist zunächst fünf Minuten; Hintergrundwechsel sperrt sofort, auch wenn der UI-Timer verzögert wird.
 - Geprüft: `cargo test -p melon-native` (7 Tests), `cargo clippy -p melon-native --all-targets -- -D warnings` erfolgreich.
 - Blocker: `gh auth status` meldet keine Anmeldung; SSH-Push funktioniert. Draft-PR benötigt noch einen verfügbaren authentifizierten API-Zugang.
+
+- Entscheidung: Cache-Antworten werden verschlüsselt geschrieben, aber nicht automatisch als Offline-Fallback verwendet; Widerruf und Löschungen sollen nicht still durch alte Daten ersetzt werden.
+- Entscheidung: HTTP nur für Loopback, sonst HTTPS; native HTTP-Weiterleitungen sind deaktiviert.
+- Entscheidung: Keychain verwendet `biometryCurrentSet` plus `WhenPasscodeSetThisDeviceOnly`, ohne ungeschützten Ersatz oder Synchronisation.
+- Geprüft: `tauri build` erzeugt `MelonApp.app` (14,65 MiB); `open` startet den Prozess und die WebKit-Prozesse.
+- Blocker: `osascript` hat keinen Accessibility-Zugriff; `screencapture` kann kein Display-Bild erstellen. Interaktive macOS-Prüfung bleibt manuell.
+- Geprüft: Web-Build mit TypeScript und WASM erfolgreich; native Oberfläche baut ohne WASM.
+- Geprüft: Tauri-Plattformtest für Server-Validierung bestanden.
+- Geprüft: `tauri ios init` erzeugt das Projekt unter `apps/desktop/src-tauri/gen/apple`.
+- Entscheidung: Vorhandene Apple-Development-Identität erkannt, Team `S7FTFS4QRH`; Simulator wird ohne Signierung gebaut.

@@ -3,6 +3,7 @@ import { AuthScreen } from './screens/AuthScreen';
 import { lock, type Account, type Session } from './session';
 import { useAutoLockMinutes } from './prefs';
 import { useIdle } from './useIdle';
+import { nativePlatform } from './platform';
 
 const loadShell = () => import('./Shell');
 const Shell = lazy(() => loadShell().then((m) => ({ default: m.Shell })));
@@ -54,6 +55,18 @@ export function App() {
     },
     [session],
   );
+
+  useEffect(() => {
+    const platform = nativePlatform();
+    if (!platform) return;
+    let disposed = false;
+    let cleanup: (() => void) | undefined;
+    void platform.onLock(() => {
+      setSession(null);
+      setNotice('MelonApp wurde gesperrt.');
+    }).then((off) => { if (disposed) off(); else cleanup = off; });
+    return () => { disposed = true; cleanup?.(); };
+  }, []);
 
   const onUpdate = useCallback((update: Partial<Account>) => {
     setSession((s) => (s ? { ...s, ...update } : s));

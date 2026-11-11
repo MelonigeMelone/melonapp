@@ -10,7 +10,7 @@ use melon_crypto::{
     vault_meta_aad, wrap_account_key,
 };
 use serde_json::{Value, json};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 type Result<T> = std::result::Result<T, &'static str>;
 
@@ -100,6 +100,15 @@ fn sealed(
     Ok(seal_vault_key(&public, key, &context(vault, user, version)).to_string())
 }
 
+fn wipe(value: &mut Value) {
+    match value {
+        Value::String(s) => s.zeroize(),
+        Value::Array(values) => values.iter_mut().for_each(wipe),
+        Value::Object(values) => values.values_mut().for_each(wipe),
+        _ => {}
+    }
+}
+
 impl Session {
     pub fn lock(&mut self) {
         self.wrapping = None;
@@ -133,6 +142,43 @@ impl Session {
         self.vaults.get(id).ok_or("vault_key_missing")
     }
 
+    pub fn biometric_key(&mut self) -> Result<Zeroizing<Vec<u8>>> {
+        self.expire();
+        Ok(Zeroizing::new(self.require_account()?.as_bytes().to_vec()))
+    }
+
+    pub fn biometric_snapshot(&mut self, scope: &str, metadata: Value) -> Result<String> {
+        self.expire();
+        let account = self.require_account()?;
+        let identity = self.identity.as_ref().ok_or("locked")?;
+        let plaintext = Zeroizing::new(
+            serde_json::to_vec(
+                &json!({"identity":identity.seal_with(account).to_string(),"metadata":metadata}),
+            )
+            .map_err(|_| "invalid_request")?,
+        );
+        self.cache_seal(scope, &plaintext)
+    }
+
+    pub fn biometric_restore(&mut self, key: &[u8], scope: &str, snapshot: &str) -> Result<Value> {
+        self.lock();
+        let bytes: [u8; 32] = key.try_into().map_err(|_| "invalid_key")?;
+        let account = SymmetricKey::from_bytes(bytes);
+        let plaintext = account
+            .decrypt(
+                &parse(snapshot)?,
+                format!("melon/native/cache/v1/{scope}").as_bytes(),
+            )
+            .map_err(|_| "decrypt_failed")?;
+        let value: Value = serde_json::from_slice(&plaintext).map_err(|_| "invalid_cache")?;
+        let identity = KeyPair::open_with(&account, &parse(text(&value, "identity")?)?)
+            .map_err(|_| "decrypt_failed")?;
+        self.account = Some(account);
+        self.identity = Some(identity);
+        self.last_activity = Instant::now();
+        Ok(value["metadata"].clone())
+    }
+
     pub fn cache_seal(&mut self, scope: &str, plaintext: &[u8]) -> Result<String> {
         self.expire();
         if plaintext.len() > 32 * 1024 * 1024 {
@@ -160,7 +206,13 @@ impl Session {
             .map_err(|_| "decrypt_failed")
     }
 
-    pub fn call(&mut self, method: &str, a: Value) -> Result<Value> {
+    pub fn call(&mut self, method: &str, mut a: Value) -> Result<Value> {
+        let result = self.call_inner(method, &a);
+        wipe(&mut a);
+        result
+    }
+
+    fn call_inner(&mut self, method: &str, a: &Value) -> Result<Value> {
         self.expire();
         match method {
             "lock" => {
@@ -179,7 +231,7 @@ impl Session {
                         .ok_or("invalid_request")
                 };
                 let options = PasswordOptions {
-                    length: number(&a, "length")? as usize,
+                    length: number(a, "length")? as usize,
                     lowercase: flag("lowercase")?,
                     uppercase: flag("uppercase")?,
                     digits: flag("digits")?,
@@ -194,7 +246,7 @@ impl Session {
             }
             "derive" => {
                 self.lock();
-                let master = derive(&a, "password", "salt", "kdf")?;
+                let master = derive(a, "password", "salt", "kdf")?;
                 self.wrapping = Some(master.wrapping_key());
                 self.last_activity = Instant::now();
                 Ok(json!(master.auth_key().to_base64()))
@@ -204,8 +256,8 @@ impl Session {
                 let account = SymmetricKey::generate();
                 let identity = KeyPair::generate();
                 let key = SymmetricKey::generate();
-                let id = text(&a, "personalVaultId")?;
-                let result = json!({"wrappedAccountKey": wrap_account_key(&wrapping, &account).to_string(), "publicKey": identity.public_key().to_base64(), "encryptedPrivateKey": identity.seal_with(&account).to_string(), "personalVault": {"encryptedMeta": key.encrypt(text(&a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(), "encryptedVaultKey": sealed(&key,&identity.public_key().to_base64(), id,text(&a,"userId")?,1)?}});
+                let id = text(a, "personalVaultId")?;
+                let result = json!({"wrappedAccountKey": wrap_account_key(&wrapping, &account).to_string(), "publicKey": identity.public_key().to_base64(), "encryptedPrivateKey": identity.seal_with(&account).to_string(), "personalVault": {"encryptedMeta": key.encrypt(text(a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(), "encryptedVaultKey": sealed(&key,&identity.public_key().to_base64(), id,text(a,"userId")?,1)?}});
                 self.account = Some(account);
                 self.identity = Some(identity);
                 self.vaults.insert(id.to_owned(), Vault { key, version: 1 });
@@ -213,11 +265,10 @@ impl Session {
             }
             "unlock" => {
                 let wrapping = self.wrapping.take().ok_or("keys_not_derived")?;
-                let account =
-                    unwrap_account_key(&wrapping, &parse(text(&a, "wrappedAccountKey")?)?)
-                        .map_err(|_| "decrypt_failed")?;
+                let account = unwrap_account_key(&wrapping, &parse(text(a, "wrappedAccountKey")?)?)
+                    .map_err(|_| "decrypt_failed")?;
                 let identity =
-                    KeyPair::open_with(&account, &parse(text(&a, "encryptedPrivateKey")?)?)
+                    KeyPair::open_with(&account, &parse(text(a, "encryptedPrivateKey")?)?)
                         .map_err(|_| "decrypt_failed")?;
                 let public = identity.public_key().to_base64();
                 self.account = Some(account);
@@ -227,15 +278,15 @@ impl Session {
             }
             "openVault" => {
                 self.require_account()?;
-                let id = text(&a, "vaultId")?;
-                let version = number(&a, "keyVersion")?;
+                let id = text(a, "vaultId")?;
+                let version = number(a, "keyVersion")?;
                 let key = self
                     .identity
                     .as_ref()
                     .ok_or("locked")?
                     .open_vault_key(
-                        &SealedKey::parse(text(&a, "sealed")?).map_err(|_| "invalid_ciphertext")?,
-                        &context(id, text(&a, "userId")?, version),
+                        &SealedKey::parse(text(a, "sealed")?).map_err(|_| "invalid_ciphertext")?,
+                        &context(id, text(a, "userId")?, version),
                     )
                     .map_err(|_| "decrypt_failed")?;
                 self.vaults.insert(id.to_owned(), Vault { key, version });
@@ -244,28 +295,27 @@ impl Session {
             "newVault" => {
                 self.require_account()?;
                 let identity = self.identity.as_ref().ok_or("locked")?;
-                let id = text(&a, "vaultId")?;
+                let id = text(a, "vaultId")?;
                 let key = SymmetricKey::generate();
-                let result = json!({"encryptedMeta":key.encrypt(text(&a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(),"encryptedVaultKey":sealed(&key,&identity.public_key().to_base64(),id,text(&a,"userId")?,1)?});
+                let result = json!({"encryptedMeta":key.encrypt(text(a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(),"encryptedVaultKey":sealed(&key,&identity.public_key().to_base64(),id,text(a,"userId")?,1)?});
                 self.vaults.insert(id.to_owned(), Vault { key, version: 1 });
                 Ok(result)
             }
             "hasVault" => Ok(json!(
-                self.vault(text(&a, "vaultId")?)
-                    .is_ok_and(|v| v.version == number(&a, "keyVersion").unwrap_or(0))
+                self.vault(text(a, "vaultId")?)
+                    .is_ok_and(|v| v.version == number(a, "keyVersion").unwrap_or(0))
             )),
             "encryptMeta" | "decryptMeta" | "encryptItem" | "decryptItems" | "sealFor"
-            | "rotate" => self.vault_call(method, &a),
+            | "rotate" => self.vault_call(method, a),
             "fingerprint" => Ok(json!(melon_crypto::fingerprint(
-                &PublicKey::from_base64(text(&a, "publicKey")?)
-                    .map_err(|_| "invalid_public_key")?
+                &PublicKey::from_base64(text(a, "publicKey")?).map_err(|_| "invalid_public_key")?
             ))),
             "setupRecovery" | "changePassword" => {
                 self.require_account()?;
-                let current = derive(&a, "password", "salt", "kdf")?;
+                let current = derive(a, "password", "salt", "kdf")?;
                 let account = unwrap_account_key(
                     &current.wrapping_key(),
-                    &parse(text(&a, "wrappedAccountKey")?)?,
+                    &parse(text(a, "wrappedAccountKey")?)?,
                 )
                 .map_err(|_| "wrong_password")?;
                 if account.as_bytes() != self.require_account()?.as_bytes() {
@@ -277,7 +327,7 @@ impl Session {
                         json!({"currentAuthKey":current.auth_key().to_base64(),"recoveryKey":recovery.display().to_string(),"recoveryAuthKey":recovery.auth_key().to_base64(),"recoveryWrappedAccountKey":recovery.wrap_account_key(&account).to_string()}),
                     )
                 } else {
-                    let next = derive(&a, "newPassword", "newSalt", "newKdf")?;
+                    let next = derive(a, "newPassword", "newSalt", "newKdf")?;
                     Ok(
                         json!({"currentAuthKey":current.auth_key().to_base64(),"authKey":next.auth_key().to_base64(),"wrappedAccountKey":wrap_account_key(&next.wrapping_key(),&account).to_string()}),
                     )
@@ -285,7 +335,7 @@ impl Session {
             }
             "recoveryAuth" => {
                 self.lock();
-                let key = Zeroizing::new(text(&a, "recoveryKey")?.to_owned());
+                let key = Zeroizing::new(text(a, "recoveryKey")?.to_owned());
                 let recovery = RecoveryKey::parse(&key).map_err(|_| "invalid_recovery_key")?;
                 let auth = recovery.auth_key().to_base64();
                 self.recovery = Some(recovery);
@@ -295,9 +345,9 @@ impl Session {
             "recoveryReset" => {
                 let recovery = self.recovery.take().ok_or("recovery_not_started")?;
                 let account = recovery
-                    .unwrap_account_key(&parse(text(&a, "recoveryWrappedAccountKey")?)?)
+                    .unwrap_account_key(&parse(text(a, "recoveryWrappedAccountKey")?)?)
                     .map_err(|_| "decrypt_failed")?;
-                let next = derive(&a, "newPassword", "newSalt", "newKdf")?;
+                let next = derive(a, "newPassword", "newSalt", "newKdf")?;
                 Ok(
                     json!({"authKey":next.auth_key().to_base64(),"wrappedAccountKey":wrap_account_key(&next.wrapping_key(),&account).to_string()}),
                 )
@@ -388,6 +438,33 @@ mod tests {
             )
             .unwrap();
         (session, created)
+    }
+
+    #[test]
+    fn biometric_restore_authenticates_snapshot_and_never_returns_keys() {
+        let (mut session, _) = account();
+        let key = session.biometric_key().unwrap();
+        let snapshot = session
+            .biometric_snapshot("server/account", json!({"email":"test@example.com"}))
+            .unwrap();
+        session.lock();
+        let metadata = session
+            .biometric_restore(&key, "server/account", &snapshot)
+            .unwrap();
+        assert_eq!(metadata, json!({"email":"test@example.com"}));
+        assert!(session.identity.is_some());
+        assert!(
+            session
+                .biometric_restore(&[0; 32], "server/account", &snapshot)
+                .is_err()
+        );
+        assert!(session.account.is_none());
+        assert!(
+            session
+                .biometric_restore(&key, "other/account", &snapshot)
+                .is_err()
+        );
+        assert!(session.account.is_none());
     }
 
     #[test]

@@ -1,0 +1,11 @@
+html {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior: none;
+}
+body {
+  min-width: 320px;
+  -webkit-tap-highlight-color: transparent;
+}
+input, textarea {
+  font-size: max(16px, 1em);
+}

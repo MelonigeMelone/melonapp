@@ -18,7 +18,7 @@ export interface Session extends Account {
   vaults: VaultsManager;
 }
 
-function open(email: string, userId: string, token: string, account: Account): Session {
+export function open(email: string, userId: string, token: string, account: Account): Session {
   return { email, userId, token, vaults: new VaultsManager(userId, authed(token), cryptoCall), ...account };
 }
 
@@ -170,6 +170,5 @@ export function describeError(e: unknown): string {
   if (e instanceof Error && e.message.includes('KDF')) {
     return 'Der Server hat ungültige Sicherheitsparameter geschickt. Anmeldung abgebrochen.';
   }
-  console.error(e);
   return 'Etwas ist schiefgelaufen. Lade die Seite neu und versuche es erneut.';
 }

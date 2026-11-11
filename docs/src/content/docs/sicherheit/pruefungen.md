@@ -80,3 +80,8 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | Rust erzwingt Ablauf ohne UI-Timer | `timeout_is_enforced_without_ui_timer` |
 | Kein Import/Export roher Schlüssel über die UI-Schnittstelle | `raw_keys_and_unknown_commands_are_never_exposed` |
 | Fehler bei neuer Anmeldung löschen den alten Zustand | `failed_derivation_clears_previous_session` |
+
+| Zusätzliche native Eigenschaft | Test |
+|---|---|
+| Biometrischer Snapshot authentifiziert Schlüssel und Kontext; Ergebnis enthält nur UI-Metadaten | `biometric_restore_authenticates_snapshot_and_never_returns_keys` |
+| Server-Adresse erzwingt TLS außer Loopback und lehnt eingebettete Zugangsdaten ab | `platform::tests::server_requires_tls_except_loopback_and_rejects_credentials` |
