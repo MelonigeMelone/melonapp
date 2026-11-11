@@ -4,7 +4,9 @@ description: Native Apple-App mit gemeinsamer React-Oberfläche.
 ---
 
 Die Apple-App unter `apps/desktop` verwendet die Oberfläche aus `apps/web`. Ihr eigener
-Vite-Einstieg ersetzt nur den Krypto-Transport. `melon-native` hält Konto-, Identitäts-
+Vite-Einstieg ersetzt nur den Krypto-Transport. Der native TypeScript-Build beginnt
+bei diesem Einstieg und prüft die transitiv importierte gemeinsame UI; der ausschließlich
+im Browser verwendete WASM-Worker gehört nicht zum nativen Build. `melon-native` hält Konto-, Identitäts-
 und Bereichsschlüssel in Rust. Rohschlüssel-Import und -Export sind im UI-Protokoll
 nicht erlaubt. Web und Browser-Erweiterung verwenden weiterhin WASM im Worker.
 

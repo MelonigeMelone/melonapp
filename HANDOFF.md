@@ -36,6 +36,7 @@ Lokale Prüfprotokolle liegen in `tmp/apple-verification/` (absichtlich nicht ei
 - Node 22 wird über das vorhandene nvm installiert und als Standard gewählt.
 - Native Datenbanktests verwenden PostgreSQL 15 unter `tmp/apple-postgres`, Loopback-Port 55432 und separate Testdatenbanken.
 - Die React-UI wird direkt wiederverwendet; es gibt keinen zweiten UI-Fork.
+- Der native TypeScript-Build prüft nur den nativen Einstieg und seine transitiven UI-Imports; der Browser-WASM-Worker bleibt außerhalb dieses Builds.
 - Der native Core bleibt im Root-Workspace; Tauri erhält einen separaten Workspace, damit Linux-Server-CI keine Desktop-Systembibliotheken braucht.
 - Konto-, Identitäts-, Bereichs- und Auth-Schlüssel bleiben in Rust; rohe Schlüssel-Import-/Export-Operationen sind für die UI gesperrt.
 - Auth-Nachweise werden durch zufällige native Handles ersetzt und beim Sperren verworfen.
@@ -137,4 +138,4 @@ gh pr create --draft --base main --head feat/apple-apps \
 
 ## Remote-CI-Stand
 
-Der erste Apple-Lauf (`43105218344`) scheiterte an einem inzwischen behobenen Clippy-Befund. Der Lauf nach dem Fix (`43106965841`) lief beim Schreiben dieser Übergabe noch; ein grünes Gesamtergebnis wird hier nicht behauptet. Der letzte Push startet erneut die Apple-Pipeline. Aktueller Branch-Status: https://github.com/MelonigeMelone/melonapp/actions?query=branch%3Afeat%2Fapple-apps
+Der erste Apple-Lauf (`43105218344`) scheiterte an einem inzwischen behobenen Clippy-Befund. Lauf `43107502273` bestand Dependency-Scans, Rust-/Plattform-/Swift-Tests und Clippy, scheiterte anschließend an einer unerwünschten WASM-Typabhängigkeit im nativen Frontend. Die TypeScript-Einstiegsgrenze wurde korrigiert und der Desktop-Frontend-Build mit tatsächlich entfernten WASM-Artefakten erfolgreich geprüft. Ein grünes Gesamtergebnis wird noch nicht behauptet; der nächste Push startet erneut die Apple-Pipeline. Aktueller Branch-Status: https://github.com/MelonigeMelone/melonapp/actions?query=branch%3Afeat%2Fapple-apps
