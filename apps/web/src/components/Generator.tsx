@@ -1,3 +1,13 @@
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import FormGroup from '@mui/material/FormGroup';
+import Paper from '@mui/material/Paper';
+import Slider from '@mui/material/Slider';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useCallback, useEffect, useState } from 'react';
 import { cryptoCall } from '../crypto/client';
 import type { GeneratorOptions } from '../crypto/protocol';
@@ -39,40 +49,53 @@ export function Generator({ onUse }: { onUse: (password: string) => void }) {
   }, [opts, generate]);
 
   return (
-    <div className="generator">
-      <div className="generator-output" aria-live="polite">
-        {error ? <span className="field-error">{error}</span> : <PasswordText value={value} revealed size="lg" />}
-      </div>
-      <label className="generator-length">
-        <span>Länge: {opts.length}</span>
-        <input
-          type="range"
-          min={8}
-          max={64}
-          value={opts.length}
-          onChange={(e) => setOpts({ ...opts, length: Number(e.target.value) })}
-        />
-      </label>
-      <div className="generator-toggles">
-        {TOGGLES.map((t) => (
-          <label key={t.key} className="check">
-            <input
-              type="checkbox"
-              checked={opts[t.key]}
-              onChange={(e) => setOpts({ ...opts, [t.key]: e.target.checked })}
+    <Paper sx={{ p: 2.5, bgcolor: 'melon.sunk', borderRadius: '18px' }}>
+      <Stack spacing={2}>
+        <Box className="generator-output" aria-live="polite" sx={{ minHeight: 48, display: 'flex', alignItems: 'center' }}>
+          {error ? (
+            <Typography color="error" variant="body2">
+              {error}
+            </Typography>
+          ) : (
+            <PasswordText value={value} revealed size="lg" />
+          )}
+        </Box>
+        <Box>
+          <Typography id="generator-length" variant="subtitle2">
+            Länge: {opts.length}
+          </Typography>
+          <Slider
+            aria-labelledby="generator-length"
+            min={8}
+            max={64}
+            value={opts.length}
+            onChange={(_, v) => setOpts({ ...opts, length: v as number })}
+          />
+        </Box>
+        <FormGroup row sx={{ columnGap: 1 }}>
+          {TOGGLES.map((t) => (
+            <FormControlLabel
+              key={t.key}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={opts[t.key]}
+                  onChange={(e) => setOpts({ ...opts, [t.key]: e.target.checked })}
+                />
+              }
+              label={<Typography variant="body2">{t.label}</Typography>}
             />
-            {t.label}
-          </label>
-        ))}
-      </div>
-      <div className="row">
-        <button type="button" className="btn" onClick={() => void generate(opts)}>
-          Neu erzeugen
-        </button>
-        <button type="button" className="btn btn-primary" disabled={!!error || !value} onClick={() => onUse(value)}>
-          Dieses Passwort verwenden
-        </button>
-      </div>
-    </div>
+          ))}
+        </FormGroup>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => void generate(opts)}>
+            Neu erzeugen
+          </Button>
+          <Button variant="contained" disabled={!!error || !value} onClick={() => onUse(value)}>
+            Dieses Passwort verwenden
+          </Button>
+        </Stack>
+      </Stack>
+    </Paper>
   );
 }

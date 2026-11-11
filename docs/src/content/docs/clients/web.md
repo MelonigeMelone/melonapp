@@ -5,7 +5,8 @@ sidebar:
   order: 1
 ---
 
-`apps/web` ist eine React-App (TypeScript, Vite). Sie läuft im Browser und wird später
+`apps/web` ist eine React-App (TypeScript, Vite) mit **MUI** als Komponentenbibliothek
+([ADR 0008](/melonapp/entscheidungen/0008-mui/)). Sie läuft im Browser und wird später
 in Tauri auch die Oberfläche für Desktop und iOS. Ausgeliefert wird sie von Caddy auf
 derselben Domain wie die API, ohne CORS.
 
@@ -15,6 +16,7 @@ apps/web/src
 ├── vault/         Datenmodell (entry.ts) und Sync-Store (store.ts), rein und getestet
 ├── screens/       Anmelden, Tresor, Detail, Editor
 ├── components/    Generator, Passwortanzeige, Logo
+├── theme.ts       MUI-Theme: Wassermelonen-Farben, Schriften, Formen, Hell/Dunkel
 ├── api.ts         HTTP-Client für die Server-API
 ├── session.ts     Anmelden, Registrieren, Sperren, Fehlermeldungen
 ├── clipboard.ts   Kopieren mit automatischem Leeren
@@ -76,7 +78,7 @@ Diese Regeln sind in `store.test.ts` gegen einen nachgebauten Server getestet.
 
 | Maßnahme | Warum |
 |---|---|
-| Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken |
+| Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. `style-src` erlaubt `'unsafe-inline'` für MUI ([warum](/melonapp/entscheidungen/0008-mui/#folge-für-die-content-security-policy)). |
 | Links in Einträgen nur mit `http:`/`https:` | verhindert `javascript:`-Links in gespeicherten URLs |
 | Auto-Lock nach 5 Minuten ohne Eingabe | Schlüssel liegen nicht unbegrenzt im Speicher |
 | Zwischenablage wird 30 s nach dem Kopieren geleert, wenn sie noch das Passwort enthält | Passwörter bleiben nicht im Clipboard-Verlauf |
@@ -91,11 +93,16 @@ Clipboard-API und Teile von WebCrypto gibt es nur in einem sicheren Kontext (HTT
 
 ## Design
 
+Alle Gestaltungsentscheidungen stecken im MUI-Theme (`theme.ts`). Komponenten bekommen
+ihre Farben über Theme-Pfade wie `melon.digit` oder `primary.main`, nie über feste Hex-Werte.
+
 | Entscheidung | Grund |
 |---|---|
 | Farben einer Wassermelone: Honigmelonen-Weiß `#F2F7F1`, Schalengrün `#2E6A43`, Fruchtrot `#E2365F` als einziger Akzent | kommt direkt aus dem Namen, statt einer beliebigen Standardpalette |
 | *Atkinson Hyperlegible* für Text, *Atkinson Hyperlegible Mono* für Passwörter | Diese Schriften wurden für Lesbarkeit entworfen und unterscheiden `I l 1 O 0 o` klar. Passwörter abtippen ist der Kernfall. |
 | *Bricolage Grotesque* für Überschriften | Charakter, ohne die Lesbarkeit zu stören |
 | Passwortanzeige: groß, Ziffern blau, Sonderzeichen rot, Großbuchstaben fett | die eine auffällige Stelle. Man sieht sofort, welches Zeichen gemeint ist. |
-| Dunkelmodus automatisch nach Systemeinstellung | |
+| Dunkelmodus automatisch nach Systemeinstellung | `colorSchemes` + CSS-Variablen, ohne Aufflackern |
+| Buttons als Pillen, Eingabefelder mit 10 px Radius, Dialoge mit 18 px | klare Hierarchie: Aktionen rund, Felder ruhig |
+| Symbol-Buttons (Kopieren, Anzeigen, Sperren) mit Tooltip und `aria-label` | wenig Platz, trotzdem verständlich und per Screenreader bedienbar |
 | Mobil: Liste und Detail als getrennte Ansichten | kleine Bildschirme |

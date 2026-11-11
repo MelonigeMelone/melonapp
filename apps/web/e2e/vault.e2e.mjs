@@ -21,7 +21,7 @@ const step = async (name, fn) => {
   try {
     await fn();
   } catch (e) {
-    await page.screenshot({ path: `${OUT}/fail.png` });
+    await page.screenshot({ path: `${OUT}/fail.png`, animations: 'disabled' });
     const errs = await page.locator('.form-error, .sync-error, .field-error').allInnerTexts();
     console.log('FAILED', name, errs, problems);
     throw e;
@@ -32,7 +32,7 @@ const step = async (name, fn) => {
 await step('open app', async () => {
   await page.goto(BASE);
   await page.getByRole('heading', { name: 'MelonApp' }).waitFor();
-  await page.screenshot({ path: `${OUT}/1-auth.png` });
+  await page.screenshot({ path: `${OUT}/1-auth.png`, animations: 'disabled' });
 });
 
 await step('register', async () => {
@@ -50,7 +50,7 @@ await step('create entry with generated password', async () => {
   await page.getByLabel('Titel').fill('GitHub');
   await page.getByLabel('Benutzername oder E-Mail').fill('melone');
   await page.locator('.generator-output .pw').waitFor();
-  await page.screenshot({ path: `${OUT}/2-editor.png` });
+  await page.screenshot({ path: `${OUT}/2-editor.png`, animations: 'disabled' });
   await page.getByRole('button', { name: 'Dieses Passwort verwenden' }).click();
   generated = await page.locator('#entry-password').inputValue();
   if (generated.length !== 20) throw new Error(`generated length ${generated.length}`);
@@ -80,7 +80,7 @@ await step('reveal and copy password', async () => {
   await page.getByText(/Kopiert\./).waitFor();
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   if (clip !== generated) throw new Error('clipboard mismatch');
-  await page.screenshot({ path: `${OUT}/3-detail.png` });
+  await page.screenshot({ path: `${OUT}/3-detail.png`, animations: 'disabled' });
 });
 
 await step('edit password keeps history', async () => {
@@ -116,10 +116,10 @@ await step('mobile and dark mode', async () => {
   await m.getByLabel('Master-Passwort', { exact: true }).fill(master);
   await m.getByRole('button', { name: 'Tresor öffnen' }).click();
   await m.getByRole('button', { name: /^GitHub/ }).waitFor({ timeout: 30000 });
-  await m.screenshot({ path: `${OUT}/4-mobile-list.png` });
+  await m.screenshot({ path: `${OUT}/4-mobile-list.png`, animations: 'disabled' });
   await m.getByRole('button', { name: /^Sparkasse/ }).click();
   await m.getByRole('button', { name: 'Anzeigen' }).click();
-  await m.screenshot({ path: `${OUT}/5-mobile-detail.png` });
+  await m.screenshot({ path: `${OUT}/5-mobile-detail.png`, animations: 'disabled' });
   await mobile.close();
 });
 

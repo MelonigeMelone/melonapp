@@ -1,8 +1,10 @@
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { AuthScreen } from './screens/AuthScreen';
-import { VaultScreen } from './screens/VaultScreen';
 import { lock, type Session } from './session';
 import { useIdle } from './useIdle';
+
+const loadVault = () => import('./screens/VaultScreen');
+const VaultScreen = lazy(() => loadVault().then((m) => ({ default: m.VaultScreen })));
 
 const AUTO_LOCK_MS = 5 * 60 * 1000;
 const EMAIL_KEY = 'melon.email';
@@ -44,12 +46,18 @@ export function App() {
     [session],
   );
 
+  useEffect(() => {
+    void loadVault();
+  }, []);
+
   useIdle(AUTO_LOCK_MS, () => {
     if (session) onLock('Der Tresor wurde nach 5 Minuten ohne Aktivität gesperrt.');
   });
 
   return session ? (
-    <VaultScreen session={session} onLock={onLock} />
+    <Suspense fallback={null}>
+      <VaultScreen session={session} onLock={onLock} />
+    </Suspense>
   ) : (
     <AuthScreen initialEmail={email} notice={notice} onSession={onSession} />
   );

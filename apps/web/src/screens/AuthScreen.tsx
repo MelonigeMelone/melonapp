@@ -1,3 +1,12 @@
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Paper from '@mui/material/Paper';
+import Stack from '@mui/material/Stack';
+import Tab from '@mui/material/Tab';
+import Tabs from '@mui/material/Tabs';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import { useState, type FormEvent } from 'react';
 import { MelonMark } from '../components/Brand';
 import { describeError, login, register, type Session } from '../session';
@@ -54,75 +63,85 @@ export function AuthScreen({
   }
 
   return (
-    <main className="auth">
-      <div className="auth-intro">
+    <Box
+      component="main"
+      sx={{
+        minHeight: '100dvh',
+        maxWidth: '64rem',
+        mx: 'auto',
+        px: 2,
+        py: { xs: 4, md: 8 },
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 26rem)' },
+        gap: { xs: 4, md: 12 },
+        alignItems: 'center',
+        alignContent: 'center',
+      }}
+    >
+      <Box>
         <MelonMark size={72} />
-        <h1>MelonApp</h1>
-        <p>Deine Passwörter, nur für dich lesbar. Verschlüsselt wird auf diesem Gerät, der Server sieht nichts davon.</p>
-      </div>
+        <Typography variant="h1" sx={{ mt: 2, fontSize: { xs: '2.25rem', md: '3.25rem' } }}>
+          MelonApp
+        </Typography>
+        <Typography variant="h3" component="p" color="text.secondary" sx={{ mt: 1.5, maxWidth: '30ch', fontFamily: 'inherit', fontWeight: 400, fontSize: '1.25rem', lineHeight: 1.5 }}>
+          Deine Passwörter, nur für dich lesbar. Verschlüsselt wird auf diesem Gerät, der Server sieht nichts davon.
+        </Typography>
+      </Box>
 
-      <form className="auth-form" onSubmit={submit} noValidate>
-        <div className="segmented" role="tablist" aria-label="Anmelden oder Konto erstellen">
-          <button type="button" role="tab" aria-selected={mode === 'login'} onClick={() => switchMode('login')}>
-            Anmelden
-          </button>
-          <button type="button" role="tab" aria-selected={mode === 'register'} onClick={() => switchMode('register')}>
-            Konto erstellen
-          </button>
-        </div>
+      <Paper variant="outlined" sx={{ p: { xs: 2.5, sm: 3.5 }, borderRadius: '18px' }}>
+        <Stack component="form" spacing={2.5} onSubmit={submit} noValidate>
+          <Tabs
+            value={mode}
+            onChange={(_, m: Mode) => switchMode(m)}
+            aria-label="Anmelden oder Konto erstellen"
+            variant="fullWidth"
+          >
+            <Tab value="login" label="Anmelden" />
+            <Tab value="register" label="Konto erstellen" />
+          </Tabs>
 
-        {notice && mode === 'login' && <p className="notice">{notice}</p>}
+          {notice && mode === 'login' && <Alert severity="info">{notice}</Alert>}
 
-        <label className="field">
-          <span>E-Mail</span>
-          <input
+          <TextField
+            label="E-Mail"
             type="email"
             autoComplete="username"
-            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            fullWidth
           />
-        </label>
-        <label className="field">
-          <span>Master-Passwort</span>
-          <input
+          <TextField
+            label="Master-Passwort"
             type="password"
             autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            required
             autoFocus={!!initialEmail}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            fullWidth
           />
-        </label>
-        {mode === 'register' && (
-          <>
-            <label className="field">
-              <span>Master-Passwort wiederholen</span>
-              <input
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-              />
-            </label>
-            <p className="hint">
-              Mindestens {MIN_LENGTH} Zeichen. Am sichersten sind vier bis sechs zufällige Wörter. Merk es dir gut:
-              Ohne Master-Passwort kommt niemand an deine Daten, auch du nicht.
-            </p>
-          </>
-        )}
+          {mode === 'register' && (
+            <TextField
+              label="Master-Passwort wiederholen"
+              type="password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              helperText={`Mindestens ${MIN_LENGTH} Zeichen. Am sichersten sind vier bis sechs zufällige Wörter. Ohne Master-Passwort kommt niemand an deine Daten, auch du nicht.`}
+              fullWidth
+            />
+          )}
 
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
+          {error && (
+            <Alert severity="error" role="alert">
+              {error}
+            </Alert>
+          )}
 
-        <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-          {busy ? 'Schlüssel werden berechnet …' : mode === 'login' ? 'Tresor öffnen' : 'Konto erstellen'}
-        </button>
-      </form>
-    </main>
+          <Button type="submit" variant="contained" size="large" loading={busy} fullWidth>
+            {mode === 'login' ? 'Tresor öffnen' : 'Konto erstellen'}
+          </Button>
+        </Stack>
+      </Paper>
+    </Box>
   );
 }

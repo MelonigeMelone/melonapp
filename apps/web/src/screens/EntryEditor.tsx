@@ -1,5 +1,18 @@
+import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
+import Collapse from '@mui/material/Collapse';
+import IconButton from '@mui/material/IconButton';
+import InputAdornment from '@mui/material/InputAdornment';
+import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useState, type FormEvent } from 'react';
 import { Generator } from '../components/Generator';
+import { monoFont } from '../theme';
 import { describeError } from '../session';
 import { emptyEntry, normalizeUrl, type PasswordEntry } from '../vault/entry';
 
@@ -24,11 +37,12 @@ export function EntryEditor({
   const [showGenerator, setShowGenerator] = useState(isNew && !base.password);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [titleMissing, setTitleMissing] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
-      setError('Gib dem Eintrag einen Titel.');
+      setTitleMissing(true);
       return;
     }
     setSaving(true);
@@ -49,40 +63,72 @@ export function EntryEditor({
   }
 
   return (
-    <form className="detail-body editor" onSubmit={submit} noValidate>
-      <h2>{isNew ? 'Neuer Eintrag' : 'Eintrag bearbeiten'}</h2>
+    <Stack component="form" spacing={2.5} onSubmit={submit} noValidate sx={{ maxWidth: '42rem' }}>
+      <Typography variant="h2" sx={{ fontSize: { xs: '1.875rem', md: '2.25rem' } }}>
+        {isNew ? 'Neuer Eintrag' : 'Eintrag bearbeiten'}
+      </Typography>
 
-      <label className="field">
-        <span>Titel</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="z. B. GitHub" autoFocus required />
-      </label>
-      <label className="field">
-        <span>Benutzername oder E-Mail</span>
-        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" spellCheck={false} />
-      </label>
+      <TextField
+        label="Titel"
+        placeholder="z. B. GitHub"
+        value={title}
+        onChange={(e) => {
+          setTitle(e.target.value);
+          setTitleMissing(false);
+        }}
+        error={titleMissing}
+        helperText={titleMissing ? 'Gib dem Eintrag einen Titel.' : undefined}
+        autoFocus
+        fullWidth
+      />
+      <TextField
+        label="Benutzername oder E-Mail"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        autoComplete="off"
+        slotProps={{ htmlInput: { spellCheck: false } }}
+        fullWidth
+      />
+      <TextField
+        id="entry-password"
+        label="Passwort"
+        type={showPassword ? 'text' : 'password'}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="new-password"
+        fullWidth
+        slotProps={{
+          htmlInput: { spellCheck: false, style: { fontFamily: monoFont } },
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <Tooltip title={showPassword ? 'Verbergen' : 'Anzeigen'}>
+                  <IconButton
+                    aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                    aria-pressed={showPassword}
+                    onClick={() => setShowPassword(!showPassword)}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Passwort generieren">
+                  <IconButton
+                    aria-label="Passwort generieren"
+                    aria-expanded={showGenerator}
+                    onClick={() => setShowGenerator(!showGenerator)}
+                    color={showGenerator ? 'primary' : 'default'}
+                  >
+                    <AutoFixHighIcon />
+                  </IconButton>
+                </Tooltip>
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
 
-      <div className="field">
-        <label htmlFor="entry-password">Passwort</label>
-        <div className="input-with-actions">
-          <input
-            id="entry-password"
-            className="mono"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
-            spellCheck={false}
-          />
-          <button type="button" className="btn btn-small" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>
-            {showPassword ? 'Verbergen' : 'Anzeigen'}
-          </button>
-          <button type="button" className="btn btn-small" aria-expanded={showGenerator} onClick={() => setShowGenerator(!showGenerator)}>
-            Generieren
-          </button>
-        </div>
-      </div>
-
-      {showGenerator && (
+      <Collapse in={showGenerator} unmountOnExit>
         <Generator
           onUse={(pw) => {
             setPassword(pw);
@@ -90,31 +136,30 @@ export function EntryEditor({
             setShowGenerator(false);
           }}
         />
-      )}
+      </Collapse>
 
-      <label className="field">
-        <span>Websites, eine pro Zeile</span>
-        <textarea rows={2} value={urls} onChange={(e) => setUrls(e.target.value)} placeholder="github.com" spellCheck={false} />
-      </label>
-      <label className="field">
-        <span>Notizen</span>
-        <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      <TextField
+        label="Websites, eine pro Zeile"
+        placeholder="github.com"
+        value={urls}
+        onChange={(e) => setUrls(e.target.value)}
+        multiline
+        minRows={2}
+        slotProps={{ htmlInput: { spellCheck: false } }}
+        fullWidth
+      />
+      <TextField label="Notizen" value={notes} onChange={(e) => setNotes(e.target.value)} multiline minRows={4} fullWidth />
 
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <Alert severity="error">{error}</Alert>}
 
-      <div className="row actions">
-        <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? 'Wird gespeichert …' : 'Speichern'}
-        </button>
-        <button type="button" className="btn-link" onClick={onCancel} disabled={saving}>
+      <Stack direction="row" spacing={1}>
+        <Button type="submit" variant="contained" loading={saving}>
+          Speichern
+        </Button>
+        <Button onClick={onCancel} disabled={saving} sx={{ color: 'text.secondary' }}>
           Abbrechen
-        </button>
-      </div>
-    </form>
+        </Button>
+      </Stack>
+    </Stack>
   );
 }

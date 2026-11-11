@@ -19,5 +19,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0005](/melonapp/entscheidungen/0005-docs-statt-kommentare/) | Doku als einzige Quelle für das Warum, Code ohne Kommentare | angenommen |
 | [0006](/melonapp/entscheidungen/0006-starlight/) | Starlight für die Doku | angenommen |
 | [0007](/melonapp/entscheidungen/0007-schluessel-im-worker/) | Schlüssel leben im Web Worker | angenommen |
+| [0008](/melonapp/entscheidungen/0008-mui/) | MUI als Komponentenbibliothek | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.
