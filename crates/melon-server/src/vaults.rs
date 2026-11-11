@@ -229,13 +229,16 @@ pub async fn delete_vault(
     user: AuthUser,
     Path(vault_id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
-    let a = access(&state.db, vault_id, user.user_id).await?;
+    let mut tx = state.db.begin().await?;
+    lock_vault(&mut tx, vault_id).await?;
+    let a = access(&mut *tx, vault_id, user.user_id).await?;
     a.require_shared()?;
     a.require_owner()?;
     sqlx::query("DELETE FROM vaults WHERE id = $1")
         .bind(vault_id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -354,7 +357,9 @@ pub async fn delete_item(
     Path((vault_id, item_id)): Path<(Uuid, Uuid)>,
     Query(q): Query<DeleteQuery>,
 ) -> ApiResult<Json<RevisionOut>> {
-    access(&state.db, vault_id, user.user_id)
+    let mut tx = state.db.begin().await?;
+    lock_vault(&mut tx, vault_id).await?;
+    access(&mut *tx, vault_id, user.user_id)
         .await?
         .require_write()?;
     let row: Option<(i64,)> = sqlx::query_as(
@@ -366,8 +371,9 @@ pub async fn delete_item(
     .bind(vault_id)
     .bind(item_id)
     .bind(q.base_revision)
-    .fetch_optional(&state.db)
+    .fetch_optional(&mut *tx)
     .await?;
     let (revision,) = row.ok_or(ApiError::Conflict("revision_mismatch"))?;
+    tx.commit().await?;
     Ok(Json(RevisionOut { revision }))
 }

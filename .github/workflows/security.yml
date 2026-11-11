@@ -21,6 +21,17 @@ jobs:
         with:
           command: check advisories bans licenses sources
 
+  npm:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Check production dependencies for known vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
+
   secrets:
     name: Leaked secrets (gitleaks)
     runs-on: ubuntu-latest

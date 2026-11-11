@@ -46,6 +46,22 @@ Wer mit wem einen Tresor teilt und welche Rolle jemand hat. Ohne dieses Wissen k
 Server Rechte (Betrachter dürfen nicht schreiben) nicht durchsetzen. Inhalte, Titel, URLs,
 Benutzernamen, Eintragstypen und Tresor-Namen sind verschlüsselt.
 
+### Was ein kompromittierter Server trotzdem kann
+
+Ende-zu-Ende-Verschlüsselung schützt die **Inhalte**. Ein Angreifer, der den Server übernimmt,
+kann sie weder lesen noch unbemerkt verändern (AEAD mit Bindung an Tresor, Eintrag und
+Schlüsselversion). Folgendes kann er aber:
+
+| Möglichkeit | Folge | Gegenmittel |
+|---|---|---|
+| **Ältere Version zurückspielen** (gleicher Eintrag, gleiche Schlüsselversion) | ein altes Passwort taucht wieder auf | Die Apps merken sich keine Revisionen dauerhaft. Erkennung von Rollbacks steht in den [offenen Punkten](/melonapp/sicherheit/offene-punkte/). |
+| **Änderungen zurückhalten** oder Einträge ausblenden | Geräte sehen unterschiedliche Stände | wie oben |
+| **Manipulierte Web-App ausliefern** (die Web-App kommt vom selben Server) | beim nächsten Entsperren im Browser liest sie das Master-Passwort mit | Browser-Erweiterung und künftige Desktop-/iPhone-App laden ihren Code **nicht** vom Server. Für sensible Nutzung diese bevorzugen. |
+| Öffentliche Schlüssel austauschen | Tresor-Schlüssel abfangen | Sicherheitscode vergleichen (unten) |
+
+Der Server ist also **für die Vertraulichkeit nicht vertrauenswürdig nötig**, solange die App
+nicht von ihm kommt. Für Verfügbarkeit und Aktualität muss man ihm vertrauen.
+
 ## Rechte
 
 Der Server prüft bei jeder Anfrage Mitgliedschaft, Rolle und Schlüsselversion

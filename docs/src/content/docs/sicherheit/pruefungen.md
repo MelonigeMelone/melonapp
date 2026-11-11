@@ -31,6 +31,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Betrachter können nicht schreiben, Bearbeiter keine Mitglieder verwalten | `api::sharing_respects_roles_and_isolation` |
 | Einladung: an E-Mail gebunden, einmalig, Registrierung sonst geschlossen | `api::invite_link_registration_and_key_grant` |
 | Entfernen erzwingt Schlüsselwechsel über alle Einträge und Mitglieder | `api::removing_a_member_rotates_the_key` |
+| Schlüsselwechsel überschreibt keine gleichzeitige Änderung (Revision wird geprüft) | `api::removing_a_member_rotates_the_key` |
 | Schreiben mit altem Schlüssel wird abgelehnt | `api::removing_a_member_rotates_the_key`, `store.test.ts` |
 | Letzter Besitzer kann nicht gehen | `api::leaving_flags_rotation_and_last_owner_stays` |
 | Passwortwechsel nur mit altem Passwort, andere Geräte abgemeldet, Tresore bleiben lesbar | `api::changing_the_master_password` |
@@ -54,6 +55,8 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Angezeigte Passwörter werden beim Wechsel zu einem anderen Eintrag wieder verborgen | CI-Job `e2e` |
 | Erweiterung: kein Treffer für Look-alike- und Eltern-Domains, kein https-Login in http-Seiten | `match.test.ts` |
 | Erweiterung: versteckte und deaktivierte Felder werden ignoriert | `form.test.ts` |
+| Erweiterung: Seiten-Skripte können Menü nicht per `click()` öffnen oder ausfüllen, auch nicht bei unsichtbar gemachtem Menü | CI-Job `e2e` (`apps/extension/e2e`) |
+| npm-Abhängigkeiten ohne bekannte hohe Schwachstellen | CI-Workflow `security`, Job `npm audit` |
 | Erweiterung im echten Chromium: kein Ausfüllen ohne Klick, nichts auf fremder Domain, Speichern landet verschlüsselt im Bereich, Sperren beendet Ausfüllen | CI-Job `e2e` (`apps/extension/e2e`) |
 | Zwei Personen im echten Browser: Einladen, automatische Freigabe, Entfernen mit Schlüsselwechsel, Zugriff danach weg | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
 | Datenbank enthält nach dem Browser-Test keinen Klartext, auch keine Tresor-Namen | CI-Job `e2e`, Schritt „no plaintext“ |

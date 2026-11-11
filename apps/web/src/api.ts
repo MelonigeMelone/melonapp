@@ -84,7 +84,7 @@ export interface RotateBody {
   key_version: number;
   encrypted_meta: string;
   members: { user_id: string; encrypted_vault_key: string }[];
-  items: { id: string; data: string }[];
+  items: { id: string; data: string; base_revision: number }[];
   remove_user_ids: string[];
 }
 

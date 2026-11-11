@@ -89,6 +89,9 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 | Maßnahme | Wogegen |
 |---|---|
 | Ausfüllen **nur nach Klick**, nie automatisch beim Laden | unsichtbare Formulare, die beim Seitenaufruf Passwörter abgreifen |
+| Symbol und Menü reagieren nur auf **echte** Klicks (`isTrusted`) an der Stelle, an der das Menü wirklich zu sehen ist (`elementFromPoint`) | Seiten-Skripte, die Symbol und Menü per `click()` bedienen und das Passwort danach aus dem Feld lesen |
+| Klicks zählen nur, wenn das Menü voll sichtbar ist: eigene Stile mit `!important`, Prüfung von Deckkraft und Sichtbarkeit von Menü, `<html>` und `<body>`. Verändert die Seite die Stile, wird der Klick ignoriert. | Clickjacking: Die Seite macht das Menü unsichtbar und lockt den Klick darauf |
+| Menüeinträge sind erst 300 ms nach dem Öffnen klickbar | Doppelklick-Fallen, bei denen der zweite Klick unbemerkt einen Login wählt |
 | Nur echte Absende-Knöpfe lösen die Speicher-Karte aus, nicht z. B. „Passwort zeigen“ | Speicher-Karten mit halb eingegebenen Passwörtern |
 | Nur sichtbare, aktivierte Felder werden erkannt und befüllt | versteckte Felder |
 | Nur im Hauptframe, nicht in iframes | fremde, eingebettete Seiten |
@@ -112,6 +115,7 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
   versteckte/deaktivierte Felder, Ausfüllen mit Events.
 - **E2E** (`apps/extension/e2e/extension.e2e.mjs`, CI-Job `e2e`): echtes Chromium mit geladener
   Erweiterung gegen den kompletten Stack. Kein Ausfüllen ohne Klick, Ausfüllen auf passender
-  Domain, 2FA-Code auf der Bestätigungsseite, nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
+  Domain, 2FA-Code auf der Bestätigungsseite, Seiten-Skripte können per synthetischem Klick weder
+  Menü öffnen noch ausfüllen (auch nicht bei unsichtbar gemachtem Menü), nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
   Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, Sperren
   beendet das Ausfüllen.

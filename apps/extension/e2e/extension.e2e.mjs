@@ -134,6 +134,11 @@ await step('unlock the extension', async () => {
 
 const site = await ctx.newPage();
 watch(site);
+const valueOf = async (selector, expected) => {
+  await site.waitForFunction(([sel, want]) => document.querySelector(sel)?.value === want, [selector, expected], { timeout: 5000 }).catch(() => undefined);
+  return site.locator(selector).inputValue();
+};
+
 await step('fill a matching site only after a click', async () => {
   current = site;
   await site.goto('https://login.example.test/');
@@ -155,9 +160,10 @@ await step('fill a matching site only after a click', async () => {
   await melon.click();
   await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').waitFor();
   await site.screenshot({ path: `${OUT}/ext-2-menu.png`, clip: { x: 0, y: 0, width: 520, height: 300 } });
+  await site.waitForTimeout(350);
   await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').click();
-  if ((await site.locator('#user').inputValue()) !== 'mia@example.test') throw new Error('username not filled');
-  if ((await site.locator('#pw').inputValue()) !== 'alt-passwort-1') throw new Error('password not filled');
+  if ((await valueOf('#user', 'mia@example.test')) !== 'mia@example.test') throw new Error('username not filled');
+  if ((await valueOf('#pw', 'alt-passwort-1')) !== 'alt-passwort-1') throw new Error('password not filled');
 });
 
 await step('fill the 2FA code on the verification page', async () => {
@@ -168,10 +174,44 @@ await step('fill the 2FA code on the verification page', async () => {
   const menu = site.getByRole('menu', { name: 'MelonApp' });
   await menu.getByText('Einmalcode für mia@example.test').waitFor();
   await site.screenshot({ path: `${OUT}/ext-2b-otp.png`, clip: { x: 0, y: 0, width: 520, height: 260 } });
+  await site.waitForTimeout(350);
   await menu.getByText('Beispiel-Login').click();
   await site.waitForFunction(() => document.querySelector('#otp')?.value.length === 6, null, { timeout: 10000 });
   const value = await site.locator('#otp').inputValue();
   if (!validCodes('JBSWY3DPEHPK3PXP').includes(value)) throw new Error(`filled 2FA code ${value} is wrong`);
+});
+
+await step('page scripts cannot open the menu or fill by synthetic clicks', async () => {
+  await site.goto('https://login.example.test/');
+  await site.locator('#pw').focus();
+  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).waitFor();
+  const filled = await site.evaluate(async () => {
+    const root = document.querySelector('melon-autofill')?.shadowRoot;
+    root?.querySelector('.btn')?.click();
+    root?.querySelector('.btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    await new Promise((r) => setTimeout(r, 800));
+    const opened = !!root?.querySelector('.menu');
+    return { opened, pw: document.querySelector('#pw').value };
+  });
+  if (filled.opened) throw new Error('a synthetic click opened the menu');
+  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
+  const menu = site.getByRole('menu', { name: 'MelonApp' });
+  await menu.getByText('Beispiel-Login').waitFor();
+  const stolen = await site.evaluate(async () => {
+    const root = document.querySelector('melon-autofill')?.shadowRoot;
+    await new Promise((r) => setTimeout(r, 400));
+    for (const b of root?.querySelectorAll('.menu button') ?? []) b.click();
+    await new Promise((r) => setTimeout(r, 800));
+    return document.querySelector('#pw').value;
+  });
+  if (stolen || filled.pw) throw new Error('a synthetic click filled the password');
+  await site.evaluate(() => {
+    document.querySelector('melon-autofill').style.setProperty('opacity', '0', 'important');
+  });
+  await site.waitForTimeout(350);
+  await menu.getByText('Beispiel-Login').click({ force: true });
+  await site.waitForTimeout(500);
+  if (await site.locator('#pw').inputValue()) throw new Error('filled while the page had hidden the menu');
 });
 
 await step('other domains get nothing, not even the icon', async () => {
@@ -188,8 +228,10 @@ await step('two-step login: e-mail page first, then password page', async () => 
   await site.goto('https://twostep.login.example.test/');
   await site.locator('#email').focus();
   await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
+  await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').waitFor();
+  await site.waitForTimeout(350);
   await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').click();
-  if ((await site.locator('#email').inputValue()) !== 'mia@example.test') throw new Error('e-mail step not filled');
+  if ((await valueOf('#email', 'mia@example.test')) !== 'mia@example.test') throw new Error('e-mail step not filled');
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/password/);
   await site.locator('#pw').focus();
@@ -197,8 +239,9 @@ await step('two-step login: e-mail page first, then password page', async () => 
   const first = site.getByRole('menu', { name: 'MelonApp' }).getByRole('button').first();
   await first.getByText('eben gewählt', { exact: false }).waitFor();
   await site.screenshot({ path: `${OUT}/ext-2b-two-step.png` });
+  await site.waitForTimeout(350);
   await first.click();
-  if ((await site.locator('#pw').inputValue()) !== 'alt-passwort-1') throw new Error('password step not filled');
+  if ((await valueOf('#pw', 'alt-passwort-1')) !== 'alt-passwort-1') throw new Error('password step not filled');
 });
 
 await step('two-step sign-up remembers the e-mail for saving', async () => {
@@ -221,6 +264,8 @@ await step('generate a password on sign-up and save the new login', async () => 
   await site.locator('#user').fill('neu@example.test');
   await site.locator('#pw').focus();
   await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
+  await site.getByText('Sicheres Passwort vorschlagen').waitFor();
+  await site.waitForTimeout(350);
   await site.getByText('Sicheres Passwort vorschlagen').click();
   const generated = await site.locator('#pw').inputValue();
   if (generated.length !== 20) throw new Error(`generated ${generated.length} characters`);

@@ -217,6 +217,7 @@ pub struct RotatedMember {
 pub struct RotatedItem {
     id: Uuid,
     data: EncString,
+    base_revision: i64,
 }
 
 #[derive(Deserialize)]
@@ -280,13 +281,13 @@ pub async fn rotate(
         return Err(ApiError::Conflict("members_changed"));
     }
 
-    let live: Vec<(Uuid,)> =
-        sqlx::query_as("SELECT id FROM items WHERE vault_id = $1 AND NOT deleted")
+    let live: Vec<(Uuid, i64)> =
+        sqlx::query_as("SELECT id, revision FROM items WHERE vault_id = $1 AND NOT deleted")
             .bind(vault_id)
             .fetch_all(&mut *tx)
             .await?;
-    let live: HashSet<Uuid> = live.into_iter().map(|(id,)| id).collect();
-    let items: HashSet<Uuid> = req.items.iter().map(|i| i.id).collect();
+    let live: HashMap<Uuid, i64> = live.into_iter().collect();
+    let items: HashMap<Uuid, i64> = req.items.iter().map(|i| (i.id, i.base_revision)).collect();
     if items.len() != req.items.len() || items != live {
         return Err(ApiError::Conflict("items_changed"));
     }
@@ -368,12 +369,14 @@ pub async fn create_invite(
     Json(req): Json<CreateInvite>,
 ) -> ApiResult<(StatusCode, Json<InviteCreated>)> {
     let email = normalize_email(&req.email)?;
-    let a = access(&state.db, vault_id, user.user_id).await?;
+    let mut tx = state.db.begin().await?;
+    lock_vault(&mut tx, vault_id).await?;
+    let a = access(&mut *tx, vault_id, user.user_id).await?;
     a.require_shared()?;
     a.require_owner()?;
     let exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE email = $1")
         .bind(&email)
-        .fetch_optional(&state.db)
+        .fetch_optional(&mut *tx)
         .await?;
     if exists.is_some() {
         return Err(ApiError::Conflict("user_exists"));
@@ -393,8 +396,9 @@ pub async fn create_invite(
     .bind(req.role.as_str())
     .bind(user.user_id)
     .bind(INVITE_DAYS)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok((
         StatusCode::CREATED,
         Json(InviteCreated {
@@ -444,13 +448,16 @@ pub async fn delete_invite(
     user: AuthUser,
     Path((vault_id, invite_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<StatusCode> {
-    access(&state.db, vault_id, user.user_id)
+    let mut tx = state.db.begin().await?;
+    lock_vault(&mut tx, vault_id).await?;
+    access(&mut *tx, vault_id, user.user_id)
         .await?
         .require_owner()?;
     sqlx::query("DELETE FROM invites WHERE id = $1 AND vault_id = $2")
         .bind(invite_id)
         .bind(vault_id)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }

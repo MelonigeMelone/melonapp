@@ -8,7 +8,7 @@ sidebar:
 | Workflow | Datei | Auslöser | Inhalt |
 |---|---|---|---|
 | CI | `ci.yml` | Push auf `main`, PR | `fmt`, `clippy -D warnings`, Rust-Tests mit PostgreSQL, Mindest-Rust-Version 1.85, Web-App und Erweiterung (WASM-Build, Tests, Build, Erweiterung als Artefakt `melonapp-extension`), **E2E**: kompletter Stack per Compose + Browser-Test der Web-App + Test der Erweiterung in Chromium + Prüfung, dass die Datenbank keinen Klartext enthält |
-| Security | `security.yml` | Push, PR, täglich 05:17 UTC, manuell | cargo-deny, gitleaks, CodeQL ([Details](/melonapp/sicherheit/pruefungen/)) |
+| Security | `security.yml` | Push, PR, täglich 05:17 UTC, manuell | cargo-deny, npm audit (Produktionsabhängigkeiten, ab „high“), gitleaks, CodeQL ([Details](/melonapp/sicherheit/pruefungen/)) |
 | Images | `docker.yml` | Push auf `main`, Tags `v*`, PR mit Code-Änderungen | Images `melonapp-server` und `melonapp-web` bauen und nach GHCR pushen (nicht bei PRs), mit SBOM und Provenance |
 | Docs | `docs.yml` | Push auf `main` mit Änderungen in `docs/`, PR, manuell | Doku bauen und auf GitHub Pages veröffentlichen (nicht bei PRs) |
 

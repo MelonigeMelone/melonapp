@@ -26,9 +26,33 @@ const STYLE = `
   @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 `;
 
+const HOST_STYLE =
+  'all: initial !important; display: block !important; position: fixed !important; top: 0 !important; left: 0 !important; ' +
+  'width: 0 !important; height: 0 !important; overflow: visible !important; z-index: 2147483647 !important; opacity: 1 !important; ' +
+  'visibility: visible !important; pointer-events: auto !important; transform: none !important;';
+const MENU_ARM_MS = 300;
+
 const host = document.createElement('melon-autofill');
+host.setAttribute('style', HOST_STYLE);
 const shadow = host.attachShadow({ mode: 'open' });
 shadow.innerHTML = `<style>${STYLE}</style>`;
+let menuShownAt = 0;
+
+function fullyShown(el: Element | null): boolean {
+  if (!el) return true;
+  const s = getComputedStyle(el);
+  return Number(s.opacity) >= 1 && s.visibility === 'visible';
+}
+
+function genuineClick(e: MouseEvent): boolean {
+  if (!e.isTrusted) return false;
+  if (host.getAttribute('style') !== HOST_STYLE) {
+    host.setAttribute('style', HOST_STYLE);
+    return false;
+  }
+  if (![host, document.documentElement, document.body].every(fullyShown)) return false;
+  return e.detail === 0 || document.elementFromPoint(e.clientX, e.clientY) === host;
+}
 let attached = false;
 let active: LoginFields | null = null;
 let anchor: HTMLInputElement | null = null;
@@ -122,7 +146,10 @@ function menuItem(menu: HTMLElement, title: string, sub: string, onClick: () => 
     s.textContent = sub;
     b.append(s);
   }
-  b.addEventListener('click', onClick);
+  b.addEventListener('click', (e) => {
+    if (!genuineClick(e) || performance.now() - menuShownAt < MENU_ARM_MS) return;
+    onClick();
+  });
   menu.append(b);
 }
 
@@ -137,6 +164,7 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
   head.innerHTML = `${ICON}<span>MelonApp</span>`;
   menu.append(head);
   shadow.append(menu);
+  menuShownAt = performance.now();
   placeMenu(menu, input);
 
   const res = await ask<MatchesResponse | null>({ type: 'matches' });
@@ -216,7 +244,8 @@ function showButton(fields: LoginFields, input: HTMLInputElement, locked: boolea
   btn.setAttribute('aria-label', 'Mit MelonApp ausfüllen');
   btn.innerHTML = ICON;
   btn.addEventListener('mousedown', (e) => e.preventDefault());
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', (e) => {
+    if (!genuineClick(e)) return;
     cached = null;
     void openMenu(fields, input);
   });

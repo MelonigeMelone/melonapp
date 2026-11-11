@@ -195,7 +195,7 @@ Höchstens 1000 pro Antwort. `403 vault_key_pending` für wartende Mitglieder.
   "key_version": 3,
   "encrypted_meta": "1.<…>",
   "members": [{ "user_id": "…", "encrypted_vault_key": "h1.<…>" }],
-  "items": [{ "id": "…", "data": "1.<…>" }],
+  "items": [{ "id": "…", "data": "1.<…>", "base_revision": 41 }],
   "remove_user_ids": ["…"]
 }
 ```
@@ -204,10 +204,17 @@ Höchstens 1000 pro Antwort. `403 vault_key_pending` für wartende Mitglieder.
 
 - `key_version` genau eins höher ist als bisher (`409 key_version_mismatch`),
 - `members` genau alle verbleibenden Mitglieder mit Schlüssel enthält (`409 members_changed`),
-- `items` genau alle nicht gelöschten Einträge enthält (`409 items_changed`).
+- `items` genau alle nicht gelöschten Einträge enthält, jeweils mit der Revision, die der Client
+  neu verschlüsselt hat (`409 items_changed`).
 
-So kann niemand versehentlich Mitglieder ausschließen oder Einträge mit altem Schlüssel
-zurücklassen.
+So kann niemand versehentlich Mitglieder ausschließen, Einträge mit altem Schlüssel zurücklassen
+oder eine gleichzeitige Änderung mit einem älteren Stand überschreiben. Bei `409` synchronisiert
+der Client und versucht es einmal neu.
+
+Alle schreibenden Endpunkte eines Tresors (Einträge, Löschen, Mitglieder, Einladungen, Rotation)
+sperren die Tresor-Zeile (`SELECT … FOR UPDATE`) und prüfen Mitgliedschaft und Rolle **in derselben
+Transaktion**. Ein gleichzeitiges Entfernen oder Herabstufen kann also nicht zwischen Prüfung und
+Schreiben rutschen.
 
 ## Einladungen
 

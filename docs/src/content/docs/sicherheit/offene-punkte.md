@@ -27,6 +27,10 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Erweiterung nicht in Chrome Web Store / Mozilla Add-ons | Veröffentlichen mit Signatur, später |
 | 2FA-Schlüssel liegen im selben Tresor wie die Passwörter | bewusst, siehe [ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/). Wichtige Konten bei Bedarf mit separater Authenticator-App. |
 | Datenleck-Abgleich nutzt einen fremden Dienst (Have I Been Pwned) | nur auf Knopfdruck, k-Anonymität. Später optional: eigene Kopie der Hash-Liste auf dem Server. |
+| Kein Schutz gegen Rollback durch einen kompromittierten Server | Apps merken sich die höchste gesehene Revision je Eintrag und warnen bei Rückschritten ([Sicherheitsmodell](/melonapp/sicherheit/modell/#was-ein-kompromittierter-server-trotzdem-kann)). |
+| Web-App wird vom eigenen Server ausgeliefert | ein übernommener Server könnte manipulierten Code ausliefern. Erweiterung und kommende Apps sind davon nicht betroffen. |
+| Erweiterung: Shadow DOM ist `open` | Seiten-Skripte können Symbol und Menü lesen, aber nicht bedienen (siehe [Erweiterung](/melonapp/clients/erweiterung/#schutzmaßnahmen)). `closed` würde die Browser-Tests unmöglich machen. |
+| Images werden standardmäßig als `latest` gezogen | im Betrieb auf `sha-…`-Tags festlegen ([Selbst hosten](/melonapp/betrieb/selbst-hosten/#updates)) |
 | RustCrypto-Major-Updates (sha2 0.11, hkdf 0.13, hmac 0.13, chacha20poly1305 0.11) | gemeinsam als ein Update einspielen, Dependabot gruppiert sie |
 
 ## Schwachstelle gefunden?

@@ -58,6 +58,16 @@ Anschließend die Registrierung wieder ausschalten.
 docker compose pull && docker compose up -d
 ```
 
+Für einen festen, geprüften Stand die Images in der `.env` auf einen Commit festlegen statt
+`latest` zu ziehen. Jeder Build auf `main` bekommt einen Tag `sha-<kurzer Commit>`:
+
+```sh
+MELON_IMAGE=ghcr.io/melonigemelone/melonapp-server:sha-4a66521
+MELON_WEB_IMAGE=ghcr.io/melonigemelone/melonapp-web:sha-4a66521
+```
+
+Ein Update ist dann bewusst: Tag ändern, `docker compose up -d`.
+
 ## Backups
 
 Nächtlich per `pg_dump` auf eine Hetzner Storage Box. Die Inhalte sind ohnehin

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use axum::{
     Router,
     body::Body,
@@ -672,17 +674,58 @@ async fn removing_a_member_rotates_the_key() {
             "encrypted_vault_key": seal_vault_key(p.keys.public_key(), &new_key, &ctx(&vault, &p.id, 2)).to_string(),
         })
     };
-    let rotated_items = |ids: &[String]| {
+    let revisions = |page: &Value| -> HashMap<String, i64> {
+        page["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|it| {
+                (
+                    it["id"].as_str().unwrap().to_owned(),
+                    it["revision"].as_i64().unwrap(),
+                )
+            })
+            .collect()
+    };
+    let (_, page) = alice
+        .get(&app, &format!("/api/v1/vaults/{vault}/items"))
+        .await;
+    let mut seen = revisions(&page);
+    let rotated_items = |ids: &[String], seen: &HashMap<String, i64>| {
         ids.iter()
-            .map(|i| json!({ "id": i, "data": new_key.encrypt(b"neu", &item_aad(&vault, i, 2)) }))
+            .map(|i| json!({ "id": i, "data": new_key.encrypt(b"neu", &item_aad(&vault, i, 2)), "base_revision": seen[i] }))
             .collect::<Vec<_>>()
     };
     let meta = new_key.encrypt(br#"{"name":"Familie"}"#, &vault_meta_aad(&vault, 2));
     let uri = format!("/api/v1/vaults/{vault}/rotate");
 
+    let (s, _) = put_item(
+        &app,
+        &bob,
+        (&vault, &key, 1),
+        &items[0],
+        b"gerade bearbeitet",
+        json!(seen[&items[0]]),
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
     let (s, r) = alice.send(&app, "POST", &uri, json!({
         "key_version": 2, "encrypted_meta": meta, "members": [seal_for(&alice), seal_for(&dave)],
-        "items": rotated_items(&items[..2]), "remove_user_ids": [bob.id],
+        "items": rotated_items(&items, &seen), "remove_user_ids": [bob.id],
+    })).await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("items_changed")),
+        "a concurrent edit must not be overwritten by the rotation"
+    );
+    let (_, page) = alice
+        .get(&app, &format!("/api/v1/vaults/{vault}/items"))
+        .await;
+    seen = revisions(&page);
+
+    let (s, r) = alice.send(&app, "POST", &uri, json!({
+        "key_version": 2, "encrypted_meta": meta, "members": [seal_for(&alice), seal_for(&dave)],
+        "items": rotated_items(&items[..2], &seen), "remove_user_ids": [bob.id],
     })).await;
     assert_eq!(
         (s, r["error"].as_str()),
@@ -696,7 +739,7 @@ async fn removing_a_member_rotates_the_key() {
             &uri,
             json!({
                 "key_version": 2, "encrypted_meta": meta, "members": [seal_for(&alice)],
-                "items": rotated_items(&items), "remove_user_ids": [bob.id],
+                "items": rotated_items(&items, &seen), "remove_user_ids": [bob.id],
             }),
         )
         .await;
@@ -713,7 +756,7 @@ async fn removing_a_member_rotates_the_key() {
             &uri,
             json!({
                 "key_version": 2, "encrypted_meta": meta, "members": [seal_for(&bob)],
-                "items": rotated_items(&items), "remove_user_ids": [alice.id],
+                "items": rotated_items(&items, &seen), "remove_user_ids": [alice.id],
             }),
         )
         .await;
@@ -721,7 +764,7 @@ async fn removing_a_member_rotates_the_key() {
 
     let (s, _) = alice.send(&app, "POST", &uri, json!({
         "key_version": 2, "encrypted_meta": meta, "members": [seal_for(&alice), seal_for(&dave)],
-        "items": rotated_items(&items), "remove_user_ids": [bob.id],
+        "items": rotated_items(&items, &seen), "remove_user_ids": [bob.id],
     })).await;
     assert_eq!(s, StatusCode::NO_CONTENT);
 

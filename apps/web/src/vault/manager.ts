@@ -176,6 +176,7 @@ export class VaultsManager {
     if (!entry?.store) throw new Error('vault_key_missing');
     await entry.store.sync();
     const keep = entry.remote.members.filter((m) => m.has_key && !removeUserIds.includes(m.user_id));
+    const revisions = new Map(entry.store.list().map((v) => [v.id, v.revision]));
     const rotated = await this.crypto('rotate', {
       vaultId,
       meta: JSON.stringify({ name: entry.name }),
@@ -187,7 +188,7 @@ export class VaultsManager {
         key_version: entry.remote.key_version + 1,
         encrypted_meta: rotated.encryptedMeta,
         members: rotated.members,
-        items: rotated.items,
+        items: rotated.items.map((i) => ({ ...i, base_revision: revisions.get(i.id) ?? 0 })),
         remove_user_ids: removeUserIds,
       });
     } catch (e) {
