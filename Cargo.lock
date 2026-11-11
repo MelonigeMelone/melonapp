@@ -998,6 +998,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "melon-native"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "melon-crypto",
+ "serde",
+ "serde_json",
+ "zeroize",
+]
+
+[[package]]
 name = "melon-server"
 version = "0.1.0"
 dependencies = [

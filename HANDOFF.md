@@ -28,3 +28,8 @@ Arbeit läuft auf `feat/apple-apps`. Nur tatsächlich ausgeführte Prüfungen we
 ## Noch offen
 
 Implementierung, native Rust-Tests, Apple-Builds, Security-Review, CI und PR folgen.
+
+- Entscheidung: `melon-native` bleibt im plattformunabhängigen Workspace; Tauri hat einen eigenen Workspace, damit Linux-Server-CI keine WebKit-Systembibliotheken benötigt.
+- Entscheidung: Native Frist zunächst fünf Minuten; Hintergrundwechsel sperrt sofort, auch wenn der UI-Timer verzögert wird.
+- Geprüft: `cargo test -p melon-native` (7 Tests), `cargo clippy -p melon-native --all-targets -- -D warnings` erfolgreich.
+- Blocker: `gh auth status` meldet keine Anmeldung; SSH-Push funktioniert. Draft-PR benötigt noch einen verfügbaren authentifizierten API-Zugang.

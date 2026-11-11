@@ -66,3 +66,17 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklung/).
+
+## Native Apple-Sitzung
+
+`cargo test -p melon-native` prüft die native Schlüsselgrenze unabhängig von Tauri:
+
+| Eigenschaft | Test |
+|---|---|
+| Eintragsverschlüsselung und Bindung an die Eintrags-ID | `roundtrip_and_wrong_item_context` |
+| Cache lehnt falschen Schlüssel, Kontext und Manipulation ab | `cache_rejects_wrong_key_scope_and_tampering` |
+| Gesperrte Sitzung kann weder Cache noch Tresor lesen | `locked_state_cannot_access_cache_or_vaults` |
+| Falsches Passwort verbraucht die Ableitung ohne Restschlüssel | `wrong_password_does_not_leave_keys_and_retry_needs_derivation` |
+| Rust erzwingt Ablauf ohne UI-Timer | `timeout_is_enforced_without_ui_timer` |
+| Kein Import/Export roher Schlüssel über die UI-Schnittstelle | `raw_keys_and_unknown_commands_are_never_exposed` |
+| Fehler bei neuer Anmeldung löschen den alten Zustand | `failed_derivation_clears_previous_session` |
