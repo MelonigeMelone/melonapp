@@ -56,6 +56,7 @@ Lokale Prüfprotokolle liegen in `tmp/apple-verification/` (absichtlich nicht ei
 - RustCrypto P-256 wurde wegen RUSTSEC-2026-0387 auf 0.14 aktualisiert; die Mindest-Rust-Version steigt dadurch auf 1.87.
 - Nur RUSTSEC-2026-0374 für den ungewarteten, ausschließlich lokalen UniFFI-Buildparser `basic-toml` wird begründet ausgenommen; auch UniFFI 0.32.2 enthielt ihn und Runtime-Advisories bleiben aktiv.
 - Die bestehende optionale Datenleck-Prüfung darf aus der nativen UI ausschließlich `api.pwnedpasswords.com` kontaktieren.
+- Das Apple-Vorbereitungsskript erzeugt auch leere Tauri-Artefaktverzeichnisse, damit XcodeGen auf einem frischen Checkout funktioniert.
 - `project.yml` ist die Quelle des Xcode-Projekts; generierte UniFFI-Bindings und Bibliotheken bleiben Build-Artefakte.
 - Ein signierter macOS-Build benötigt ein validiertes Provisioning-Profil; das Hilfsskript verlangt es ausdrücklich, statt einen bekannten nicht startbaren Build zu erzeugen.
 - Fehlende Hardware-/Signierungs-/Review-Abnahmen werden offen ausgewiesen und blockieren nicht die unabhängigen Simulator-, Test- und Dokumentationsarbeiten.

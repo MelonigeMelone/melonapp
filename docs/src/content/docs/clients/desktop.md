@@ -88,4 +88,6 @@ npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
 Nicht erneut `tauri ios init` ausführen, um eigene Extension-Einstellungen zu erhalten.
 Die Quelle des Xcode-Projekts ist `project.yml`; generierte UniFFI-Bindings und Libraries
 werden nicht eingecheckt. Nach einem frischen Checkout zunächst `build-apple-ffi.sh`
-ausführen, bevor XcodeGen das Projekt neu erzeugt.
+ausführen, bevor XcodeGen das Projekt neu erzeugt. Das Skript legt auch die leeren,
+nicht versionierten Tauri-Verzeichnisse `Externals` und `assets` an; XcodeGen benötigt
+sie bereits vor dem ersten Tauri-iOS-Build.

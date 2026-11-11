@@ -1,6 +1,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.cargo/bin:$PATH"
+mkdir -p apps/desktop/src-tauri/gen/apple/Externals apps/desktop/src-tauri/gen/apple/assets
 cargo build -p melon-ffi --locked
 cargo run -p melon-ffi --locked --features bindgen --bin melon-bindgen -- generate --library target/debug/libmelon_ffi.dylib --language swift --out-dir apps/desktop/apple/Bindings
 case "${1:-host}" in
