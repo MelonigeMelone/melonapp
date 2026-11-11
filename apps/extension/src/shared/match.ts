@@ -26,6 +26,13 @@ export function urlMatches(pageUrl: string, itemUrl: string): boolean {
   return page === item || page.endsWith(`.${item}`);
 }
 
+export function siteOf(url: string): string | null {
+  const host = hostOf(url);
+  if (!host) return null;
+  if (/^[\d.]+$/.test(host) || host === 'localhost') return host;
+  return host.split('.').slice(-2).join('.');
+}
+
 export function anyUrlMatches(pageUrl: string, itemUrls: readonly string[]): boolean {
   return itemUrls.some((u) => urlMatches(pageUrl, u));
 }

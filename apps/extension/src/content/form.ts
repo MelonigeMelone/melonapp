@@ -1,4 +1,6 @@
 const USERNAME_TYPES = new Set(['text', 'email', 'tel', '']);
+const IDENTIFIER_HINT = /e-?mail|user|login|benutzer|konto|account|identifier|anmeld|kunden/i;
+const NOT_IDENTIFIER = /search|suche|query|newsletter|coupon|gutschein|promo|captcha|otp|code|zip|plz/i;
 
 export function isVisible(el: HTMLElement): boolean {
   if (!el.isConnected) return false;
@@ -10,12 +12,16 @@ export function isVisible(el: HTMLElement): boolean {
 
 export interface LoginFields {
   username: HTMLInputElement | null;
-  password: HTMLInputElement;
+  password: HTMLInputElement | null;
   isNew: boolean;
 }
 
 function scopeOf(input: HTMLInputElement): ParentNode {
   return input.form ?? input.ownerDocument;
+}
+
+function describe(i: HTMLInputElement): string {
+  return [i.name, i.id, i.autocomplete, i.placeholder, i.getAttribute('aria-label') ?? ''].join(' ');
 }
 
 export function findLoginFields(root: ParentNode, visible: (el: HTMLElement) => boolean = isVisible): LoginFields[] {
@@ -34,6 +40,18 @@ export function findLoginFields(root: ParentNode, visible: (el: HTMLElement) => 
     const isNew = password.autocomplete === 'new-password' || siblings.length > 1;
     return { username, password, isNew };
   });
+}
+
+export function findIdentifierFields(root: ParentNode, visible: (el: HTMLElement) => boolean = isVisible): LoginFields[] {
+  const candidates = [...root.querySelectorAll<HTMLInputElement>('input')].filter((i) => {
+    if (i.disabled || i.readOnly || !USERNAME_TYPES.has(i.type) || !visible(i)) return false;
+    if (i.closest('[role="search"]') || NOT_IDENTIFIER.test(describe(i))) return false;
+    const auto = i.autocomplete.toLowerCase();
+    return i.type === 'email' || auto.includes('username') || auto.includes('email') || IDENTIFIER_HINT.test(describe(i));
+  });
+  return candidates
+    .filter((i) => ![...scopeOf(i).querySelectorAll<HTMLInputElement>('input[type="password"]')].some((p) => visible(p)))
+    .map((username) => ({ username, password: null, isNew: false }));
 }
 
 export function setValue(input: HTMLInputElement, value: string) {

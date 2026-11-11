@@ -30,6 +30,11 @@ Master-Passwort.
 
 - **Ausfüllen:** In ein Login-Feld klicken → kleines Melonen-Symbol im Feld → Login wählen. Alternativ
   Symbol in der Browserleiste → „Ausfüllen“.
+- **Anmeldung in zwei Schritten** (erst E-Mail-Seite, dann Passwort-Seite, wie bei Google oder
+  Microsoft): Das Symbol erscheint schon im E-Mail-Feld und füllt nur die E-Mail. Auf der
+  Passwort-Seite steht der gewählte Login oben („eben gewählt“). Beim Speichern übernimmt die Karte
+  die E-Mail aus dem ersten Schritt. Gemerkt wird das pro Tab und Website für 5 Minuten, nur im
+  Arbeitsspeicher. Such-, Newsletter- und Code-Felder werden nicht als E-Mail-Schritt erkannt.
 - **Neue Logins:** Nach dem Anmelden oder Registrieren erscheint oben rechts auf der Seite eine Karte
   „Neuen Login speichern?“ bzw. „Passwort aktualisieren?“ mit **Speichern**, **Nicht jetzt** und
   **Nie für diese Seite**. Das klappt auch auf Seiten, die nicht neu laden (z. B. Web-Apps). Zusätzlich
@@ -93,9 +98,10 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 ## Tests
 
 - `match.test.ts`: Domain-Abgleich inklusive Look-alike-Domains und http/https, Generator.
-- `form.test.ts`: Formular-Erkennung, versteckte/deaktivierte Felder, Ausfüllen mit Events.
+- `form.test.ts`: Formular-Erkennung inklusive E-Mail-Schritt bei zweistufigen Logins (ohne Such-,
+  Newsletter- und Code-Felder), versteckte/deaktivierte Felder, Ausfüllen mit Events.
 - **E2E** (`apps/extension/e2e/extension.e2e.mjs`, CI-Job `e2e`): echtes Chromium mit geladener
   Erweiterung gegen den kompletten Stack. Kein Ausfüllen ohne Klick, Ausfüllen auf passender
-  Domain, nichts auf fremder Domain, Generator, Speichern über die Karte auf der Seite (danach in der
+  Domain, nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
   Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, Sperren
   beendet das Ausfüllen.

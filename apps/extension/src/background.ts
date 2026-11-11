@@ -1,12 +1,15 @@
 import { generatePassword } from './shared/generator';
-import { anyUrlMatches, hostOf } from './shared/match';
+import { anyUrlMatches, hostOf, siteOf } from './shared/match';
 import {
   AUTO_LOCK_MINUTES,
+  FLOW_MAX_AGE_MS,
+  FLOWS_KEY,
   NEVER_KEY,
   PENDING_KEY,
   PROMPT_MAX_AGE_MS,
   SESSION_KEY,
   type ContentRequest,
+  type Flow,
   type FrameRequest,
   type MatchesResponse,
   type PendingSave,
@@ -43,6 +46,25 @@ async function pending(): Promise<PendingSave | null> {
 
 const extensionOrigin = chrome.runtime.getURL('');
 
+async function flows(): Promise<Record<string, Flow>> {
+  return ((await chrome.storage.session.get(FLOWS_KEY))[FLOWS_KEY] as Record<string, Flow> | undefined) ?? {};
+}
+
+async function flowFor(tabId: number, pageUrl: string): Promise<Flow | null> {
+  const f = (await flows())[String(tabId)];
+  return f && f.site === siteOf(pageUrl) && Date.now() - f.at < FLOW_MAX_AGE_MS ? f : null;
+}
+
+async function updateFlow(tabId: number, pageUrl: string, patch: Partial<Flow>) {
+  const site = siteOf(pageUrl);
+  if (!site) return;
+  const all = await flows();
+  const previous = all[String(tabId)];
+  const base = previous && previous.site === site && Date.now() - previous.at < FLOW_MAX_AGE_MS ? previous : { site, at: 0 };
+  const fresh = Object.fromEntries(Object.entries(all).filter(([, f]) => Date.now() - f.at < FLOW_MAX_AGE_MS));
+  await chrome.storage.session.set({ [FLOWS_KEY]: { ...fresh, [String(tabId)]: { ...base, ...patch, site, at: Date.now() } } });
+}
+
 async function handleFrame(msg: FrameRequest, sender: chrome.runtime.MessageSender): Promise<unknown> {
   const tabId = sender.tab?.id;
   const send = (m: TabMessage) => (tabId === undefined ? Promise.resolve() : chrome.tabs.sendMessage(tabId, m, { frameId: 0 }).catch(() => undefined));
@@ -70,9 +92,17 @@ async function handle(msg: ContentRequest, sender: chrome.runtime.MessageSender)
       const s = await snapshot();
       if (!s) return { locked: true } satisfies MatchesResponse;
       await touch(s);
+      const flow = await flowFor(sender.tab.id ?? -1, pageUrl);
       const matches = s.logins
         .filter((l) => l.password && anyUrlMatches(pageUrl, l.urls))
-        .map(({ vaultId, id, title, username }) => ({ vaultId, id, title, username }));
+        .map(({ vaultId, id, title, username }) => ({
+          vaultId,
+          id,
+          title,
+          username,
+          chosen: flow?.choice?.vaultId === vaultId && flow.choice.id === id,
+        }))
+        .sort((a, b) => Number(b.chosen) - Number(a.chosen));
       return { locked: false, matches } satisfies MatchesResponse;
     }
     case 'credentials': {
@@ -82,15 +112,28 @@ async function handle(msg: ContentRequest, sender: chrome.runtime.MessageSender)
       await touch(s);
       return { username: login.username, password: login.password };
     }
+    case 'identifier': {
+      if (msg.username) await updateFlow(sender.tab.id ?? -1, pageUrl, { username: msg.username });
+      return null;
+    }
+    case 'choose': {
+      const s = await snapshot();
+      const login = s?.logins.find((l) => l.vaultId === msg.vaultId && l.id === msg.id);
+      if (!s || !login || !anyUrlMatches(pageUrl, login.urls)) return null;
+      await touch(s);
+      await updateFlow(sender.tab.id ?? -1, pageUrl, { choice: { vaultId: login.vaultId, id: login.id }, username: login.username });
+      return { username: login.username };
+    }
     case 'submitted': {
       const host = hostOf(pageUrl);
       if (!msg.password || !host || (await neverHosts()).includes(host)) return null;
+      const username = msg.username || (await flowFor(sender.tab.id ?? -1, pageUrl))?.username || '';
       const s = await snapshot();
       const known = s?.logins.some(
-        (l) => anyUrlMatches(pageUrl, l.urls) && l.password === msg.password && (!msg.username || l.username === msg.username),
+        (l) => anyUrlMatches(pageUrl, l.urls) && l.password === msg.password && (!username || l.username === username),
       );
       if (known) return null;
-      const pending: PendingSave = { url: pageUrl, username: msg.username, password: msg.password, at: Date.now() };
+      const pending: PendingSave = { url: pageUrl, username, password: msg.password, at: Date.now() };
       await chrome.storage.session.set({ [PENDING_KEY]: pending });
       await setBadge(true);
       return null;

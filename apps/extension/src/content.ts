@@ -1,4 +1,4 @@
-import { findLoginFields, isVisible, setValue, type LoginFields } from './content/form';
+import { findIdentifierFields, findLoginFields, isVisible, setValue, type LoginFields } from './content/form';
 import { anyUrlMatches } from './shared/match';
 import type { ContentRequest, Match, MatchesResponse, TabMessage } from './shared/messages';
 
@@ -85,7 +85,7 @@ function place(el: HTMLElement, input: HTMLInputElement, below: boolean) {
 
 function fill(fields: LoginFields, username: string, password: string) {
   if (fields.username && username) setValue(fields.username, username);
-  setValue(fields.password, password);
+  if (fields.password && password) setValue(fields.password, password);
   clear();
 }
 
@@ -124,16 +124,22 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
     return;
   }
   for (const m of res.matches as Match[]) {
-    menuItem(menu, m.title, m.username, async () => {
+    const sub = m.chosen ? `${m.username}, eben gewählt` : m.username;
+    menuItem(menu, m.title, sub, async () => {
+      if (!fields.password) {
+        const chosen = await ask<{ username: string } | null>({ type: 'choose', vaultId: m.vaultId, id: m.id });
+        if (chosen) fill(fields, chosen.username, '');
+        return;
+      }
       const creds = await ask<{ username: string; password: string } | null>({ type: 'credentials', vaultId: m.vaultId, id: m.id });
       if (creds) fill(fields, creds.username, creds.password);
     });
   }
-  if (fields.isNew) {
+  if (fields.isNew && fields.password) {
     menuItem(menu, 'Sicheres Passwort vorschlagen', '20 Zeichen, zufällig', async () => {
       const r = await ask<{ password: string } | null>({ type: 'generate' });
       if (!r) return;
-      for (const p of findLoginFields(document).filter((f) => f.password.form === fields.password.form)) setValue(p.password, r.password);
+      for (const p of findLoginFields(document).filter((f) => f.password?.form === fields.password?.form)) if (p.password) setValue(p.password, r.password);
       clear();
     });
   }
@@ -163,7 +169,10 @@ function showButton(fields: LoginFields, input: HTMLInputElement) {
 }
 
 function fieldsFor(input: HTMLInputElement): LoginFields | undefined {
-  return findLoginFields(document).find((f) => f.password === input || f.username === input);
+  return (
+    findLoginFields(document).find((f) => f.password === input || f.username === input) ??
+    findIdentifierFields(document).find((f) => f.username === input)
+  );
 }
 
 document.addEventListener(
@@ -197,11 +206,16 @@ window.addEventListener('scroll', reposition, true);
 window.addEventListener('resize', reposition);
 
 function reportSubmit(form: HTMLFormElement | null) {
-  const fields = findLoginFields(form ?? document).find((f) => f.password.value);
-  if (!fields) return;
-  void ask({ type: 'submitted', username: fields.username?.value ?? '', password: fields.password.value }).then(() =>
-    setTimeout(() => void checkPending(), 1200),
-  );
+  const scope = form ?? document;
+  const fields = findLoginFields(scope).find((f) => f.password?.value);
+  if (fields?.password) {
+    void ask({ type: 'submitted', username: fields.username?.value ?? '', password: fields.password.value }).then(() =>
+      setTimeout(() => void checkPending(), 1200),
+    );
+    return;
+  }
+  const identifier = findIdentifierFields(scope).find((f) => f.username?.value.trim());
+  if (identifier?.username) void ask({ type: 'identifier', username: identifier.username.value.trim() });
 }
 
 document.addEventListener('submit', (e) => reportSubmit(e.target instanceof HTMLFormElement ? e.target : null), true);
@@ -211,7 +225,8 @@ document.addEventListener(
     const el = e.target instanceof Element ? e.target.closest('button, input[type="submit"]') : null;
     if (!el || e.composedPath().includes(host)) return;
     const form = (el as HTMLButtonElement).form ?? null;
-    if (findLoginFields(form ?? document).some((f) => f.password.value)) reportSubmit(form);
+    const scope = form ?? document;
+    if (findLoginFields(scope).some((f) => f.password?.value) || findIdentifierFields(scope).some((f) => f.username?.value)) reportSubmit(form);
   },
   true,
 );

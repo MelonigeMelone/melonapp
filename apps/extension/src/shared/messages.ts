@@ -30,6 +30,14 @@ export interface Match {
   id: string;
   title: string;
   username: string;
+  chosen?: boolean;
+}
+
+export interface Flow {
+  site: string;
+  username?: string;
+  choice?: { vaultId: string; id: string };
+  at: number;
 }
 
 export type ContentRequest =
@@ -37,7 +45,9 @@ export type ContentRequest =
   | { type: 'credentials'; vaultId: string; id: string }
   | { type: 'submitted'; username: string; password: string }
   | { type: 'generate' }
-  | { type: 'pendingForPage' };
+  | { type: 'pendingForPage' }
+  | { type: 'identifier'; username: string }
+  | { type: 'choose'; vaultId: string; id: string };
 
 export type FrameRequest = { type: 'closeSavePrompt' } | { type: 'resizeSavePrompt'; height: number } | { type: 'neverSave' };
 
@@ -51,5 +61,7 @@ export type TabMessage =
 export const SESSION_KEY = 'snapshot';
 export const PENDING_KEY = 'pendingSave';
 export const NEVER_KEY = 'neverSave';
+export const FLOWS_KEY = 'flows';
+export const FLOW_MAX_AGE_MS = 5 * 60_000;
 export const AUTO_LOCK_MINUTES = 30;
 export const PROMPT_MAX_AGE_MS = 5 * 60_000;

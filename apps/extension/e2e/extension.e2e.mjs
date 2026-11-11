@@ -14,6 +14,26 @@ const page = (title, extra = '') => `<!doctype html><html><head><title>${title}<
     <button type="submit">Weiter</button>
   </form></body></html>`;
 
+const emailStep = (title, next) => `<!doctype html><html><head><title>${title}</title></head><body>
+  <h1>${title}</h1>
+  <form method="get" action="${next}" style="display:grid;gap:8px;width:320px">
+    <input id="email" type="email" name="identifier" autocomplete="username" placeholder="E-Mail">
+    <button type="submit">Weiter</button>
+  </form></body></html>`;
+
+const passwordStep = (title) => `<!doctype html><html><head><title>${title}</title></head><body>
+  <h1>${title}</h1>
+  <form method="get" action="/done" style="display:grid;gap:8px;width:320px">
+    <input id="pw" type="password" name="password" placeholder="Passwort">
+    <button type="submit">Anmelden</button>
+  </form></body></html>`;
+
+const twoStep = (title) => (r) => {
+  const path = new URL(r.request().url()).pathname;
+  const body = path.startsWith('/password') ? passwordStep(title) : path.startsWith('/done') ? page(title) : emailStep(title, '/password');
+  return r.fulfill({ contentType: 'text/html', body });
+};
+
 const ctx = await chromium.launchPersistentContext(`/tmp/profile-${Date.now()}`, {
   channel: 'chromium',
   headless: true,
@@ -21,6 +41,8 @@ const ctx = await chromium.launchPersistentContext(`/tmp/profile-${Date.now()}`,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 });
 await ctx.route('https://login.example.test/**', (r) => r.fulfill({ contentType: 'text/html', body: page('Login Beispiel') }));
+await ctx.route('https://twostep.login.example.test/**', twoStep('Zwei Schritte'));
+await ctx.route('https://twostep.new.example.test/**', twoStep('Neu in zwei Schritten'));
 await ctx.route('https://evil.example.test/**', (r) => r.fulfill({ contentType: 'text/html', body: page('Fremde Seite') }));
 await ctx.route('https://signup.example.test/**', (r) =>
   r.fulfill({ contentType: 'text/html', body: page('Registrierung', 'autocomplete="new-password"') }),
@@ -104,6 +126,39 @@ await step('other domains get nothing', async () => {
   await site.getByText('Kein Login für diese Seite gespeichert.').waitFor();
   const leaked = await sw.evaluate(async () => 'x');
   if (!leaked) throw new Error('service worker unreachable');
+});
+
+await step('two-step login: e-mail page first, then password page', async () => {
+  current = site;
+  await site.goto('https://twostep.login.example.test/');
+  await site.locator('#email').focus();
+  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
+  await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').click();
+  if ((await site.locator('#email').inputValue()) !== 'mia@example.test') throw new Error('e-mail step not filled');
+  await site.getByRole('button', { name: 'Weiter' }).click();
+  await site.waitForURL(/password/);
+  await site.locator('#pw').focus();
+  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
+  const first = site.getByRole('menu', { name: 'MelonApp' }).getByRole('button').first();
+  await first.getByText('eben gewählt', { exact: false }).waitFor();
+  await site.screenshot({ path: `${OUT}/ext-2b-two-step.png` });
+  await first.click();
+  if ((await site.locator('#pw').inputValue()) !== 'alt-passwort-1') throw new Error('password step not filled');
+});
+
+await step('two-step sign-up remembers the e-mail for saving', async () => {
+  await site.goto('https://twostep.new.example.test/');
+  await site.locator('#email').fill('zwei@example.test');
+  await site.getByRole('button', { name: 'Weiter' }).click();
+  await site.waitForURL(/password/);
+  await site.locator('#pw').fill('zwei-schritte-passwort');
+  await site.getByRole('button', { name: 'Anmelden' }).click();
+  await site.waitForURL(/done/);
+  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  await prompt.getByText('Neuen Login für twostep.new.example.test speichern?').waitFor({ timeout: 15000 });
+  await prompt.getByText('zwei@example.test').waitFor();
+  await prompt.getByRole('button', { name: 'Nicht jetzt' }).click();
+  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
 });
 
 await step('generate a password on sign-up and save the new login', async () => {
