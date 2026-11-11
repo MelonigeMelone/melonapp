@@ -4,6 +4,7 @@ export interface Login {
   title: string;
   username: string;
   password: string;
+  totp: string;
   urls: string[];
 }
 
@@ -30,6 +31,7 @@ export interface Match {
   id: string;
   title: string;
   username: string;
+  hasTotp: boolean;
   chosen?: boolean;
 }
 
@@ -47,7 +49,8 @@ export type ContentRequest =
   | { type: 'generate' }
   | { type: 'pendingForPage' }
   | { type: 'identifier'; username: string }
-  | { type: 'choose'; vaultId: string; id: string };
+  | { type: 'choose'; vaultId: string; id: string }
+  | { type: 'otp'; vaultId: string; id: string };
 
 export type FrameRequest = { type: 'closeSavePrompt' } | { type: 'resizeSavePrompt'; height: number } | { type: 'neverSave' };
 

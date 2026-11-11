@@ -56,7 +56,7 @@ function login(p: LoginParts): Item {
   const sections: Section[] = [];
   const more = urls.slice(1).map((u) => field('Website', 'url', normalizeUrl(u)));
   if (more.length) sections.push({ id: newId(), title: 'Weitere Websites', fields: more });
-  if (p.otp) sections.push({ id: newId(), title: 'Einmalcode', fields: [field('TOTP-Schlüssel', 'concealed', p.otp)] });
+  if (p.otp) sections.push({ id: newId(), title: 'Einmalcode', fields: [field('Einmalcode', 'totp', p.otp)] });
   item.sections = [...sections, ...(p.extra ?? [])];
   return item;
 }
@@ -144,8 +144,9 @@ function convertValue(raw: unknown): { kind: FieldKind; value: string } | null {
   const [key, inner] = Object.entries(v)[0] ?? [];
   if (key === undefined) return null;
   switch (key) {
-    case 'concealed':
     case 'totp':
+      return { kind: 'totp', value: str(inner) };
+    case 'concealed':
     case 'creditCardNumber':
       return { kind: 'concealed', value: str(inner) };
     case 'url':
@@ -206,7 +207,7 @@ function convert1puxItem(raw: unknown): Item | null {
         continue;
       }
       if (str(f.title).toLowerCase() === 'one-time password' || Object.keys(obj(f.value))[0] === 'totp') {
-        fields.push(field('TOTP-Schlüssel', 'concealed', converted.value));
+        fields.push(field('Einmalcode', 'totp', converted.value));
         continue;
       }
       fields.push(field(str(f.title) || 'Feld', converted.kind, converted.value));

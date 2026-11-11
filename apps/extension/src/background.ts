@@ -1,3 +1,4 @@
+import { parseTotp, totpCode } from '@web/vault/totp';
 import { generatePassword } from './shared/generator';
 import { anyUrlMatches, hostOf, siteOf } from './shared/match';
 import {
@@ -94,12 +95,13 @@ async function handle(msg: ContentRequest, sender: chrome.runtime.MessageSender)
       await touch(s);
       const flow = await flowFor(sender.tab.id ?? -1, pageUrl);
       const matches = s.logins
-        .filter((l) => l.password && anyUrlMatches(pageUrl, l.urls))
-        .map(({ vaultId, id, title, username }) => ({
+        .filter((l) => (l.password || l.totp) && anyUrlMatches(pageUrl, l.urls))
+        .map(({ vaultId, id, title, username, totp }) => ({
           vaultId,
           id,
           title,
           username,
+          hasTotp: !!parseTotp(totp),
           chosen: flow?.choice?.vaultId === vaultId && flow.choice.id === id,
         }))
         .sort((a, b) => Number(b.chosen) - Number(a.chosen));
@@ -111,6 +113,14 @@ async function handle(msg: ContentRequest, sender: chrome.runtime.MessageSender)
       if (!s || !login || !anyUrlMatches(pageUrl, login.urls)) return null;
       await touch(s);
       return { username: login.username, password: login.password };
+    }
+    case 'otp': {
+      const s = await snapshot();
+      const login = s?.logins.find((l) => l.vaultId === msg.vaultId && l.id === msg.id);
+      const cfg = login ? parseTotp(login.totp) : null;
+      if (!s || !login || !cfg || !anyUrlMatches(pageUrl, login.urls)) return null;
+      await touch(s);
+      return { code: await totpCode(cfg) };
     }
     case 'identifier': {
       if (msg.username) await updateFlow(sender.tab.id ?? -1, pageUrl, { username: msg.username });

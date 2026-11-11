@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { findIdentifierFields, findLoginFields, setValue } from './form';
+import { fillOtp, findIdentifierFields, findLoginFields, findOtpFields, setValue } from './form';
 
 const always = () => true;
 
@@ -73,3 +73,29 @@ describe('login form detection', () => {
   });
 });
 
+describe('one-time code fields', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('finds 2FA inputs but not postcodes, coupons or passwords', () => {
+    document.body.innerHTML = `
+      <form><input id="a" autocomplete="one-time-code"><input id="b" name="totp" inputmode="numeric"><input id="c" placeholder="Bestätigungscode"></form>
+      <form><input name="plz_code"><input name="gutschein_code"><input type="password" name="otp"><input type="email" name="email"></form>`;
+    expect(findOtpFields(document, always).map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('spreads the code over single-digit boxes', () => {
+    document.body.innerHTML = `<form>${'<input maxlength="1" autocomplete="one-time-code">'.repeat(6)}</form>`;
+    const boxes = [...document.querySelectorAll('input')];
+    fillOtp(boxes[2]!, '123456', always);
+    expect(boxes.map((b) => b.value).join('')).toBe('123456');
+  });
+
+  it('fills a single field with the whole code', () => {
+    document.body.innerHTML = `<input name="otp">`;
+    const input = document.querySelector('input')!;
+    fillOtp(input, '654321', always);
+    expect(input.value).toBe('654321');
+  });
+});

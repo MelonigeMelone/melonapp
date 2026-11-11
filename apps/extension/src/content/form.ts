@@ -14,6 +14,7 @@ export interface LoginFields {
   username: HTMLInputElement | null;
   password: HTMLInputElement | null;
   isNew: boolean;
+  otp?: HTMLInputElement;
 }
 
 function scopeOf(input: HTMLInputElement): ParentNode {
@@ -52,6 +53,34 @@ export function findIdentifierFields(root: ParentNode, visible: (el: HTMLElement
   return candidates
     .filter((i) => ![...scopeOf(i).querySelectorAll<HTMLInputElement>('input[type="password"]')].some((p) => visible(p)))
     .map((username) => ({ username, password: null, isNew: false }));
+}
+
+const OTP_HINT = /otp|totp|2fa|mfa|one.?time|einmal|verif|bestätigung|authenticat|security.?code|sicherheitscode|token|\bcode\b/i;
+const OTP_TYPES = new Set(['text', 'tel', 'number', '']);
+
+export function isOtpField(i: HTMLInputElement): boolean {
+  if (i.disabled || i.readOnly || !OTP_TYPES.has(i.type)) return false;
+  if (i.autocomplete.toLowerCase() === 'one-time-code') return true;
+  if (!OTP_HINT.test(describe(i))) return false;
+  return !/zip|plz|post|promo|coupon|gutschein|captcha|search|such/i.test(describe(i));
+}
+
+export function findOtpFields(root: ParentNode, visible: (el: HTMLElement) => boolean = isVisible): HTMLInputElement[] {
+  return [...root.querySelectorAll<HTMLInputElement>('input')].filter((i) => visible(i) && isOtpField(i));
+}
+
+export function fillOtp(input: HTMLInputElement, code: string, visible: (el: HTMLElement) => boolean = isVisible) {
+  if (input.maxLength !== 1) {
+    setValue(input, code);
+    return;
+  }
+  const scope = input.form ?? input.parentElement?.parentElement ?? input.ownerDocument;
+  const boxes = [...scope.querySelectorAll<HTMLInputElement>('input')].filter((i) => i.maxLength === 1 && !i.disabled && visible(i));
+  const start = boxes.length >= code.length ? 0 : Math.max(0, boxes.indexOf(input));
+  [...code].forEach((c, n) => {
+    const box = boxes[start + n];
+    if (box) setValue(box, c);
+  });
 }
 
 export function setValue(input: HTMLInputElement, value: string) {

@@ -1,4 +1,18 @@
+import { createHmac } from 'node:crypto';
 import { chromium } from 'playwright';
+
+function totpNow(secret, offset = 0) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const c of secret.replace(/=+$/, '')) bits += alphabet.indexOf(c).toString(2).padStart(5, '0');
+  const key = Buffer.from(bits.match(/.{8}/g).map((b) => parseInt(b, 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000) + offset));
+  const h = createHmac('sha1', key).update(counter).digest();
+  const o = h[h.length - 1] & 15;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1e6).padStart(6, '0');
+}
+const validCodes = (secret) => [-1, 0, 1].map((o) => totpNow(secret, o));
 
 const BASE = process.env.BASE ?? 'http://localhost';
 const OUT = process.env.OUT ?? '/out';
@@ -147,7 +161,8 @@ await step('import from Apple Passwords, skipping duplicates', async () => {
   await pw.getByRole('button', { name: 'Anzeigen' }).click();
   if ((await pw.locator('.concealed-value .pw').innerText()) !== 'strom,gas"2026') throw new Error('imported password differs');
   await a.locator('.entry-row', { hasText: 'Bibliothek' }).click();
-  await a.getByText('TOTP-Schlüssel').waitFor();
+  const shown = (await a.locator('.totp-code').innerText()).replace(/\s/g, '');
+  if (!validCodes('JBSWY3DP').includes(shown)) throw new Error(`imported 2FA code ${shown} is wrong`);
   if ((await a.locator('.entry-row', { hasText: 'GitHub' }).count()) !== 1) throw new Error('duplicate was imported');
 });
 
@@ -167,6 +182,39 @@ await step('editing a password keeps the old one', async () => {
   await a.locator('#field-password').fill('ganz-neues-passwort-2026');
   await a.getByRole('button', { name: 'Speichern' }).click();
   await a.getByText('Frühere Werte (1)').waitFor();
+});
+
+await step('add a 2FA key and see the current code', async () => {
+  await a.getByRole('button', { name: 'Bearbeiten' }).click();
+  await a.getByRole('button', { name: 'Einmalcode (2FA) hinzufügen' }).click();
+  await a.getByLabel('Schlüssel', { exact: true }).fill('otpauth://totp/GitHub:melone?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=GitHub');
+  await a.getByText('Aktueller Code:', { exact: false }).waitFor();
+  await a.getByRole('button', { name: 'Speichern' }).click();
+  const code = a.locator('.totp-field');
+  await code.waitFor();
+  const shown = (await code.locator('.totp-code').innerText()).replace(/\s/g, '');
+  if (!validCodes('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ').includes(shown)) throw new Error(`2FA code ${shown} is wrong`);
+  await shot(a, '4b-totp');
+  await code.getByRole('button', { name: 'Code kopieren' }).click();
+  const copied = await a.evaluate(() => navigator.clipboard.readText());
+  if (!validCodes('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ').includes(copied)) throw new Error('copied 2FA code is wrong');
+});
+
+await step('security check lists weak and reused passwords', async () => {
+  await newItem(a, 'Login');
+  await a.getByLabel('Titel').fill('Bibliothek Familie');
+  await a.locator('#field-password').fill('buecher!');
+  await a.getByText('Schwach', { exact: false }).first().waitFor();
+  await a.getByRole('button', { name: 'Speichern' }).click();
+  await a.getByRole('heading', { name: 'Bibliothek Familie', level: 2 }).waitFor();
+  await a.locator('.security-nav').click();
+  const check = a.locator('.security-check');
+  await check.getByText('Mehrfach verwendet: 2 Einträge').waitFor();
+  await check.getByText('Schwach:', { exact: false }).waitFor();
+  await check.getByRole('button', { name: 'Jetzt abgleichen' }).waitFor();
+  await shot(a, '4c-security-check');
+  await check.locator('section[aria-labelledby="audit-reused"] .audit-row', { hasText: 'Bibliothek Familie' }).click();
+  await a.getByRole('heading', { name: 'Bibliothek Familie', level: 2 }).waitFor();
 });
 
 let inviteLink = '';

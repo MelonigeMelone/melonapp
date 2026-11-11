@@ -19,13 +19,100 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useState, type FormEvent } from 'react';
 import { Generator } from '../../components/Generator';
+import { QrImportButton, useTotp } from '../../components/Totp';
+import LinearProgress from '@mui/material/LinearProgress';
 import { describeError } from '../../session';
 import { monoFont } from '../../theme';
-import { cleanItem, KIND_LABELS, newId, TEMPLATES, type Field, type FieldKind, type Item } from '../../vault/item';
+import { cleanItem, isTotpField, KIND_LABELS, newId, TEMPLATES, totpFields, type Field, type FieldKind, type Item } from '../../vault/item';
+import { estimateStrength, STRENGTH_LABELS } from '../../vault/strength';
+import { formatCode } from '../../vault/totp';
 import type { VaultView } from '../../vault/manager';
 
-const KIND_ORDER: FieldKind[] = ['text', 'concealed', 'url', 'email', 'phone', 'date', 'multiline'];
+const KIND_ORDER: FieldKind[] = ['text', 'concealed', 'totp', 'url', 'email', 'phone', 'date', 'multiline'];
 type Path = { section: number | null; index: number };
+
+function StrengthMeter({ password }: { password: string }) {
+  if (!password) return null;
+  const s = estimateStrength(password);
+  const value = s.level === 'weak' ? 25 : s.level === 'fair' ? 60 : 100;
+  const color = s.level === 'weak' ? 'error' : s.level === 'fair' ? 'warning' : 'success';
+  return (
+    <Stack spacing={0.5} className="strength-meter">
+      <LinearProgress variant="determinate" value={value} color={color} sx={{ height: 6, borderRadius: 3 }} aria-hidden="true" />
+      <Typography variant="body2" color="text.secondary">
+        <strong>{STRENGTH_LABELS[s.level]}</strong>
+        {s.hint ? `: ${s.hint}` : ''}
+      </Typography>
+    </Stack>
+  );
+}
+
+function TotpInput({ field, custom, onChange, onRemove }: { field: Field; custom: boolean; onChange: (f: Field) => void; onRemove?: () => void }) {
+  const { cfg, code } = useTotp(field.value);
+  const [visible, setVisible] = useState(!field.value);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const helper = !field.value
+    ? 'otpauth://-Link oder geheimer Schlüssel aus der 2FA-Einrichtung der Website.'
+    : !cfg
+      ? 'Ungültig. Erwartet wird ein otpauth://-Link oder ein Base32-Schlüssel.'
+      : code
+        ? `Aktueller Code: ${formatCode(code)}`
+        : ' ';
+  return (
+    <Stack spacing={1}>
+      {custom && (
+        <TextField
+          size="small"
+          label="Name des Felds (Einmalcode)"
+          value={field.label}
+          onChange={(e) => onChange({ ...field, label: e.target.value })}
+          sx={{ maxWidth: 360 }}
+        />
+      )}
+      <TextField
+        id={`field-${field.id}`}
+        label={custom ? 'Schlüssel' : field.label}
+        value={field.value}
+        onChange={(e) => onChange({ ...field, kind: 'totp', value: e.target.value })}
+        type={visible ? 'text' : 'password'}
+        error={!!field.value && !cfg}
+        helperText={helper}
+        autoComplete="off"
+        fullWidth
+        slotProps={{
+          htmlInput: { spellCheck: false, style: { fontFamily: monoFont } },
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <Tooltip title={visible ? 'Verbergen' : 'Anzeigen'}>
+                  <IconButton aria-label={visible ? 'Schlüssel verbergen' : 'Schlüssel anzeigen'} onClick={() => setVisible(!visible)} edge={onRemove ? false : 'end'}>
+                    {visible ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                  </IconButton>
+                </Tooltip>
+                {onRemove && (
+                  <Tooltip title="Feld entfernen">
+                    <IconButton aria-label={`${field.label || 'Feld'} entfernen`} onClick={onRemove} edge="end">
+                      <DeleteOutlinedIcon />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+      <QrImportButton
+        onValue={(v) => {
+          setQrError(null);
+          setVisible(false);
+          onChange({ ...field, kind: 'totp', value: v });
+        }}
+        onError={setQrError}
+      />
+      {qrError && <Alert severity="warning">{qrError}</Alert>}
+    </Stack>
+  );
+}
 
 function FieldInput({
   field,
@@ -40,6 +127,7 @@ function FieldInput({
 }) {
   const [visible, setVisible] = useState(!field.value);
   const [generator, setGenerator] = useState(false);
+  if (isTotpField(field)) return <TotpInput field={field} custom={custom} onChange={onChange} onRemove={onRemove} />;
   const concealed = field.kind === 'concealed';
   const id = `field-${field.id}`;
 
@@ -109,6 +197,7 @@ function FieldInput({
           input: concealed || onRemove ? { endAdornment: actions } : undefined,
         }}
       />
+      {field.id === 'password' && <StrengthMeter password={field.value} />}
       {concealed && (
         <Collapse in={generator} unmountOnExit>
           <Generator
@@ -174,6 +263,12 @@ export function ItemEditor({
         : { ...it, sections: [{ id: newId(), title: '', fields: [field] }] },
     );
   };
+
+  const addTotp = () =>
+    setItem((it) => ({
+      ...it,
+      sections: [...it.sections, { id: newId(), title: 'Einmalcode', fields: [{ id: newId(), label: 'Einmalcode', kind: 'totp', value: '' }] }],
+    }));
 
   const addSection = () =>
     setItem((it) => ({ ...it, sections: [...it.sections, { id: newId(), title: 'Neuer Abschnitt', fields: [] }] }));
@@ -272,6 +367,11 @@ export function ItemEditor({
         <Button variant="outlined" startIcon={<AddIcon />} onClick={(e) => setMenu(e.currentTarget)} aria-haspopup="menu">
           Feld hinzufügen
         </Button>
+        {item.type === 'login' && totpFields(item).length === 0 && (
+          <Button startIcon={<AddIcon />} onClick={addTotp} sx={{ color: 'text.secondary' }}>
+            Einmalcode (2FA) hinzufügen
+          </Button>
+        )}
         <Button startIcon={<AddIcon />} onClick={addSection} sx={{ color: 'text.secondary' }}>
           Abschnitt hinzufügen
         </Button>

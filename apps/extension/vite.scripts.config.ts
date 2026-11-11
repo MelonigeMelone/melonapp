@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => ({
+  resolve: { alias: { '@web': fileURLToPath(new URL('../web/src', import.meta.url)) } },
   build: {
     outDir: 'dist',
     emptyOutDir: false,

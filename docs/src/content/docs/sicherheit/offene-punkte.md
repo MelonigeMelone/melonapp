@@ -25,6 +25,8 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Erweiterung leert die Zwischenablage nicht automatisch | Ausfüllen statt Kopieren nutzen |
 | „Nie für diese Seite“ lässt sich noch nicht rückgängig machen | Einstellungsseite der Erweiterung, später |
 | Erweiterung nicht in Chrome Web Store / Mozilla Add-ons | Veröffentlichen mit Signatur, später |
+| 2FA-Schlüssel liegen im selben Tresor wie die Passwörter | bewusst, siehe [ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/). Wichtige Konten bei Bedarf mit separater Authenticator-App. |
+| Datenleck-Abgleich nutzt einen fremden Dienst (Have I Been Pwned) | nur auf Knopfdruck, k-Anonymität. Später optional: eigene Kopie der Hash-Liste auf dem Server. |
 | RustCrypto-Major-Updates (sha2 0.11, hkdf 0.13, hmac 0.13, chacha20poly1305 0.11) | gemeinsam als ein Update einspielen, Dependabot gruppiert sie |
 
 ## Schwachstelle gefunden?

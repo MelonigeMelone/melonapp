@@ -10,7 +10,8 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useState } from 'react';
-import { safeHref, type Field } from '../vault/item';
+import { isTotpField, safeHref, type Field } from '../vault/item';
+import { TotpCode } from './Totp';
 import { PasswordText } from './PasswordText';
 
 const dateFormat = new Intl.DateTimeFormat('de-DE', { dateStyle: 'long' });
@@ -39,6 +40,15 @@ export function FieldView({ field, onCopy }: { field: Field; onCopy: (value: str
       {field.label || 'Ohne Namen'}
     </Typography>
   );
+
+  if (isTotpField(field)) {
+    return (
+      <Box component="section">
+        {label}
+        <TotpCode value={field.value} label={field.label || 'Einmalcode'} onCopy={onCopy} />
+      </Box>
+    );
+  }
 
   if (field.kind === 'concealed') {
     return (

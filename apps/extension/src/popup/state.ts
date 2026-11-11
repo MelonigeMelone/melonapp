@@ -1,7 +1,7 @@
 import { api, authed, setApiBase } from '@web/api';
 import { cryptoCall } from '@web/crypto/client';
 import { login } from '@web/session';
-import { allFields, emptyItem, fieldValue, type Item } from '@web/vault/item';
+import { allFields, emptyItem, fieldValue, totpFields, type Item } from '@web/vault/item';
 import { VaultsManager } from '@web/vault/manager';
 import { hostOf } from '../shared/match';
 import { PENDING_KEY, SESSION_KEY, type Login, type PendingSave, type Snapshot } from '../shared/messages';
@@ -36,6 +36,7 @@ function logins(manager: VaultsManager): Login[] {
       title: v.item.title,
       username: fieldValue(v.item, 'username'),
       password: fieldValue(v.item, 'password'),
+      totp: totpFields(v.item)[0]?.value ?? '',
       urls: allFields(v.item)
         .filter((f) => f.kind === 'url' && f.value)
         .map((f) => f.value),

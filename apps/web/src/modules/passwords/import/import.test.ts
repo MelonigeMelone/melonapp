@@ -40,7 +40,7 @@ describe('csv formats', () => {
     expect(gh.title).toBe('GitHub');
     expect(fieldValue(gh, 'password')).toBe('p,w"1');
     expect(gh.notes).toBe('Notiz');
-    expect(section(gh, 'Einmalcode')?.fields[0]).toMatchObject({ kind: 'concealed', value: 'otpauth://totp/GitHub?secret=ABC' });
+    expect(section(gh, 'Einmalcode')?.fields[0]).toMatchObject({ kind: 'totp', value: 'otpauth://totp/GitHub?secret=ABC' });
     expect(ex.title).toBe('example.org');
   });
 
@@ -166,7 +166,7 @@ describe('1password 1pux', () => {
     expect(section(gh, 'Weitere Websites')?.fields[0]?.value).toBe('https://gist.github.com');
     expect(section(gh, 'Sicherheit')?.fields.map((f) => [f.label, f.kind, f.value])).toEqual([
       ['Recovery', 'concealed', 'R-1'],
-      ['TOTP-Schlüssel', 'concealed', 'otpauth://x'],
+      ['Einmalcode', 'totp', 'otpauth://x'],
     ]);
     expect(gh.history).toEqual([{ fieldId: 'password', label: 'Passwort', value: 'alt', changedAt: '2023-11-14T22:13:20.000Z' }]);
 

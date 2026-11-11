@@ -16,12 +16,14 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
+import PinOutlinedIcon from '@mui/icons-material/PinOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ApiError } from '@web/api';
 import { MelonMark } from '@web/components/Brand';
 import { count } from '@web/layout';
 import { describeError } from '@web/session';
+import { parseTotp, totpCode } from '@web/vault/totp';
 import { anyUrlMatches, hostOf } from '../shared/match';
 import type { Login, PendingSave, TabMessage } from '../shared/messages';
 import { PendingCard } from './PendingCard';
@@ -90,6 +92,7 @@ function UnlockForm({ onUnlocked }: { onUnlocked: (u: Unlocked) => void }) {
 }
 
 function LoginRow({ login, onFill, onCopy }: { login: Login; onFill?: () => void; onCopy: (what: string, value: string) => void }) {
+  const totp = useMemo(() => parseTotp(login.totp), [login.totp]);
   return (
     <ListItem
       disableGutters
@@ -106,9 +109,16 @@ function LoginRow({ login, onFill, onCopy }: { login: Login; onFill?: () => void
               <ContentCopyIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          {totp && (
+            <Tooltip title="Einmalcode kopieren">
+              <IconButton size="small" aria-label={`Einmalcode von ${login.title} kopieren`} onClick={() => void totpCode(totp).then((c) => onCopy('Einmalcode', c))}>
+                <PinOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Stack>
       }
-      sx={{ pr: 10 }}
+      sx={{ pr: totp ? 14 : 10 }}
     >
       <ListItemText
         primary={login.title}

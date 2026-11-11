@@ -1,4 +1,4 @@
-import { findIdentifierFields, findLoginFields, isVisible, setValue, type LoginFields } from './content/form';
+import { fillOtp, findIdentifierFields, findLoginFields, isOtpField, isVisible, setValue, type LoginFields } from './content/form';
 import { anyUrlMatches } from './shared/match';
 import type { ContentRequest, Match, MatchesResponse, TabMessage } from './shared/messages';
 
@@ -148,6 +148,24 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
     placeMenu(menu, input);
     return;
   }
+  if (fields.otp) {
+    const otp = fields.otp;
+    for (const m of (res.matches as Match[]).filter((x) => x.hasTotp)) {
+      menuItem(menu, m.title, m.username ? `Einmalcode für ${m.username}` : 'Einmalcode', async () => {
+        const r = await ask<{ code: string } | null>({ type: 'otp', vaultId: m.vaultId, id: m.id });
+        if (r) fillOtp(otp, r.code);
+        clear();
+      });
+    }
+    if (!menu.querySelector('button')) {
+      const n = document.createElement('div');
+      n.className = 'note';
+      n.textContent = 'Für diese Seite ist kein Einmalcode gespeichert.';
+      menu.append(n);
+    }
+    placeMenu(menu, input);
+    return;
+  }
   for (const m of res.matches as Match[]) {
     const sub = m.chosen ? `${m.username}, eben gewählt` : m.username;
     menuItem(menu, m.title, sub, async () => {
@@ -209,7 +227,8 @@ function showButton(fields: LoginFields, input: HTMLInputElement, locked: boolea
 function fieldsFor(input: HTMLInputElement): LoginFields | undefined {
   return (
     findLoginFields(document).find((f) => f.password === input || f.username === input) ??
-    findIdentifierFields(document).find((f) => f.username === input)
+    findIdentifierFields(document).find((f) => f.username === input) ??
+    (isOtpField(input) && isVisible(input) ? { username: null, password: null, isNew: false, otp: input } : undefined)
   );
 }
 
@@ -223,7 +242,8 @@ document.addEventListener(
     void matchesForPage().then((res) => {
       if (document.activeElement !== input) return;
       const locked = !res || res.locked;
-      const useful = locked || (res.locked === false && res.matches.length > 0) || (fields.isNew && !!fields.password);
+      const matches = res && !res.locked ? res.matches : [];
+      const useful = locked || (fields.otp ? matches.some((m) => m.hasTotp) : matches.length > 0) || (fields.isNew && !!fields.password);
       if (useful) showButton(fields, input, locked);
     });
   },

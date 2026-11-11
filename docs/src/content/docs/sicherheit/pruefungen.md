@@ -46,6 +46,9 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Unlesbare Items brechen den Sync nicht ab | `store.test.ts: skips items it cannot decrypt` |
 | Keine `javascript:`-Links aus Einträgen | `item.test.ts: only creates safe links` |
 | Verborgene Felder sind nicht durchsuchbar | `item.test.ts`, CI-Job `e2e` |
+| 2FA-Codes stimmen mit RFC 6238 überein (SHA-1/256/512), kaputte Schlüssel werden abgelehnt | `totp.test.ts` |
+| Datenleck-Abgleich sendet nur 5 Hash-Zeichen, jedes Passwort nur einmal | `audit.test.ts` |
+| 2FA-Code im echten Browser: Anzeige, Kopieren, Ausfüllen durch die Erweiterung nur auf passender Domain | CI-Job `e2e` |
 | Import liest alle Formate korrekt, auch schwierige CSV-Fälle und 1PUX | `import.test.ts` |
 | Import im Browser: Doppelte übersprungen, Sonderzeichen in Passwörtern bleiben erhalten | CI-Job `e2e`, Schritt „import“ |
 | Angezeigte Passwörter werden beim Wechsel zu einem anderen Eintrag wieder verborgen | CI-Job `e2e` |

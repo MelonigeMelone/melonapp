@@ -78,8 +78,11 @@ den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
 
 - `fields` kommen aus der Vorlage des Typs (feste IDs wie `username`, `password`), `sections`
   enthalten eigene Felder.
-- Feldarten: `text`, `concealed`, `url`, `email`, `phone`, `date`, `multiline`. Unbekannte Arten
-  werden als `text` gelesen. So zeigen ältere Apps neuere Einträge trotzdem an.
+- Feldarten: `text`, `concealed`, `totp`, `url`, `email`, `phone`, `date`, `multiline`. Unbekannte
+  Arten werden als `text` gelesen. So zeigen ältere Apps neuere Einträge trotzdem an.
+- `totp` enthält einen `otpauth://`-Link oder einen Base32-Schlüssel. Ältere verborgene Felder, die
+  wie ein 2FA-Schlüssel aussehen (`otpauth://` oder Name wie „TOTP“/„2FA“ und Base32-Wert), zeigt die
+  App ebenfalls als Code an (`isTotpField`).
 - **Verlauf:** Ändert sich ein verborgenes Feld (`concealed`), egal ob Vorlage oder eigenes Feld,
   wandert der alte Wert in `history` (höchstens 20, ohne Doppelte und ohne aktuelle Werte).
 - **Suche** durchsucht Titel und sichtbare Felder (Text, URL, E-Mail, Telefon), nie verborgene.
@@ -133,12 +136,40 @@ Im Passwortmanager unter „Importieren“ (`modules/passwords/import/`). Unters
   sichere Notizen. Bekannte Felder landen in den Vorlagenfeldern, alles andere in eigenen Abschnitten
   mit passender Feldart. Dazu kommt der Passwort-Verlauf. Andere Kategorien (Bankkonto, Ausweis …)
   werden zu sicheren Notizen mit Abschnitten.
-- **2FA-Schlüssel** (TOTP) kommen als verborgenes Feld „TOTP-Schlüssel“ in den Abschnitt
-  „Einmalcode“, bis es ein eigenes 2FA-Modul gibt.
+- **2FA-Schlüssel** (TOTP) kommen als Feld „Einmalcode“ (Art `totp`) in den Abschnitt
+  „Einmalcode“ und zeigen sofort den aktuellen Code.
 - Archivierte Einträge (1Password) und interne Firefox-Logins werden übersprungen.
 - **Doppelte** (gleicher Typ, Titel, Benutzername und Website ohne `www.`) im Ziel-Bereich werden
   standardmäßig übersprungen.
 - Danach erinnert die App daran, die Export-Datei zu löschen, weil sie unverschlüsselt ist.
+
+## 2FA-Codes
+
+Ein Login kann einen 2FA-Schlüssel haben (Begründung:
+[ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)).
+
+- **Einrichten:** Im Editor „Einmalcode (2FA) hinzufügen“, dann den `otpauth://`-Link oder den
+  geheimen Schlüssel einfügen oder „QR-Code aus Bild lesen“ mit einem Screenshot des QR-Codes. Das
+  Bild wird nur im Browser ausgewertet (`jsqr`, wird erst bei Bedarf geladen). Darunter steht zur
+  Kontrolle schon der aktuelle Code.
+- **Anzeige:** großer Code mit Countdown-Ring und „Code kopieren“. Die letzten 5 Sekunden sind farbig
+  markiert.
+- **Berechnung:** `vault/totp.ts` nach RFC 6238 mit WebCrypto-HMAC. Unterstützt SHA-1, SHA-256 und
+  SHA-512, 6 bis 8 Stellen und Perioden von 10 bis 300 Sekunden. Schlüssel ab 8 Base32-Zeichen.
+
+## Sicherheits-Check
+
+In der Seitenleiste des Passwortmanagers, mit der Zahl der Hinweise
+(`modules/passwords/SecurityCheck.tsx`, `vault/audit.ts`, `vault/strength.ts`).
+
+- **Mehrfach verwendet:** gleiche Passwörter über alle Bereiche, gruppiert.
+- **Schwach:** Schätzung aus Länge, Zeichenarten, Wiederholungen und Tastaturfolgen, dazu eine Liste
+  häufiger Passwörter (auch deutsche) samt Varianten wie `Passwort123!`. Unter 10 Zeichen gilt immer
+  als schwach. Dieselbe Schätzung zeigt der Editor als Balken unter dem Passwort.
+- **Datenlecks:** nur auf Knopfdruck „Jetzt abgleichen“. Die App sendet die ersten 5 Zeichen des
+  SHA-1-Hashes an `api.pwnedpasswords.com` (mit `Add-Padding`, ohne Cookies und Referrer) und
+  vergleicht den Rest lokal. Jedes Passwort wird nur einmal geprüft, höchstens 4 Anfragen gleichzeitig.
+- Ein Klick auf einen Eintrag öffnet ihn.
 
 ## Konto
 
@@ -163,7 +194,7 @@ verschlüsselten Konto-Schlüssel, nie das Passwort selbst.
 
 | Maßnahme | Warum |
 |---|---|
-| Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self'`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. `style-src` erlaubt `'unsafe-inline'` für MUI ([warum](/melonapp/entscheidungen/0008-mui/#folge-für-die-content-security-policy)). |
+| Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' https://api.pwnedpasswords.com`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. Die einzige fremde Adresse ist der Datenleck-Abgleich ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)). `style-src` erlaubt `'unsafe-inline'` für MUI ([warum](/melonapp/entscheidungen/0008-mui/#folge-für-die-content-security-policy)). |
 | Links in Einträgen nur mit `http(s):`, `mailto:`, `tel:` | verhindert `javascript:`-Links in gespeicherten Feldern |
 | Einladungs-Token im URL-Fragment (`/#/invite/…`) | landet nie in Server- oder Proxy-Logs |
 | Auto-Lock nach 5 Minuten ohne Eingabe | Schlüssel liegen nicht unbegrenzt im Speicher |

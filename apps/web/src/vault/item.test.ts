@@ -4,6 +4,7 @@ import {
   cleanItem,
   emptyItem,
   fieldValue,
+  isTotpField,
   matchesSearch,
   newId,
   parseItem,
@@ -105,6 +106,15 @@ describe('item model', () => {
     const ids = new Set(Array.from({ length: 50 }, newId));
     expect(ids.size).toBe(50);
     for (const id of ids) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it('recognises one-time code fields, including ones imported before the totp kind existed', () => {
+    const f = (label: string, kind: 'concealed' | 'totp' | 'text', value: string) => ({ id: 'x', label, kind, value });
+    expect(isTotpField(f('Einmalcode', 'totp', 'JBSWY3DPEHPK3PXP'))).toBe(true);
+    expect(isTotpField(f('TOTP-Schlüssel', 'concealed', 'JBSWY3DPEHPK3PXP'))).toBe(true);
+    expect(isTotpField(f('Irgendwas', 'concealed', 'otpauth://totp/x?secret=JBSWY3DPEHPK3PXP'))).toBe(true);
+    expect(isTotpField(f('PIN', 'concealed', '1234'))).toBe(false);
+    expect(isTotpField(f('Notiz', 'text', 'otpauth://totp/x'))).toBe(false);
   });
 
   it('classifies characters for the password display', () => {

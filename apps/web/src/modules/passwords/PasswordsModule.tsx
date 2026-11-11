@@ -26,6 +26,8 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import GppMaybeOutlinedIcon from '@mui/icons-material/GppMaybeOutlined';
 import { useEffect, useMemo, useState } from 'react';
 import { ItemAvatar, TYPE_ICONS } from '../../components/TypeIcon';
 import { describeError } from '../../session';
@@ -36,6 +38,8 @@ import type { ModuleDef } from '../registry';
 import { ItemDetail } from './ItemDetail';
 import { ImportDialog } from './ImportDialog';
 import { ItemEditor } from './ItemEditor';
+import { SecurityCheck } from './SecurityCheck';
+import { audit } from '../../vault/audit';
 
 const ALL = 'all';
 
@@ -55,6 +59,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
   const [drawer, setDrawer] = useState(false);
   const [newMenu, setNewMenu] = useState<HTMLElement | null>(null);
   const [importing, setImporting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const wide = useMediaQuery((t) => t.breakpoints.up('md'), { noSsr: true });
 
   useEffect(() => {
@@ -69,14 +74,18 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
   const current = selected ? (items.find((i) => i.vaultId === selected.vaultId && i.id === selected.id) ?? null) : null;
   const writable = vaults.filter((v) => v.canWrite);
   const defaultVault = scopeVault?.canWrite ? scopeVault.id : (writable[0]?.id ?? null);
-  const showDetail = editing !== null || current !== null;
+  const showDetail = editing !== null || current !== null || checking;
+  const report = useMemo(() => audit(items), [items]);
+  const issues = report.weak.length + report.reused.reduce((n, g) => n + g.length, 0);
   const vaultName = (id: string) => vaults.find((v) => v.id === id)?.name ?? '';
   const inSpace = (id: string) => items.filter((i) => i.vaultId === id).length;
   const types = module.types as ItemType[];
 
   const startNew = (type: ItemType) => {
     setNewMenu(null);
-    if (defaultVault) setEditing({ vaultId: defaultVault, id: null, item: emptyItem(type) });
+    if (!defaultVault) return;
+    setChecking(false);
+    setEditing({ vaultId: defaultVault, id: null, item: emptyItem(type) });
   };
 
   const save = async (vaultId: string, item: Item) => {
@@ -107,8 +116,9 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
         sx={{ display: 'grid', gap: 0.25 }}
       >
         <ListItemButton
-          selected={scope === ALL}
+          selected={scope === ALL && !checking}
           onClick={() => {
+            setChecking(false);
             setScope(ALL);
             setDrawer(false);
           }}
@@ -124,8 +134,9 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
             <Stack key={v.id} direction="row" sx={{ alignItems: 'center' }}>
               <ListItemButton
                 className="vault-row"
-                selected={scope === v.id}
+                selected={scope === v.id && !checking}
                 onClick={() => {
+                  setChecking(false);
                   setScope(v.id);
                   setDrawer(false);
                 }}
@@ -156,6 +167,21 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
             </Stack>
           );
         })}
+      </List>
+      <List disablePadding sx={{ mt: 1 }}>
+        <ListItemButton
+          className="security-nav"
+          selected={checking}
+          onClick={() => {
+            setEditing(null);
+            setSelected(null);
+            setChecking(true);
+            setDrawer(false);
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>{issues > 0 ? <GppMaybeOutlinedIcon color="primary" /> : <ShieldOutlinedIcon />}</ListItemIcon>
+          <ListItemText primary="Sicherheits-Check" secondary={issues > 0 ? count(issues, 'Hinweis', 'Hinweise') : 'Alles in Ordnung'} />
+        </ListItemButton>
       </List>
       <Stack sx={{ mt: 1, alignItems: 'flex-start' }}>
         <Button startIcon={<AddIcon />} onClick={() => createSpace((id) => setScope(id))} sx={{ color: 'text.secondary' }}>
@@ -251,6 +277,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
               selected={selected?.id === v.id && selected.vaultId === v.vaultId && !editing}
               onClick={() => {
                 setEditing(null);
+                setChecking(false);
                 setSelected({ vaultId: v.vaultId, id: v.id });
               }}
             >
@@ -291,6 +318,14 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
       onEdit={() => setEditing({ vaultId: current.vaultId, id: current.id, item: current.item })}
       onDelete={() => remove(current.vaultId, current.id)}
       onBack={() => setSelected(null)}
+    />
+  ) : checking ? (
+    <SecurityCheck
+      items={items}
+      onSelect={(v) => {
+        setChecking(false);
+        setSelected({ vaultId: v.vaultId, id: v.id });
+      }}
     />
   ) : (
     <Box sx={{ height: '60vh', display: 'grid', placeItems: 'center', textAlign: 'center' }}>

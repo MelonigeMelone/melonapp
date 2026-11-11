@@ -44,6 +44,11 @@ Master-Passwort.
   zeigt das Symbol in der Leiste eine rote **1**, im Popup lässt sich der Login ebenfalls speichern.
 - **Gesperrt?** Dann sagt die Karte nur, dass man über das Symbol in der Leiste entsperren soll. Nach
   dem Master-Passwort fragt sie nie.
+- **2FA-Codes:** In Feldern für Einmalcodes (`autocomplete="one-time-code"` oder Namen wie „otp“,
+  „2fa“, „Bestätigungscode“) erscheint das Symbol, wenn ein Login der Seite einen 2FA-Schlüssel hat.
+  Ein Klick füllt den aktuellen Code, auch in Seiten mit einem Kästchen pro Ziffer. Im Popup kopiert
+  das Ziffern-Symbol neben einem Login den Code. Den Code rechnet der Hintergrund erst beim Klick aus,
+  nur für die Adresse, die der Browser für den Tab meldet.
 - **Generator:** In Registrierungs-Formularen bietet das Melonen-Symbol „Sicheres Passwort vorschlagen“
   an und füllt beide Passwortfelder.
 - **Sperren:** Schloss-Symbol im Popup, automatisch nach 30 Minuten ohne Nutzung und beim Schließen
@@ -70,7 +75,7 @@ Melonen-SVG.
 
 Erweiterungs-Seiten und der Hintergrund-Prozess werden vom Browser nach kurzer Zeit beendet. Deshalb
 legt das Popup nach dem Entsperren einen **Schnappschuss** in `chrome.storage.session` ab:
-Sitzungs-Token, entschlüsselte Logins (Titel, Benutzername, Passwort, URLs), Bereiche und die
+Sitzungs-Token, entschlüsselte Logins (Titel, Benutzername, Passwort, 2FA-Schlüssel, URLs), Bereiche und die
 Bereichs-Schlüssel als Rohbytes. `storage.session` liegt nur im Arbeitsspeicher, verschwindet beim
 Schließen des Browsers und ist für Content-Scripts und Websites nicht lesbar. Begründung und
 Abwägung: [ADR 0013](/melonapp/entscheidungen/0013-browser-erweiterung/).
@@ -103,9 +108,10 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 
 - `match.test.ts`: Domain-Abgleich inklusive Look-alike-Domains und http/https, Generator.
 - `form.test.ts`: Formular-Erkennung inklusive E-Mail-Schritt bei zweistufigen Logins (ohne Such-,
-  Newsletter- und Code-Felder), versteckte/deaktivierte Felder, Ausfüllen mit Events.
+  Newsletter- und Code-Felder), 2FA-Felder (ohne PLZ, Gutschein und Passwortfelder), Ziffern-Kästchen,
+  versteckte/deaktivierte Felder, Ausfüllen mit Events.
 - **E2E** (`apps/extension/e2e/extension.e2e.mjs`, CI-Job `e2e`): echtes Chromium mit geladener
   Erweiterung gegen den kompletten Stack. Kein Ausfüllen ohne Klick, Ausfüllen auf passender
-  Domain, nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
+  Domain, 2FA-Code auf der Bestätigungsseite, nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
   Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, Sperren
   beendet das Ausfüllen.

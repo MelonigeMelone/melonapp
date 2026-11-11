@@ -1,4 +1,18 @@
+import { createHmac } from 'node:crypto';
 import { chromium } from 'playwright';
+
+function totpNow(secret, offset = 0) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const c of secret.replace(/=+$/, '')) bits += alphabet.indexOf(c).toString(2).padStart(5, '0');
+  const key = Buffer.from(bits.match(/.{8}/g).map((b) => parseInt(b, 2)));
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000) + offset));
+  const h = createHmac('sha1', key).update(counter).digest();
+  const o = h[h.length - 1] & 15;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1e6).padStart(6, '0');
+}
+const validCodes = (secret) => [-1, 0, 1].map((o) => totpNow(secret, o));
 
 const BASE = process.env.BASE ?? 'http://localhost';
 const EXT = process.env.EXT ?? '/ext';
@@ -31,6 +45,13 @@ const passwordStep = (title) => `<!doctype html><html><head><title>${title}</tit
     <button type="submit">Anmelden</button>
   </form></body></html>`;
 
+const otpStep = `<!doctype html><html><head><meta charset="utf-8"><title>Bestätigung</title></head><body>
+  <h1>Bestätigung</h1>
+  <form method="get" action="/done" style="display:grid;gap:8px;width:320px">
+    <input id="otp" name="otp" inputmode="numeric" autocomplete="one-time-code" placeholder="6-stelliger Code">
+    <button type="submit">Bestätigen</button>
+  </form></body></html>`;
+
 const twoStep = (title) => (r) => {
   const path = new URL(r.request().url()).pathname;
   const body = path.startsWith('/password') ? passwordStep(title) : path.startsWith('/done') ? page(title) : emailStep(title, '/password');
@@ -43,7 +64,9 @@ const ctx = await chromium.launchPersistentContext(`/tmp/profile-${Date.now()}`,
   viewport: { width: 1280, height: 860 },
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
 });
-await ctx.route('https://login.example.test/**', (r) => r.fulfill({ contentType: 'text/html', body: page('Login Beispiel') }));
+await ctx.route('https://login.example.test/**', (r) =>
+  r.fulfill({ contentType: 'text/html', body: new URL(r.request().url()).pathname.startsWith('/2fa') ? otpStep : page('Login Beispiel') }),
+);
 await ctx.route('https://twostep.login.example.test/**', twoStep('Zwei Schritte'));
 await ctx.route('https://twostep.new.example.test/**', twoStep('Neu in zwei Schritten'));
 await ctx.route('https://evil.example.test/**', (r) => r.fulfill({ contentType: 'text/html', body: page('Fremde Seite') }));
@@ -88,6 +111,8 @@ await step('account with one login in the web app', async () => {
   await web.getByLabel('Benutzername').fill('mia@example.test');
   await web.locator('#field-password').fill('alt-passwort-1');
   await web.locator('#field-website').fill('https://login.example.test');
+  await web.getByRole('button', { name: 'Einmalcode (2FA) hinzufügen' }).click();
+  await web.getByLabel('Schlüssel', { exact: true }).fill('JBSWY3DPEHPK3PXP');
   await web.getByRole('button', { name: 'Speichern' }).click();
   await web.getByRole('heading', { name: 'Beispiel-Login', level: 2 }).waitFor();
 });
@@ -133,6 +158,19 @@ await step('fill a matching site only after a click', async () => {
   await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').click();
   if ((await site.locator('#user').inputValue()) !== 'mia@example.test') throw new Error('username not filled');
   if ((await site.locator('#pw').inputValue()) !== 'alt-passwort-1') throw new Error('password not filled');
+});
+
+await step('fill the 2FA code on the verification page', async () => {
+  await site.goto('https://login.example.test/2fa');
+  await site.locator('#otp').focus();
+  const melon = site.getByRole('button', { name: 'Mit MelonApp ausfüllen' });
+  await melon.click();
+  const menu = site.getByRole('menu', { name: 'MelonApp' });
+  await menu.getByText('Einmalcode für mia@example.test').waitFor();
+  await site.screenshot({ path: `${OUT}/ext-2b-otp.png`, clip: { x: 0, y: 0, width: 520, height: 260 } });
+  await menu.getByText('Beispiel-Login').click();
+  const value = await site.locator('#otp').inputValue();
+  if (!validCodes('JBSWY3DPEHPK3PXP').includes(value)) throw new Error(`filled 2FA code ${value} is wrong`);
 });
 
 await step('other domains get nothing, not even the icon', async () => {

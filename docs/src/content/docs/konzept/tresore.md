@@ -111,4 +111,4 @@ und braucht keine Verbindung nach außen.
 ## Später
 
 - **Personengruppen** („Familie“), die man mehreren Bereichen auf einmal hinzufügt
-- einzelnen Eintrag per Link teilen, Sicherheits-Check, 2FA-Codes, Passkeys, Anhänge
+- einzelnen Eintrag per Link teilen, Passkeys, Anhänge

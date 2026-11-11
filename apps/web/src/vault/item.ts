@@ -1,4 +1,4 @@
-export type FieldKind = 'text' | 'concealed' | 'url' | 'email' | 'phone' | 'date' | 'multiline';
+export type FieldKind = 'text' | 'concealed' | 'totp' | 'url' | 'email' | 'phone' | 'date' | 'multiline';
 export type ItemType = 'login' | 'note' | 'card' | 'identity' | 'wifi';
 
 export interface Field {
@@ -38,7 +38,7 @@ export interface VaultItem {
 }
 
 const HISTORY_LIMIT = 20;
-const KINDS: FieldKind[] = ['text', 'concealed', 'url', 'email', 'phone', 'date', 'multiline'];
+const KINDS: FieldKind[] = ['text', 'concealed', 'totp', 'url', 'email', 'phone', 'date', 'multiline'];
 const TYPES: ItemType[] = ['login', 'note', 'card', 'identity', 'wifi'];
 
 type Template = { label: string; fields: Omit<Field, 'value'>[] };
@@ -86,12 +86,25 @@ export const TEMPLATES: Record<ItemType, Template> = {
 export const KIND_LABELS: Record<FieldKind, string> = {
   text: 'Text',
   concealed: 'Verborgen',
+  totp: 'Einmalcode (2FA)',
   url: 'URL',
   email: 'E-Mail',
   phone: 'Telefon',
   date: 'Datum',
   multiline: 'Mehrzeiliger Text',
 };
+
+const TOTP_LABEL = /totp|einmalcode|2fa|one-time|authenticator/i;
+
+export function isTotpField(f: Field): boolean {
+  if (f.kind === 'totp') return true;
+  if (f.kind !== 'concealed' || !f.value) return false;
+  return /^otpauth:\/\/totp\//i.test(f.value.trim()) || (TOTP_LABEL.test(f.label) && /^[A-Za-z2-7=\s-]{16,}$/.test(f.value.trim()));
+}
+
+export function totpFields(item: Item): Field[] {
+  return allFields(item).filter(isTotpField);
+}
 
 export function newId(): string {
   const b = globalThis.crypto.getRandomValues(new Uint8Array(16));
