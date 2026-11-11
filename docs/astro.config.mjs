@@ -23,6 +23,7 @@ export default defineConfig({
         { label: 'Architektur', items: [{ autogenerate: { directory: 'architektur' } }] },
         { label: 'Sicherheit', items: [{ autogenerate: { directory: 'sicherheit' } }] },
         { label: 'Server', items: [{ autogenerate: { directory: 'server' } }] },
+        { label: 'Clients', items: [{ autogenerate: { directory: 'clients' } }] },
         { label: 'Betrieb', items: [{ autogenerate: { directory: 'betrieb' } }] },
         { label: 'Entscheidungen', items: [{ autogenerate: { directory: 'entscheidungen' } }] },
         { label: 'Mitwirken', items: [{ autogenerate: { directory: 'mitwirken' } }] },

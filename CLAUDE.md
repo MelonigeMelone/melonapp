@@ -18,6 +18,8 @@ Passwortmanager. Die gesamte Doku liegt in `docs/src/content/docs/` (Starlight).
 
 - `crates/melon-crypto`: gesamte Kryptografie, nativ + WASM
 - `crates/melon-server`: axum + PostgreSQL, speichert nur Chiffretext
+- `crates/melon-wasm` → `packages/melon-wasm`: WASM-Bindings (`bash scripts/build-wasm.sh`)
+- `apps/web`: React-Web-App, Krypto im Web Worker; E2E-Test in `apps/web/e2e`
 - `docs/`: Starlight-Doku (npm-Workspace)
 - `deploy/`: Docker Compose für den eigenen Server
 

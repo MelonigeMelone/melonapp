@@ -23,6 +23,7 @@ sidebar:
 | Sync-Verhalten | `server/sync.md` |
 | Migration | `server/datenbank.md` |
 | Umgebungsvariable | `server/konfiguration.md` und `betrieb/selbst-hosten.md` |
+| Web-App: Verhalten, Sync, Schutzmaßnahmen, Design | `clients/web.md` |
 | Workflow | `betrieb/pipelines.md` |
 | Neuer Sicherheitstest | Tabelle in `sicherheit/pruefungen.md` |
 | Bekannte Lücke | `sicherheit/offene-punkte.md` |

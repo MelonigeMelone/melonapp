@@ -28,9 +28,9 @@ Beim Ändern schickt der Client die Revision mit, auf der seine Änderung basier
   `409 revision_mismatch`. Der Client synchronisiert, führt beide Stände zusammen und
   versucht es erneut.
 
-Das Zusammenführen muss der Client übernehmen, weil nur er die Inhalte lesen kann. Plan
-für den Passwortmanager: feldweise zusammenführen. Ändern beide Geräte dasselbe Feld,
-gewinnt die neuere Änderung, und die ältere landet im Verlauf des Eintrags.
+Das Zusammenführen muss der Client übernehmen, weil nur er die Inhalte lesen kann. Die
+Web-App lässt die gerade gespeicherte Änderung gewinnen und legt das Passwort der anderen
+Seite im Verlauf ab ([Details](/melonapp/clients/web/#konflikte)).
 
 Anlegen (`base_revision: null`) einer schon existierenden ID ist ebenfalls ein `409`.
 Der Modulname eines Items lässt sich nicht ändern, weil er Teil der
@@ -46,6 +46,7 @@ Ein Tombstone lässt sich per `PUT` mit seiner Revision als `base_revision` wied
 
 ## Offline
 
-Clients halten eine verschlüsselte lokale Kopie aller Items. Lesen und Suchen gehen damit
-ohne Netz und sofort. Offline-Änderungen landen in einer Warteschlange und werden mit ihrer
+Die Web-App hält die Einträge nur im Speicher. Die Desktop-App (M3) bekommt eine
+verschlüsselte lokale Kopie aller Items, damit Lesen und Suchen ohne Netz und sofort gehen.
+Dort landen Offline-Änderungen in einer Warteschlange und werden mit ihrer
 `base_revision` hochgeladen, sobald wieder Netz da ist. Konflikte laufen wie oben beschrieben.

@@ -26,7 +26,8 @@ sidebar:
 |---|---|---|---|
 | Krypto-Kern | Rust | `crates/melon-crypto` | ✅ |
 | Sync-Server | Rust, axum, PostgreSQL | `crates/melon-server` | ✅ |
-| Web-App | React + TypeScript, Krypto als WASM | `apps/web` | M2 |
+| WASM-Brücke | wasm-bindgen | `crates/melon-wasm` → `packages/melon-wasm` | ✅ |
+| Web-App | React + TypeScript, Krypto im Web Worker | `apps/web` | ✅ |
 | Desktop & iOS | Tauri 2 mit derselben React-UI | `apps/desktop` | M3 / M5 |
 | Browser-Erweiterung | WebExtension (MV3), TypeScript | `apps/extension` | M4 |
 | iOS-AutoFill | Swift Credential Provider Extension, ruft `melon-crypto` über UniFFI | `apps/desktop/src-tauri/gen/apple` | M5 |

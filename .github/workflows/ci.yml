@@ -43,8 +43,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
 
-  wasm:
-    name: Crypto core builds for WebAssembly
+  web:
+    name: Web app (WASM, tests, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -52,7 +52,44 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build -p melon-crypto --target wasm32-unknown-unknown --locked
+      - run: bash scripts/build-wasm.sh
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test -w web
+      - run: npm run build -w web
+
+  e2e:
+    name: End-to-end (browser against full stack)
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose -p melon-e2e --env-file apps/web/e2e/e2e.env -f deploy/docker-compose.yml -f apps/web/e2e/compose.override.yml
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
+      - run: $COMPOSE build
+      - run: $COMPOSE up -d --wait
+      - name: Wait for the API
+        run: for i in $(seq 60); do curl -sf localhost:18081/health && exit 0; sleep 1; done; exit 1
+      - name: Run browser test
+        run: >-
+          docker run --rm --network container:melon-e2e-caddy-1
+          -v "$PWD/apps/web/e2e:/e2e" -v "$RUNNER_TEMP:/out" -w /work
+          mcr.microsoft.com/playwright:v1.65.0-noble
+          bash -c "npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.65.0 >/dev/null && cp /e2e/vault.e2e.mjs . && node vault.e2e.mjs"
+      - name: Check that the database holds no plaintext
+        run: |
+          hits=$(docker exec melon-e2e-db-1 psql -U melon -d melon -tAc "SELECT count(*) FROM items WHERE data ILIKE '%github%' OR data ILIKE '%sparkasse%' OR data ILIKE '%melone%'")
+          test "$hits" = "0"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/*.png
+      - if: failure()
+        run: $COMPOSE logs
 
   msrv:
     name: Minimum Rust version (1.85)

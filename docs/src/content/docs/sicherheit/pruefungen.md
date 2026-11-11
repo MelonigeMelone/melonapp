@@ -31,6 +31,11 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | `prelogin` verrät keine Konten | `api::prelogin_does_not_reveal_accounts` |
 | Abgemeldete Tokens sind ungültig | `api::full_vault_flow` |
 | Sicherheits-Header sind gesetzt | `api::security_headers_are_set` |
+| Konflikt verliert kein Passwort | `store.test.ts: resolves a conflicting edit` |
+| Unlesbare Items brechen den Sync nicht ab | `store.test.ts: skips items it cannot decrypt` |
+| Keine `javascript:`-Links aus Einträgen | `entry.test.ts: only links http and https urls` |
+| Ganzer Ablauf im echten Browser, falsches Passwort wird abgelehnt | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
+| Datenbank enthält nach dem Browser-Test keinen Klartext | CI-Job `e2e`, Schritt „no plaintext“ |
 
 ## Lokal ausführen
 

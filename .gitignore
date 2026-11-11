@@ -4,3 +4,5 @@ deploy/.env
 node_modules/
 dist/
 .DS_Store
+/packages/melon-wasm/pkg
+/tmp

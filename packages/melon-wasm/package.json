@@ -1,0 +1,16 @@
+{
+  "name": "@melon/wasm",
+  "private": true,
+  "type": "module",
+  "main": "./pkg/melon_wasm.js",
+  "types": "./pkg/melon_wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./pkg/melon_wasm.d.ts",
+      "default": "./pkg/melon_wasm.js"
+    }
+  },
+  "scripts": {
+    "build": "bash ../../scripts/build-wasm.sh"
+  }
+}

@@ -11,9 +11,13 @@ Docker Compose. Warum nicht Kubernetes, steht in [ADR 0004](/melonapp/entscheidu
 ## Aufbau
 
 ```text
-Internet ─► Caddy :443 (TLS, HSTS) ─► melon-server :8080 ─► PostgreSQL
-            Netz "web"                 Netz "web" + "internal"   nur Netz "internal"
+Internet ─► Caddy :443 (TLS, HSTS)  ─┬─ /api/*, /health ─► melon-server :8080 ─► PostgreSQL
+            Image melonapp-web       └─ alles andere ───► Web-App (statisch, /srv)
+            Netz "web"                   Netz "web" + "internal"   nur Netz "internal"
 ```
+
+Die Web-App und die API laufen unter derselben Domain. CORS ist dafür nicht nötig.
+Caddy setzt für die Web-App eine strenge Content-Security-Policy ([Details](/melonapp/clients/web/#schutzmaßnahmen)).
 
 - Die Datenbank hängt nur im internen Netz und ist von außen nicht erreichbar.
 - Der Server-Container läuft schreibgeschützt (`read_only`), ohne Linux-Capabilities und mit
@@ -39,10 +43,14 @@ docker compose up -d
 | `POSTGRES_PASSWORD` | `openssl rand -base64 48` |
 | `MELON_SERVER_SECRET` | `openssl rand -base64 48` |
 | `MELON_ALLOW_REGISTRATION` | zum Anlegen der Konten `true`, danach `false` und `docker compose up -d` |
-| `MELON_CORS_ORIGINS` | Origins von Web-App und Erweiterung |
+| `MELON_CORS_ORIGINS` | nur für die Browser-Erweiterung (M4) nötig. Die Web-App läuft auf derselben Domain. |
 | `MELON_IMAGE` | `ghcr.io/melonigemelone/melonapp-server:latest` |
+| `MELON_WEB_IMAGE` | `ghcr.io/melonigemelone/melonapp-web:latest` (Caddy + Web-App) |
 
 Alle Variablen des Servers: [Konfiguration](/melonapp/server/konfiguration/).
+
+Danach `https://<deine-domain>` öffnen und unter **Konto erstellen** die Konten anlegen.
+Anschließend die Registrierung wieder ausschalten.
 
 ## Updates
 

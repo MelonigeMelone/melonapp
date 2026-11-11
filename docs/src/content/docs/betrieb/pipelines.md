@@ -7,9 +7,9 @@ sidebar:
 
 | Workflow | Datei | Auslöser | Inhalt |
 |---|---|---|---|
-| CI | `ci.yml` | Push auf `main`, PR | `fmt`, `clippy -D warnings`, Tests mit PostgreSQL-Service, WASM-Build, Mindest-Rust-Version 1.85 |
+| CI | `ci.yml` | Push auf `main`, PR | `fmt`, `clippy -D warnings`, Rust-Tests mit PostgreSQL, Mindest-Rust-Version 1.85, Web-App (WASM-Build, Tests, Build), **E2E**: kompletter Stack per Compose + Browser-Test + Prüfung, dass die Datenbank keinen Klartext enthält |
 | Security | `security.yml` | Push, PR, täglich 05:17 UTC, manuell | cargo-deny, gitleaks, CodeQL ([Details](/melonapp/sicherheit/pruefungen/)) |
-| Server image | `docker.yml` | Push auf `main`, Tags `v*`, PR mit Rust-Änderungen | Docker-Image bauen und nach GHCR pushen (nicht bei PRs), mit SBOM und Provenance |
+| Images | `docker.yml` | Push auf `main`, Tags `v*`, PR mit Code-Änderungen | Images `melonapp-server` und `melonapp-web` bauen und nach GHCR pushen (nicht bei PRs), mit SBOM und Provenance |
 | Docs | `docs.yml` | Push auf `main` mit Änderungen in `docs/`, PR, manuell | Doku bauen und auf GitHub Pages veröffentlichen (nicht bei PRs) |
 
 ## Image-Tags
@@ -20,7 +20,7 @@ sidebar:
 | `sha-<commit>` | jeder Push |
 | `1.2.3` | Git-Tag `v1.2.3` |
 
-Image: `ghcr.io/melonigemelone/melonapp-server`.
+Images: `ghcr.io/melonigemelone/melonapp-server` und `ghcr.io/melonigemelone/melonapp-web`.
 
 ## Öffentliches oder privates Repo
 

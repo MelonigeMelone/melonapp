@@ -50,6 +50,37 @@ docker run --rm --network melon-dev -p 8080:8080 \
 curl localhost:8080/health
 ```
 
+## Web-App
+
+```sh
+bash scripts/build-wasm.sh
+npm install
+npm run dev -w web
+```
+
+Der Dev-Server leitet `/api` an `localhost:8080` weiter. Der Server muss also wie oben
+laufen, mit `MELON_ALLOW_REGISTRATION=true`. Tests: `npm test -w web`.
+
+`build-wasm.sh` installiert beim ersten Lauf `wasm-bindgen-cli` in genau der Version aus
+`Cargo.lock`. CLI und Bibliothek müssen exakt zusammenpassen.
+
+## Gesamtes System + Browser-Test
+
+So läuft es auch in der CI:
+
+```sh
+COMPOSE="docker compose -p melon-e2e --env-file apps/web/e2e/e2e.env -f deploy/docker-compose.yml -f apps/web/e2e/compose.override.yml"
+$COMPOSE up -d --build --wait
+docker run --rm --network container:melon-e2e-caddy-1 -v "$PWD/apps/web/e2e:/e2e" -v "$PWD/tmp:/out" -w /work \
+  mcr.microsoft.com/playwright:v1.65.0-noble \
+  bash -c "npm init -y && npm i playwright@1.65.0 && cp /e2e/vault.e2e.mjs . && node vault.e2e.mjs"
+```
+
+Die App ist dann unter `http://localhost:18081` erreichbar. Der Test spielt Registrieren,
+Einträge anlegen, Suchen, Kopieren, Bearbeiten, Neuladen, falsches Passwort und die
+Mobilansicht durch und legt Screenshots in `tmp/` ab. Er läuft über `localhost`, weil
+Browser bestimmte APIs nur dort oder unter HTTPS anbieten.
+
 ## Doku
 
 Benötigt Node ≥ 22.23.
