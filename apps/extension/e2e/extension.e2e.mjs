@@ -169,6 +169,7 @@ await step('fill the 2FA code on the verification page', async () => {
   await menu.getByText('Einmalcode für mia@example.test').waitFor();
   await site.screenshot({ path: `${OUT}/ext-2b-otp.png`, clip: { x: 0, y: 0, width: 520, height: 260 } });
   await menu.getByText('Beispiel-Login').click();
+  await site.waitForFunction(() => document.querySelector('#otp')?.value.length === 6, null, { timeout: 10000 });
   const value = await site.locator('#otp').inputValue();
   if (!validCodes('JBSWY3DPEHPK3PXP').includes(value)) throw new Error(`filled 2FA code ${value} is wrong`);
 });
