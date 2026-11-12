@@ -34,5 +34,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0020](/melonapp/entscheidungen/0020-deploy-per-tag/) | Deployment per Versions-Tag | angenommen |
 | [0021](/melonapp/entscheidungen/0021-papierkorb-im-eintrag/) | Papierkorb als verschlüsselte Markierung im Eintrag | angenommen |
 | [0022](/melonapp/entscheidungen/0022-backups-mit-age/) | Backups verschlüsselt mit age, Schlüssel offline | angenommen |
+| [0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/) | Passkeys als verschlüsselte Tresor-Einträge | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.

@@ -19,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 sha2 = "0.11"
 tempfile = "3"
+base64 = "0.22"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2-foundation = { version = "0.3", features = ["NSFileManager", "NSString", "NSURL"] }
@@ -31,6 +32,9 @@ security-framework = { version = "3", features = ["OSX_10_15"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-global-shortcut = "2"
+
+[dev-dependencies]
+melon-crypto = { path = "../../../crates/melon-crypto" }
 
 [lints.rust]
 unsafe_code = "forbid"

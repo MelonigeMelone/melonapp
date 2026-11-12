@@ -1,5 +1,5 @@
 export type FieldKind = 'text' | 'concealed' | 'totp' | 'url' | 'email' | 'phone' | 'date' | 'multiline';
-export type ItemType = 'login' | 'note' | 'card' | 'identity' | 'wifi';
+export type ItemType = 'login' | 'note' | 'card' | 'identity' | 'wifi' | 'passkey';
 
 export interface Field {
   id: string;
@@ -42,7 +42,8 @@ export interface VaultItem {
 const HISTORY_LIMIT = 20;
 const LATEST_DATE = Date.UTC(9999, 0, 1);
 const KINDS: FieldKind[] = ['text', 'concealed', 'totp', 'url', 'email', 'phone', 'date', 'multiline'];
-const TYPES: ItemType[] = ['login', 'note', 'card', 'identity', 'wifi'];
+const TYPES: ItemType[] = ['login', 'note', 'card', 'identity', 'wifi', 'passkey'];
+export const CREATABLE_TYPES: ItemType[] = ['login', 'note', 'card', 'identity', 'wifi'];
 
 type Template = { label: string; fields: Omit<Field, 'value'>[] };
 
@@ -84,7 +85,48 @@ export const TEMPLATES: Record<ItemType, Template> = {
       { id: 'security', label: 'Sicherheit', kind: 'text' },
     ],
   },
+  passkey: {
+    label: 'Passkey',
+    fields: [
+      { id: 'rp', label: 'Website (RP-ID)', kind: 'text' },
+      { id: 'username', label: 'Benutzername', kind: 'text' },
+      { id: 'credentialId', label: 'Credential-ID', kind: 'text' },
+      { id: 'userHandle', label: 'User-Handle', kind: 'text' },
+      { id: 'privateKey', label: 'Privater Schlüssel', kind: 'concealed' },
+    ],
+  },
 };
+
+export interface PasskeyData {
+  rp: string;
+  userName: string;
+  credentialId: string;
+  userHandle: string;
+  privateKey: string;
+}
+
+const BASE64URL = /^[A-Za-z0-9_-]+$/;
+
+export function passkeyOf(item: Item): PasskeyData | null {
+  if (item.type !== 'passkey') return null;
+  const get = (id: string) => item.fields.find((f) => f.id === id)?.value ?? '';
+  const data = { rp: get('rp'), userName: get('username'), credentialId: get('credentialId'), userHandle: get('userHandle'), privateKey: get('privateKey') };
+  if (!data.rp || ![data.credentialId, data.userHandle, data.privateKey].every((v) => BASE64URL.test(v))) return null;
+  return data;
+}
+
+export function passkeyItem(data: PasskeyData): Item {
+  const values: Record<string, string> = { rp: data.rp, username: data.userName, credentialId: data.credentialId, userHandle: data.userHandle, privateKey: data.privateKey };
+  return {
+    ...emptyItem('passkey'),
+    title: data.userName ? `${data.rp} (${data.userName})` : data.rp,
+    fields: TEMPLATES.passkey.fields.map((f) => ({ ...f, value: values[f.id] ?? '' })),
+  };
+}
+
+export function visibleFields(item: Item): Field[] {
+  return item.type === 'passkey' ? item.fields.filter((f) => f.id !== 'privateKey') : item.fields;
+}
 
 export const KIND_LABELS: Record<FieldKind, string> = {
   text: 'Text',

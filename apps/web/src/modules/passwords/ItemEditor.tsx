@@ -309,9 +309,15 @@ export function ItemEditor({
         </TextField>
       )}
 
-      {item.fields.map((f, i) => (
-        <FieldInput key={f.id} field={f} custom={false} onChange={(nf) => update({ section: null, index: i }, nf)} />
-      ))}
+      {item.type === 'passkey' ? (
+        <Typography variant="body2" color="text.secondary">
+          Website, Benutzername und Schlüssel dieses Passkeys verwaltet MelonApp. Sie lassen sich nicht bearbeiten.
+        </Typography>
+      ) : (
+        item.fields.map((f, i) => (
+          <FieldInput key={f.id} field={f} custom={false} onChange={(nf) => update({ section: null, index: i }, nf)} />
+        ))
+      )}
 
       {item.sections.map((s, si) => (
         <Paper key={s.id} variant="outlined" sx={{ p: 2, borderRadius: '18px', borderStyle: 'dashed' }}>

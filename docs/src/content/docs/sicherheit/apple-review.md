@@ -93,8 +93,11 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
 - Passwort-Snapshots sind bewusst angelegte Offline-Kopien: Widerruf wirkt dort nicht
   sofort. Die 24-Stunden-Frist hängt von der Gerätezeit ab und ist kein kryptografischer
   Schutz vor Zurücksetzen der Systemzeit oder Wiedereinspielen alter gültiger Dateien.
-- Passkeys melden BS=1, sind aber gerätelokal ohne Sync, Export oder Wiederherstellung
-  ([#32](https://github.com/MelonigeMelone/melonapp/issues/32)). Konten nie nur an einen MelonApp-Passkey binden.
+- Passkey-Sync über den Tresor ([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)) ist
+  in Tests, im Simulator und auf dem iPhone 13 geprüft (gerätelokaler Passkey übernommen,
+  Anmeldung danach aus der Tresor-Kopie). Wiederherstellung auf einem zweiten Gerät
+  (anmelden, Face ID einrichten, AutoFill veröffentlichen) vom Nutzer bestätigt. Gelöschte Passkeys verschwinden aus den iOS-Vorschlägen erst beim
+  nächsten entsperrten AutoFill-Vorgang.
 - Notarisierung und TestFlight ([#30](https://github.com/MelonigeMelone/melonapp/issues/30)) sowie die Safari-Web-Erweiterung
   ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) stehen aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
   biometrische Aussagen gelten nur für die Hardware-Abnahme oben.

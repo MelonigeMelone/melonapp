@@ -23,7 +23,7 @@ import { CLIPBOARD_CLEAR_SECONDS, copySecret } from '../../clipboard';
 import { FieldView } from '../../components/FieldView';
 import { PasswordText } from '../../components/PasswordText';
 import { TYPE_ICONS } from '../../components/TypeIcon';
-import { TEMPLATES, type VaultItem } from '../../vault/item';
+import { TEMPLATES, visibleFields, type VaultItem } from '../../vault/item';
 import type { VaultView } from '../../vault/manager';
 import { purgeDate } from '../../vault/trash';
 
@@ -106,9 +106,16 @@ export function ItemDetail({
         </Typography>
       </Stack>
 
-      {item.fields.map((f) => (
+      {visibleFields(item).map((f) => (
         <FieldView key={`${entry.vaultId}/${entry.id}/${f.id}`} field={f} onCopy={(v) => void copy(v)} />
       ))}
+
+      {item.type === 'passkey' && (
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: '65ch' }}>
+          Der private Schlüssel bleibt verborgen. Anmelden mit diesem Passkey geht über das AutoFill
+          von MelonApp auf dem iPhone. Behalte für das Konto trotzdem Passwort oder zweiten Faktor.
+        </Typography>
+      )}
 
       {item.sections.map((s) => (
         <Stack key={s.id} spacing={2.5}>

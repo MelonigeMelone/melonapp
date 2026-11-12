@@ -350,6 +350,7 @@ fn autofill_remove() -> Result<(), String> {
     }
     for name in [
         format!("{}.passwords.enc", scope.trim()),
+        crate::passkeys::synced_name(scope.trim()),
         "active.txt".to_owned(),
     ] {
         let path = directory.join(name);
@@ -449,6 +450,83 @@ mod tests {
     }
 }
 
+#[cfg(target_os = "ios")]
+const APP_GROUP: &str = "group.de.melonigemelone.app";
+
+#[cfg(target_os = "ios")]
+fn app_group() -> Result<PathBuf, String> {
+    use objc2_foundation::{NSFileManager, NSString};
+    let url = NSFileManager::defaultManager()
+        .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(APP_GROUP))
+        .ok_or("app_group_unavailable")?;
+    Ok(PathBuf::from(
+        url.path().ok_or("app_group_unavailable")?.to_string(),
+    ))
+}
+
+#[cfg(target_os = "ios")]
+fn autofill_scope(app: &tauri::AppHandle, user_id: &str) -> Result<String, String> {
+    Ok(sha256_hex(format!("{}/{user_id}", server(app)?).as_bytes()))
+}
+
+#[tauri::command]
+pub async fn passkeys_pending(
+    app: tauri::AppHandle,
+    user_id: String,
+) -> Result<Vec<crate::passkeys::Pending>, String> {
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app, user_id);
+        Err("ios_only".into())
+    }
+    #[cfg(target_os = "ios")]
+    {
+        tauri::async_runtime::spawn_blocking(move || {
+            let directory = app_group()?;
+            let scope = autofill_scope(&app, &user_id)?;
+            let state = app.state::<Mutex<Session>>();
+            let mut session = state.lock().map_err(|_| "session_unavailable")?;
+            crate::passkeys::pending(&mut session, &directory, &scope)
+        })
+        .await
+        .map_err(|_| "storage_unavailable")?
+    }
+}
+
+#[tauri::command]
+pub fn passkeys_acknowledge(
+    app: tauri::AppHandle,
+    user_id: String,
+    files: Vec<String>,
+) -> Result<(), String> {
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app, user_id, files);
+        Err("ios_only".into())
+    }
+    #[cfg(target_os = "ios")]
+    {
+        let scope = autofill_scope(&app, &user_id)?;
+        crate::passkeys::acknowledge(&app_group()?, &scope, &files)
+    }
+}
+
+#[tauri::command]
+pub fn autofill_active(app: tauri::AppHandle, user_id: String) -> bool {
+    #[cfg(not(target_os = "ios"))]
+    {
+        let _ = (app, user_id);
+        false
+    }
+    #[cfg(target_os = "ios")]
+    {
+        let (Ok(directory), Ok(scope)) = (app_group(), autofill_scope(&app, &user_id)) else {
+            return false;
+        };
+        fs::read_to_string(directory.join("active.txt")).is_ok_and(|active| active.trim() == scope)
+    }
+}
+
 #[tauri::command]
 pub fn is_ios() -> bool {
     cfg!(target_os = "ios")
@@ -459,23 +537,19 @@ pub async fn autofill_publish(
     app: tauri::AppHandle,
     user_id: String,
     entries: Value,
+    passkeys: Vec<crate::passkeys::Synced>,
 ) -> Result<(), String> {
     #[cfg(not(target_os = "ios"))]
     {
-        let _ = (app, user_id, entries);
+        let _ = (app, user_id, entries, passkeys);
         Err("ios_only".into())
     }
     #[cfg(target_os = "ios")]
     {
         tauri::async_runtime::spawn_blocking(move || {
-            use objc2_foundation::{NSFileManager, NSString};
-            let group = "group.de.melonigemelone.app";
-            let url = NSFileManager::defaultManager()
-                .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(group))
-                .ok_or("app_group_unavailable")?;
-            let directory = PathBuf::from(url.path().ok_or("app_group_unavailable")?.to_string());
-            let base = server(&app)?;
-            let scope = sha256_hex(format!("{base}/{user_id}").as_bytes());
+            let group = APP_GROUP;
+            let directory = app_group()?;
+            let scope = autofill_scope(&app, &user_id)?;
             let account = format!("autofill/v1/{scope}");
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -485,7 +559,7 @@ pub async fn autofill_publish(
                 serde_json::to_vec(&serde_json::json!({"createdAt":created,"passwords":entries}))
                     .map_err(|_| "invalid_request")?,
             );
-            let (key, ciphertext) = {
+            let (key, ciphertext, synced) = {
                 let state = app.state::<Mutex<Session>>();
                 let mut session = state.lock().map_err(|_| "session_unavailable")?;
                 (
@@ -493,6 +567,7 @@ pub async fn autofill_publish(
                     session
                         .cache_seal(&format!("{account}/passwords"), &data)
                         .map_err(str::to_owned)?,
+                    crate::passkeys::seal_synced(&mut session, &scope, &passkeys)?,
                 )
             };
             let item = || {
@@ -519,6 +594,10 @@ pub async fn autofill_publish(
             atomic_write(
                 &directory.join(format!("{scope}.passwords.enc")),
                 ciphertext.as_bytes(),
+            )?;
+            atomic_write(
+                &directory.join(crate::passkeys::synced_name(&scope)),
+                synced.as_bytes(),
             )?;
             atomic_write(&directory.join("active.txt"), scope.as_bytes())?;
             Ok(())
