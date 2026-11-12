@@ -298,11 +298,7 @@ pub async fn login(
 ) -> ApiResult<Json<LoginResponse>> {
     let email = normalize_email(&req.email)?;
     let ip_key = ip.map(limiter_key);
-    if state.limiter.is_blocked(&email)
-        || ip_key
-            .as_deref()
-            .is_some_and(|k| state.ip_limiter.is_blocked(k))
-    {
+    if !state.begin_attempt(&email, ip_key.as_deref()) {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -327,14 +323,10 @@ pub async fn login(
     let Some((user_id, _, wrapped_account_key, public_key, encrypted_private_key, has_recovery)) =
         user.filter(|_| matches && key.is_some())
     else {
-        state.limiter.record_failure(&email);
-        if let Some(k) = &ip_key {
-            state.ip_limiter.record_failure(k);
-        }
         tracing::info!("failed login");
         return Err(ApiError::Unauthorized);
     };
-    state.limiter.reset(&email);
+    state.attempt_succeeded(&email, ip_key.as_deref());
 
     let ttl_hours = state.config.session_ttl_hours;
     let token = create_session(&state, user_id, "full", ttl_hours * 60).await?;

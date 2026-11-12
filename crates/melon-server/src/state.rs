@@ -32,6 +32,26 @@ impl AppState {
     }
 }
 
+impl Inner {
+    pub fn begin_attempt(&self, key: &str, ip_key: Option<&str>) -> bool {
+        if !self.limiter.try_begin(key) {
+            return false;
+        }
+        let ip_ok = ip_key.is_none_or(|ip| self.ip_limiter.try_begin(ip));
+        if !ip_ok {
+            self.limiter.release(key);
+        }
+        ip_ok
+    }
+
+    pub fn attempt_succeeded(&self, key: &str, ip_key: Option<&str>) {
+        self.limiter.reset(key);
+        if let Some(ip) = ip_key {
+            self.ip_limiter.release(ip);
+        }
+    }
+}
+
 impl Deref for AppState {
     type Target = Inner;
     fn deref(&self) -> &Inner {
@@ -63,13 +83,7 @@ impl LoginLimiter {
         }
     }
 
-    pub fn is_blocked(&self, key: &str) -> bool {
-        let map = self.failures.lock().expect("limiter mutex poisoned");
-        map.get(key)
-            .is_some_and(|(n, since)| *n >= self.max && since.elapsed() < WINDOW)
-    }
-
-    pub fn record_failure(&self, key: &str) {
+    pub fn try_begin(&self, key: &str) -> bool {
         let mut map = self.failures.lock().expect("limiter mutex poisoned");
         if map.len() >= MAX_TRACKED {
             map.retain(|_, (_, since)| since.elapsed() < WINDOW);
@@ -78,7 +92,22 @@ impl LoginLimiter {
         if entry.1.elapsed() >= WINDOW {
             *entry = (0, Instant::now());
         }
+        if entry.0 >= self.max {
+            return false;
+        }
         entry.0 += 1;
+        true
+    }
+
+    pub fn release(&self, key: &str) {
+        if let Some(entry) = self
+            .failures
+            .lock()
+            .expect("limiter mutex poisoned")
+            .get_mut(key)
+        {
+            entry.0 = entry.0.saturating_sub(1);
+        }
     }
 
     pub fn reset(&self, key: &str) {
@@ -94,16 +123,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blocks_after_max_failures() {
+    fn blocks_after_max_attempts_and_counts_before_the_slow_check() {
         let l = LoginLimiter::default();
-        for _ in 0..MAX_FAILURES - 1 {
-            l.record_failure("a");
+        for _ in 0..MAX_FAILURES {
+            assert!(l.try_begin("a"));
         }
-        assert!(!l.is_blocked("a"));
-        l.record_failure("a");
-        assert!(l.is_blocked("a"));
-        assert!(!l.is_blocked("b"));
+        assert!(!l.try_begin("a"));
+        assert!(l.try_begin("b"));
+        l.release("a");
+        assert!(l.try_begin("a"));
+        assert!(!l.try_begin("a"));
         l.reset("a");
-        assert!(!l.is_blocked("a"));
+        assert!(l.try_begin("a"));
     }
 }

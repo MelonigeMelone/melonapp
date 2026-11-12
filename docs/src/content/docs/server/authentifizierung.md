@@ -60,6 +60,13 @@ herausfinden, welche Konten existieren. Ein zufälliges Salt würde sich bei jed
   `X-Forwarded-For`, also dem, den der eigene Reverse Proxy angehängt hat. Caddy ignoriert
   mitgeschickte Werte unbekannter Clients und setzt die echte Adresse. Ohne die Variable zählt
   die Adresse der TCP-Verbindung, und der Header wird ignoriert, weil ihn jeder setzen kann.
+- Jeder Versuch wird **vor** der langsamen Argon2-Prüfung gezählt, in einem Schritt mit der
+  Prüfung auf Sperre. Viele gleichzeitige Anfragen kommen so nicht an den Limits vorbei. Ein
+  erfolgreicher Versuch gibt seinen Platz wieder frei.
+- **Kehrseite:** Wer sich eine Adresse teilt (Büro, Familie, Mobilfunk-NAT), kann die anderen
+  für 15 Minuten aussperren. Dasselbe gilt, wenn Docker die echten Adressen nicht durchreicht
+  (rootless Docker oder IPv6 ohne IPv6 im Docker-Netz): Dann sehen alle Anfragen wie die
+  Docker-Bridge aus. Im Zweifel in den Server-Logs prüfen, welche Adressen ankommen.
 - Die Zähler liegen im Speicher (höchstens 10 000 Einträge, alte werden aufgeräumt). Ein
   Neustart setzt sie zurück.
 - Argon2 läuft in `spawn_blocking`, damit es den Async-Server nicht blockiert.

@@ -1318,3 +1318,46 @@ async fn many_failed_logins_from_one_address_are_blocked_across_accounts() {
         );
     }
 }
+
+#[tokio::test]
+async fn simultaneous_failed_logins_cannot_slip_past_the_limits() {
+    let Some(app) = app_with(true, true).await else {
+        return;
+    };
+    let mut tasks = tokio::task::JoinSet::new();
+    for n in 0..60 {
+        let app = app.clone();
+        tasks.spawn(async move {
+            login_from(&app, "192.0.2.77", &format!("race-{n}@example.com")).await
+        });
+    }
+    let mut checked = 0;
+    while let Some(status) = tasks.join_next().await {
+        if status.unwrap() == StatusCode::UNAUTHORIZED {
+            checked += 1;
+        }
+    }
+    assert_eq!(
+        checked, 30,
+        "exactly the per-address limit reaches the password check"
+    );
+
+    let alice = Person::new("alice");
+    assert_eq!(alice.register(&app, None).await, StatusCode::CREATED);
+    let mut tasks = tokio::task::JoinSet::new();
+    for _ in 0..25 {
+        let app = app.clone();
+        let email = alice.email.clone();
+        tasks.spawn(async move { login_from(&app, "198.51.100.8", &email).await });
+    }
+    let mut checked = 0;
+    while let Some(status) = tasks.join_next().await {
+        if status.unwrap() == StatusCode::UNAUTHORIZED {
+            checked += 1;
+        }
+    }
+    assert_eq!(
+        checked, 10,
+        "exactly the per-account limit reaches the password check"
+    );
+}
