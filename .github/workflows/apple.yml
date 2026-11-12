@@ -45,7 +45,7 @@ jobs:
       - run: bash scripts/build-apple-ffi.sh iphonesimulator
       - run: xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
       - run: npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apple-apps-unsigned
           path: |
