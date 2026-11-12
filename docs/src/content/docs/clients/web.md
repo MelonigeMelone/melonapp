@@ -75,7 +75,8 @@ den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
   title, notes,
   fields:   [{ id, label, kind, value }],
   sections: [{ id, title, fields: [...] }],
-  history:  [{ fieldId, label, value, changedAt }] }
+  history:  [{ fieldId, label, value, changedAt }],
+  seq }
 ```
 
 - `fields` kommen aus der Vorlage des Typs (feste IDs wie `username`, `password`), `sections`
@@ -87,10 +88,40 @@ den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
   App ebenfalls als Code an (`isTotpField`).
 - **Verlauf:** Ändert sich ein verborgenes Feld (`concealed`), egal ob Vorlage oder eigenes Feld,
   wandert der alte Wert in `history` (höchstens 20, ohne Doppelte und ohne aktuelle Werte).
+- **`seq`** zählt jede gespeicherte Version hoch (Rollback-Erkennung, siehe unten). Einträge
+  ohne `seq` gelten als 0.
 - **Suche** durchsucht Titel und sichtbare Felder (Text, URL, E-Mail, Telefon), nie verborgene.
 - Links entstehen nur für `http(s):`, `mailto:` und `tel:` (`safeHref`).
 
 ## Sync
+
+### Rollback-Erkennung
+
+Die Revisionsnummer vergibt der Server, und sie ist nicht Teil der Verschlüsselung. Ein
+kompromittierter Server könnte also eine alte, echte Version eines Eintrags unter einer neuen
+Revision ausliefern. Deshalb steckt im verschlüsselten Eintrag ein eigener Zähler `seq`:
+
+- Jedes Speichern setzt `seq` auf mindestens eins mehr als die höchste Version, die dieses Gerät
+  von dem Eintrag kennt (`VaultStore.write`). Bei Konflikten gewinnt der höhere Zähler plus eins.
+- Jedes Gerät merkt sich je Eintrag den höchsten gesehenen `seq` dauerhaft (`vault/seen.ts`,
+  `localStorage`, Schlüssel `melon.seen.<userId>`). Löschen erhöht den Merkwert um eins, damit ein
+  gelöschter Eintrag nicht aus einer alten Kopie zurückkommt.
+- Liefert der Server einen kleineren `seq`, verwirft die App diese Version, zeigt weiter die
+  neuere (falls noch geladen) und warnt rot: „Der Server hat bei … einen älteren Stand
+  geliefert …“.
+- Der verworfene Stand bleibt intern mit seiner aktuellen Server-Revision bekannt. Speichern
+  überschreibt ihn also mit dem neueren Stand, und ein Schlüsselwechsel schickt die vollständige,
+  vom Server verlangte Liste aller Einträge. Mehrere Tabs mischen ihre Merkwerte (immer der
+  höhere gewinnt).
+- **Alle Apps aktuell halten:** Ältere Versionen von Erweiterung oder Desktop-App kennen `seq`
+  nicht und speichern ohne Zähler. Neuere Geräte melden solche Änderungen dann als Rückschritt.
+- Wird ein Server-Backup bewusst zurückgespielt, melden bestehende Geräte alle seitdem
+  geänderten Einträge als Rückschritt. Dann im Browser die Website-Daten für MelonApp löschen
+  (setzt `melon.seen.*` zurück).
+
+Grenzen: Ein Gerät, das einen Eintrag noch nie gesehen hat (neues Gerät, gelöschter
+Browser-Speicher), kann keinen Rückschritt erkennen. Ein Server, der Änderungen ganz
+zurückhält oder Einträge weglässt, fällt so ebenfalls nicht auf.
 
 - `VaultsManager` (`vault/manager.ts`) hält alle Tresore. `VaultStore` (`vault/store.ts`) hält die
   Einträge eines Tresors und setzt das [Sync-Protokoll](/melonapp/server/sync/) um.

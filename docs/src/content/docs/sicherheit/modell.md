@@ -54,8 +54,8 @@ Schlüsselversion). Folgendes kann er aber:
 
 | Möglichkeit | Folge | Gegenmittel |
 |---|---|---|
-| **Ältere Version zurückspielen** (gleicher Eintrag, gleiche Schlüsselversion) | ein altes Passwort taucht wieder auf | Die Apps merken sich keine Revisionen dauerhaft. Erkennung von Rollbacks steht in den [offenen Punkten](/melonapp/sicherheit/offene-punkte/). |
-| **Änderungen zurückhalten** oder Einträge ausblenden | Geräte sehen unterschiedliche Stände | wie oben |
+| **Ältere Version zurückspielen** (gleicher Eintrag, gleiche Schlüsselversion) | ein altes Passwort taucht wieder auf | **Erkannt**, sobald das Gerät eine neuere Version kannte: verschlüsselter Versionszähler `seq` je Eintrag, die App warnt und zeigt den neueren Stand ([Rollback-Erkennung](/melonapp/clients/web/#rollback-erkennung)). Neue Geräte erkennen es nicht. |
+| **Änderungen zurückhalten** oder Einträge ausblenden | Geräte sehen unterschiedliche Stände | nicht erkennbar, steht in den [offenen Punkten](/melonapp/sicherheit/offene-punkte/) |
 | **Manipulierte Web-App ausliefern** (die Web-App kommt vom selben Server) | beim nächsten Entsperren im Browser liest sie das Master-Passwort mit | Browser-Erweiterung und künftige Desktop-/iPhone-App laden ihren Code **nicht** vom Server. Für sensible Nutzung diese bevorzugen. |
 | Öffentliche Schlüssel austauschen | Tresor-Schlüssel abfangen | Sicherheitscode vergleichen (unten) |
 
