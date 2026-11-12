@@ -5,8 +5,8 @@ description: Prüfumfang, behobene Befunde und offene Abnahmen der nativen Clien
 
 Stand: 11. November 2026. Diese lokale Implementierungsprüfung ersetzt keine unabhängige
 Abnahme. Der Claude-Code-Befehl `/security-review` ist in dieser Codex-Sitzung nicht als
-Werkzeug verfügbar und wurde **nicht ausgeführt**; dieser separate Lauf bleibt vor dem
-Merge offen.
+Werkzeug verfügbar und wurde **nicht ausgeführt**. Der Branch ist inzwischen gemergt;
+der Review wird in [#29](https://github.com/MelonigeMelone/melonapp/issues/29) nachgeholt.
 
 ## Geprüfte Grenzen und behobene Befunde
 
@@ -59,17 +59,17 @@ nicht abgenommen.
 ## Offene Abnahmen
 
 - Echter Touch-ID-/Face-ID-Erfolg, Abbruch, neue biometrische Registrierung und gesperrtes
-  Gerät: auf Hardware prüfen; Simulator und Rust-Tests beweisen dies nicht.
+  Gerät: auf Hardware prüfen; Simulator und Rust-Tests beweisen dies nicht ([#25](https://github.com/MelonigeMelone/melonapp/issues/25), [#26](https://github.com/MelonigeMelone/melonapp/issues/26)).
 - macOS benötigt für die Data-Protection-Keychain-Entitlements ein passendes
   Provisioning-Profil. Ein signiertes, aber unprovisioniertes Bundle kann vom System
-  beendet werden, obwohl `codesign --verify` erfolgreich ist.
+  beendet werden, obwohl `codesign --verify` erfolgreich ist ([#24](https://github.com/MelonigeMelone/melonapp/issues/24)).
 - iOS-Signierung wurde versucht und scheiterte an der gespeicherten Xcode-Anmeldung
-  sowie fehlender App-Group-Berechtigung im vorhandenen Profil.
+  sowie fehlender App-Group-Berechtigung im vorhandenen Profil ([#23](https://github.com/MelonigeMelone/melonapp/issues/23)).
 - AutoFill und Passkeys sind gebaut, aber nicht gegen Safari/eine echte Relying Party
-  vollständig auf Hardware abgenommen. Passkeys haben noch keinen Server-Sync,
-  Export oder Wiederherstellungsablauf.
+  vollständig auf Hardware abgenommen ([#27](https://github.com/MelonigeMelone/melonapp/issues/27), [#28](https://github.com/MelonigeMelone/melonapp/issues/28)). Passkeys haben
+  noch keinen Server-Sync, Export oder Wiederherstellungsablauf ([#32](https://github.com/MelonigeMelone/melonapp/issues/32)).
 - Passwort-Snapshots sind bewusst angelegte Offline-Kopien: Widerruf wirkt dort nicht
   sofort. Die 24-Stunden-Frist hängt von der Gerätezeit ab und ist kein kryptografischer
   Schutz vor Zurücksetzen der Systemzeit oder Wiedereinspielen alter gültiger Dateien.
 - Native Zwischenablage und globale Hotkey-Aktivierung benötigen noch interaktive
-  Abnahme; die Umgebung erlaubt keine macOS-Accessibility-Automatisierung.
+  Abnahme; die Umgebung erlaubt keine macOS-Accessibility-Automatisierung ([#25](https://github.com/MelonigeMelone/melonapp/issues/25)).
