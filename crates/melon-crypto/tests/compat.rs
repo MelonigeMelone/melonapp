@@ -14,6 +14,8 @@ const RECOVERY: &str = "XHN3-KUNR-QP3B-4ZGO-PM2J-JKW7-Q5BR-TA7A-U2B3-62QH-VZLT-F
 const RECOVERY_AUTH: &str = "OCfCYrwRByX9NFhz/cEz+RiKbuSbzCKah2kB+cONPjU=";
 const RECOVERY_WRAPPED: &str = "1.LgTH2mA8FAkyMc-SUtfjewq1Oiuy_a884wHR-qdrJUJvMLB-UVifC4HuXmTD3x3owRUxkSVrkaBm42ickLBRt-AeFtHM8HV2";
 const PRIVATE_SEALED: &str = "1.le7Bu4FdIov-f-gIjgG54vWZGAcWp4tgm_6neURlCJpzZVYx8EeijJ_zbzUzKCICCGXaPT_4G_g-_wbsNIoBwW2IBAUIDhmz";
+const PRIVATE_DATA: &str =
+    "1.0vOJva6fx5IQsGhDMTFu6AifPpIIGup1KOyZo6IMgkrhFcKRUH4E9ZtUjjoeXfLZ-6HOAmZYkCSBXS4KxwhbcA";
 const PUBLIC: &str = "ZIMEglqPgGRIi0sAvM+5AeX+inAU6wv4p0hCOfAQjR4=";
 const FINGERPRINT: &str = "99914 21060 17345 32630 54970 30777";
 const SEALED_VAULT_KEY: &str = "h1.LK_MzopzpzCIQGJ9fXY4pWjtDypDKFeZcQR3dMYTfzqSwWYOQdCf0j_PUAeOdxMD45jJ2PPFijVSoIKD60ejhpRWtq8S4bT26vXWWTBgcNQ";
@@ -116,4 +118,13 @@ fn stored_passkey_signs_identically_and_verifies_with_the_registered_key() {
     message.extend_from_slice(&[1u8; 32]);
     let signature = Signature::from_der(&a.signature).unwrap();
     assert!(verifying.verify(&message, &signature).is_ok());
+}
+
+#[test]
+fn private_data_from_older_versions_still_opens() {
+    let key = PrivateDataKey::derive(&account_key());
+    let plain = key
+        .open("compat-user", "verified-codes", &enc(PRIVATE_DATA))
+        .unwrap();
+    assert_eq!(&*plain, br#"{"counter":1,"marks":{}}"#);
 }

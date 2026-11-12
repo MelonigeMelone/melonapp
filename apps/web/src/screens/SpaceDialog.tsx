@@ -169,6 +169,7 @@ export function SpaceDialog({
 
   const owners = vault.members.filter((m) => m.role === 'owner' && m.has_key).length;
   const codeState = codeFor ? verifyState(verified, codeFor.userId, codeFor.publicKey) : 'unverified';
+  const confirmState = confirmUser ? verifyState(verified, confirmUser.user_id, confirmUser.public_key) : 'unverified';
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="space-dialog-title">
@@ -352,6 +353,12 @@ export function SpaceDialog({
             ob ihr Code genauso aussieht, am besten am Telefon oder persönlich.
           </Typography>
           {confirmUser && <SecurityCode code={confirmUser.fingerprint} />}
+          {confirmState === 'changed' && (
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              Das ist nicht mehr der Code, den du für {confirmUser?.email} geprüft hast. Vergleiche ihn neu, bevor du hinzufügst. Hat
+              die Person ihren Schlüssel nicht gewechselt, füge sie nicht hinzu.
+            </Alert>
+          )}
           <Typography color="text.secondary" variant="body2">
             Stimmt er nicht, könnte jemand den Schlüssel auf dem Server ausgetauscht haben. Dann nicht hinzufügen.
           </Typography>
@@ -372,7 +379,7 @@ export function SpaceDialog({
               })
             }
           >
-            Code stimmt, hinzufügen
+            {confirmState === 'changed' ? 'Neuer Code stimmt, hinzufügen' : 'Code stimmt, hinzufügen'}
           </Button>
         </DialogActions>
       </Dialog>

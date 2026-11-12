@@ -180,6 +180,8 @@ const messages: Record<string, string> = {
   vault_key_pending: 'Ein Besitzer muss dir den Zugang noch freigeben. Das passiert automatisch, sobald er die App öffnet.',
   key_changed:
     'Der Sicherheitscode einer Person hat sich geändert, seit du ihn geprüft hast. Der Schlüssel wird ihr erst wieder gegeben, wenn du den Code im Bereich neu prüfst (Fingerabdruck-Knopf).',
+  verifications_unavailable:
+    'Deine geprüften Sicherheitscodes konnten nicht geladen werden oder sind älter als zuletzt gesehen. Bis das geklärt ist, gibt die App keine Bereichs-Schlüssel weiter. Lade neu, und wenn es bleibt, prüfe den Server.',
   vault_not_found: 'Diesen Bereich gibt es nicht mehr, oder du hast keinen Zugriff mehr.',
 };
 

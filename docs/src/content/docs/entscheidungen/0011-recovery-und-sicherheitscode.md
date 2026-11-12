@@ -50,14 +50,22 @@ Telefon vorlesen.
 - Jedes Mitglied hat im Tresor-Dialog einen Code-Knopf. Den eigenen Code zeigt „Konto“.
 - **Geprüfte Codes werden gemerkt** ([#42](https://github.com/MelonigeMelone/melonapp/issues/42)):
   „Code stimmt überein“ bzw. „Code stimmt, hinzufügen“ speichert pro Person den geprüften
-  öffentlichen Schlüssel im verschlüsselten `encrypted_meta` des **persönlichen** Tresors
-  (`verified: { <userId>: { publicKey, at } }`). Damit ist die Markierung auf allen eigenen
-  Geräten da, und der Server kann sie weder lesen noch fälschen. Im Tresor-Dialog steht dann
-  „Code geprüft“.
+  öffentlichen Schlüssel. Die Liste `{ counter, marks: { <userId>: { publicKey, at } } }` wird
+  mit dem **Private-Data-Key** verschlüsselt (aus dem Konto-Schlüssel abgeleitet, nur die
+  Person selbst hat ihn) und liegt als Feld `verified` im `encrypted_meta` des persönlichen
+  Tresors. So ist sie auf allen eigenen Geräten da, und weder der Server noch jemand mit Zugriff
+  auf einen anderen Tresor kann sie lesen oder fälschen. Im Tresor-Dialog steht „Code geprüft“.
 - **Gebunden an den Schlüssel:** Liefert der Server später einen anderen öffentlichen Schlüssel
   für diese Person, zeigt die App „Code geändert“ und gibt ihr keinen Tresor-Schlüssel mehr
   (Freigabe nach Einladung, Hinzufügen, Schlüsselwechsel brechen mit `key_changed` ab), bis man
   den neuen Code geprüft hat. Ungeprüfte Personen verhalten sich wie bisher.
+- **Im Zweifel nichts weitergeben:** Die Liste wird bei jedem Sync geladen, **bevor** Schlüssel
+  verteilt werden. Als persönlich zählt nur ein Tresor, in dem man allein Besitzer ist, und nur
+  wenn es genau einen solchen gibt. Fehlt die Liste, obwohl dieses Gerät schon eine gesehen hat,
+  lässt sie sich nicht öffnen, oder ist ihr `counter` kleiner als der höchste auf diesem Gerät
+  gesehene (zurückgespielt), verteilt die App gar keine Tresor-Schlüssel
+  (`verifications_unavailable`). Den höchsten Zähler merkt sich jedes Gerät wie bei der
+  [Rollback-Erkennung](/melonapp/clients/web/#rollback-erkennung).
 
 ## Alternativen
 
@@ -72,9 +80,12 @@ Telefon vorlesen.
 ## Folgen
 
 - Gleichzeitiges Markieren auf zwei Geräten: Wer zuletzt speichert, gewinnt, eine Markierung kann
-  dabei verloren gehen. Dann fehlt nur das „geprüft“, sicherer Zustand.
-- Spielt der Server ein altes `encrypted_meta` zurück, fehlen höchstens neuere Markierungen. Eine
-  Markierung für einen fremden Schlüssel kann er nicht erzeugen.
+  dabei verloren gehen. Dann fehlt nur das „geprüft“.
+- Ein **neues Gerät** kennt noch keinen Zähler. Unterschlägt der Server dort die Liste ganz, sieht
+  es alle als ungeprüft. Das gleiche Restrisiko hat die Rollback-Erkennung, vollständig lösbar nur
+  mit einem signierten Gesamtstand.
+- Der Private-Data-Key hängt am Konto-Schlüssel, nicht am Schlüsselpaar. Master-Passwort ändern
+  und Recovery behalten die Liste.
 
 - Wer Recovery-Key **und** E-Mail hat, kann das Konto übernehmen. Deshalb gehört das Kit offline
   aufbewahrt, und die Wiederherstellung ist wie der Login gegen Durchprobieren gesperrt.

@@ -1,8 +1,8 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
-    EncString, KdfParams, KeyPair, PasswordOptions, PublicKey, RecoveryKey, SealedKey,
-    SymmetricKey, VaultKeyContext, derive_master_key, item_aad, unwrap_account_key, vault_meta_aad,
-    wrap_account_key,
+    EncString, KdfParams, KeyPair, PasswordOptions, PrivateDataKey, PublicKey, RecoveryKey,
+    SealedKey, SymmetricKey, VaultKeyContext, derive_master_key, item_aad, unwrap_account_key,
+    vault_meta_aad, wrap_account_key,
 };
 use wasm_bindgen::prelude::*;
 
@@ -73,6 +73,28 @@ pub struct AccountKey(SymmetricKey);
 impl AccountKey {
     pub fn generate() -> AccountKey {
         AccountKey(SymmetricKey::generate())
+    }
+}
+
+#[wasm_bindgen]
+pub struct PrivateData(PrivateDataKey);
+
+#[wasm_bindgen]
+impl PrivateData {
+    pub fn derive(account_key: &AccountKey) -> PrivateData {
+        PrivateData(PrivateDataKey::derive(&account_key.0))
+    }
+
+    pub fn seal(&self, user_id: &str, purpose: &str, plaintext: &str) -> String {
+        self.0
+            .seal(user_id, purpose, plaintext.as_bytes())
+            .to_string()
+    }
+
+    pub fn open(&self, user_id: &str, purpose: &str, data: &str) -> Result<String, JsError> {
+        let enc = EncString::parse(data).map_err(js_err)?;
+        let plain = self.0.open(user_id, purpose, &enc).map_err(js_err)?;
+        String::from_utf8(plain.to_vec()).map_err(js_err)
     }
 }
 

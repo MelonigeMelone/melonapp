@@ -141,6 +141,8 @@ ohne dass ein Test es merkt.
 | Recovery-Wrap-Key | HKDF-SHA256(Salt `melon/v2/recovery`, Info `melon/v2/recovery-wrap`) |
 | Konto-Schlüssel per Recovery | XChaCha20-Poly1305, AAD `melon/v2/account-key-recovery` |
 | Sicherheitscode | SHA-256(`melon/v2/fingerprint\0` ‖ öffentlicher Schlüssel), Byte 0–29 als 6 × 5 Ziffern |
+| Private-Data-Key (`private.rs`) | HKDF-SHA256(Salt `melon/v2/private-data`, IKM Konto-Schlüssel, Info `key`) |
+| Private Daten (z. B. geprüfte Codes) | XChaCha20-Poly1305 mit dem Private-Data-Key, AAD `melon/v2/private\0` ‖ User-ID ‖ `\0` ‖ Zweck (`verified-codes`) |
 
 Die eigene AAD verhindert, dass die Recovery-Kopie des Konto-Schlüssels mit der
 Passwort-Kopie verwechselt oder vertauscht wird. Begründung:

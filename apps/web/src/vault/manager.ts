@@ -4,7 +4,7 @@ import { newId, type Item, type VaultItem } from './item';
 import { storedLog, type SeenLog } from './seen';
 import { isConflict, VaultStore } from './store';
 import { expired, fromTrash, isTrashed, toTrash } from './trash';
-import { metaName, parseMeta, verifiedOf, verifyState, withVerified, type Meta, type Verified } from './verified';
+import { changeMarks, emptyMarks, MARKS_PURPOSE, metaName, parseMarks, parseMeta, verifyState, type Marks, type Meta, type Verified } from './verified';
 
 type Call = <M extends keyof CryptoMethods>(
   method: M,
@@ -46,12 +46,14 @@ interface Entry {
 }
 
 const PERSONAL_NAME = 'Persönlich';
+const MARKS_SEEN = '#verified';
 
 export class VaultsManager {
   private vaults = new Map<string, Entry>();
   private listeners = new Set<() => void>();
   private snapshot: Snapshot = { vaults: [], items: [], trash: [], verified: {} };
   private running: Promise<void> | null = null;
+  private marks: Marks | null = null;
 
   constructor(
     readonly userId: string,
@@ -92,8 +94,7 @@ export class VaultsManager {
     const trash = all
       .filter((v) => isTrashed(v.item))
       .sort((a, b) => (b.item.trashedAt ?? '').localeCompare(a.item.trashedAt ?? ''));
-    const personal = this.personalEntry();
-    this.snapshot = { vaults: views, items, trash, verified: personal ? verifiedOf(personal.meta) : {} };
+    this.snapshot = { vaults: views, items, trash, verified: this.marks?.marks ?? {} };
     for (const l of this.listeners) l();
   };
 
@@ -141,12 +142,14 @@ export class VaultsManager {
       entry.store ??= this.makeStore(remote.id);
       await entry.store.sync();
       if (remote.role !== 'viewer') await this.purge(entry.store);
-      if (remote.role === 'owner' && !remote.personal) {
-        try {
-          await this.ownerDuties(entry);
-        } catch (e) {
-          failure ??= e;
-        }
+    }
+    this.marks = await this.loadMarks();
+    for (const entry of this.vaults.values()) {
+      if (!entry.store || entry.remote.role !== 'owner' || entry.remote.personal) continue;
+      try {
+        await this.ownerDuties(entry);
+      } catch (e) {
+        failure ??= e;
       }
     }
     this.emit();
@@ -301,21 +304,47 @@ export class VaultsManager {
   }
 
   private requireTrusted(userId: string, publicKey: string) {
-    const personal = this.personalEntry();
-    if (personal && verifyState(verifiedOf(personal.meta), userId, publicKey) === 'changed') {
-      throw new ApiError(409, 'key_changed');
-    }
+    if (!this.marks) throw new ApiError(409, 'verifications_unavailable');
+    if (verifyState(this.marks.marks, userId, publicKey) === 'changed') throw new ApiError(409, 'key_changed');
   }
 
-  private personalEntry(): Entry | undefined {
-    return [...this.vaults.values()].find((e) => e.remote.personal && e.store !== null);
+  private personalEntry(): Entry | null {
+    const candidates = [...this.vaults.values()].filter(
+      (e) =>
+        e.remote.personal &&
+        e.remote.role === 'owner' &&
+        e.store !== null &&
+        e.remote.members.length === 1 &&
+        e.remote.members[0]?.user_id === this.userId,
+    );
+    return candidates.length === 1 ? (candidates[0] ?? null) : null;
+  }
+
+  private async loadMarks(): Promise<Marks | null> {
+    const personal = this.personalEntry();
+    if (!personal) return null;
+    const sealed = personal.meta.verified;
+    const highest = this.seen.get(MARKS_SEEN);
+    if (sealed === undefined) return highest === 0 ? emptyMarks() : null;
+    if (typeof sealed !== 'string') return null;
+    let marks: Marks | null;
+    try {
+      marks = parseMarks(await this.crypto('openPrivate', { userId: this.userId, purpose: MARKS_PURPOSE, data: sealed }));
+    } catch {
+      return null;
+    }
+    if (!marks || marks.counter < highest) return null;
+    this.seen.raise(MARKS_SEEN, marks.counter);
+    return marks;
   }
 
   async setVerified(userId: string, publicKey: string | null) {
+    await this.sync().catch(() => undefined);
     const personal = this.personalEntry();
-    if (!personal) throw new ApiError(404, 'vault_not_found');
-    const verification = publicKey ? { publicKey, at: this.now().toISOString() } : null;
-    await this.writeMeta(personal.remote.id, (meta) => withVerified(meta, userId, verification));
+    if (!personal || !this.marks) throw new ApiError(409, 'verifications_unavailable');
+    const next = changeMarks(this.marks, userId, publicKey ? { publicKey, at: this.now().toISOString() } : null);
+    const sealed = await this.crypto('sealPrivate', { userId: this.userId, purpose: MARKS_PURPOSE, plaintext: JSON.stringify(next) });
+    await this.writeMeta(personal.remote.id, (meta) => ({ ...meta, verified: sealed }));
   }
 
   async deleteVault(vaultId: string) {

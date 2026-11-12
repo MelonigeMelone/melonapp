@@ -6,6 +6,7 @@ import init, {
   generateSalt,
   Identity,
   openExport,
+  PrivateData,
   Recovery,
   sealExport,
   sealVaultKey,
@@ -16,6 +17,7 @@ import type { CryptoMethods, CryptoRequest, CryptoResponse } from './protocol';
 
 let derived: DerivedKeys | null = null;
 let identity: Identity | null = null;
+let privateData: PrivateData | null = null;
 let pendingRecovery: Recovery | null = null;
 const vaults = new Map<string, { key: VaultKey; version: number }>();
 const ready = init();
@@ -30,6 +32,15 @@ function requireDerived(): DerivedKeys {
 
 function requireIdentity(): Identity {
   return identity ?? fail('locked');
+}
+
+function requirePrivateData(): PrivateData {
+  return privateData ?? fail('locked');
+}
+
+function keepPrivateData(account: AccountKey) {
+  privateData?.free();
+  privateData = PrivateData.derive(account);
 }
 
 function requireVault(vaultId: string) {
@@ -82,6 +93,7 @@ const handlers: CryptoMethods = {
       };
       identity?.free();
       identity = fresh;
+      keepPrivateData(account);
       setVault(personalVaultId, vaultKey, 1);
       return result;
     } finally {
@@ -94,6 +106,7 @@ const handlers: CryptoMethods = {
     try {
       identity?.free();
       identity = Identity.open(account, encryptedPrivateKey);
+      keepPrivateData(account);
       return identity.publicKey;
     } finally {
       account.free();
@@ -205,6 +218,12 @@ const handlers: CryptoMethods = {
   fingerprint({ publicKey }) {
     return fingerprint(publicKey);
   },
+  sealPrivate({ userId, purpose, plaintext }) {
+    return requirePrivateData().seal(userId, purpose, plaintext);
+  },
+  openPrivate({ userId, purpose, data }) {
+    return requirePrivateData().open(userId, purpose, data);
+  },
   sealExport(r) {
     if (r.exportPassword.normalize('NFKC') === r.password.normalize('NFKC')) fail('export_password_is_master_password');
     return withAccountKey(r, () => sealExport(r.exportPassword, r.plaintext));
@@ -227,6 +246,8 @@ const handlers: CryptoMethods = {
     dropDerived();
     identity?.free();
     identity = null;
+    privateData?.free();
+    privateData = null;
     for (const v of vaults.values()) v.key.free();
     vaults.clear();
   },

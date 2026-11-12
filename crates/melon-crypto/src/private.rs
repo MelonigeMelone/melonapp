@@ -1,0 +1,67 @@
+use hkdf::Hkdf;
+use sha2::Sha256;
+use zeroize::Zeroizing;
+
+use crate::{CryptoError, EncString, SymmetricKey};
+
+const SALT: &[u8] = b"melon/v2/private-data";
+const AAD_PREFIX: &[u8] = b"melon/v2/private\0";
+
+pub struct PrivateDataKey(SymmetricKey);
+
+fn aad(user_id: &str, purpose: &str) -> Vec<u8> {
+    let mut aad = AAD_PREFIX.to_vec();
+    aad.extend_from_slice(user_id.as_bytes());
+    aad.push(0);
+    aad.extend_from_slice(purpose.as_bytes());
+    aad
+}
+
+impl PrivateDataKey {
+    pub fn derive(account_key: &SymmetricKey) -> Self {
+        let hk = Hkdf::<Sha256>::new(Some(SALT), account_key.as_bytes());
+        let mut out = Zeroizing::new([0u8; 32]);
+        hk.expand(b"key", out.as_mut())
+            .expect("32 bytes is a valid HKDF output length");
+        Self(SymmetricKey::from_bytes(*out))
+    }
+
+    pub fn seal(&self, user_id: &str, purpose: &str, plaintext: &[u8]) -> EncString {
+        self.0.encrypt(plaintext, &aad(user_id, purpose))
+    }
+
+    pub fn open(
+        &self,
+        user_id: &str,
+        purpose: &str,
+        sealed: &EncString,
+    ) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
+        self.0.decrypt(sealed, &aad(user_id, purpose))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key(byte: u8) -> PrivateDataKey {
+        PrivateDataKey::derive(&SymmetricKey::from_bytes([byte; 32]))
+    }
+
+    #[test]
+    fn only_the_same_account_user_and_purpose_open_it() {
+        let sealed = key(1).seal("me", "verified", b"{}");
+        assert_eq!(&*key(1).open("me", "verified", &sealed).unwrap(), b"{}");
+        assert!(key(2).open("me", "verified", &sealed).is_err());
+        assert!(key(1).open("other", "verified", &sealed).is_err());
+        assert!(key(1).open("me", "other", &sealed).is_err());
+        assert!(key(1).open("mev", "erified", &sealed).is_err());
+    }
+
+    #[test]
+    fn differs_from_the_account_key_itself() {
+        let account = SymmetricKey::from_bytes([7; 32]);
+        let sealed = PrivateDataKey::derive(&account).seal("me", "verified", b"x");
+        assert!(account.decrypt(&sealed, &aad("me", "verified")).is_err());
+    }
+}

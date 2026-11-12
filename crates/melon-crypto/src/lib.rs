@@ -4,6 +4,7 @@ mod export;
 mod generator;
 mod kdf;
 mod passkey;
+mod private;
 mod recovery;
 mod rng;
 mod sharing;
@@ -20,3 +21,4 @@ pub use sharing::{
 };
 
 pub use passkey::{PasskeyAssertion, PasskeyRegistration, assert_passkey, create_passkey};
+pub use private::PrivateDataKey;
