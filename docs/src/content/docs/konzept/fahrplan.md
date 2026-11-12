@@ -17,7 +17,7 @@ sidebar:
 | **M6 – Browser-Erweiterung** | Chromium (Chrome, Edge, Brave, Opera GX) und Firefox: Ausfüllen per Klick, Speichern, Generator, Auto-Lock ([Details](/melonapp/clients/erweiterung/)) | ✅ fertig |
 | [M7 – iOS](https://github.com/MelonigeMelone/melonapp/milestone/2) | Tauri-iOS-App, Face-ID-Keychain, Credential Provider Extension und gerätelokale Passkeys; Safari-Erweiterung bleibt offen | Simulator-Build und Start geprüft; Geräte-/AutoFill-Abnahme offen |
 | **M8a – 2FA und Sicherheits-Check** | 2FA-Codes in Web-App und Erweiterung (auch per QR-Bild), Stärke-Anzeige, schwache und mehrfach verwendete Passwörter, Datenleck-Abgleich auf Knopfdruck ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)) | ✅ fertig |
-| [M8 – Mehr](https://github.com/MelonigeMelone/melonapp/milestone/3) | Personengruppen, eigene Symbole, Anhänge, ~~Export~~ (fertig) | geplant |
+| [M8 – Mehr](https://github.com/MelonigeMelone/melonapp/milestone/3) | Personengruppen, eigene Symbole, Anhänge, ~~Export~~, ~~Papierkorb~~ (fertig) | geplant |
 | [M9 – Android](https://github.com/MelonigeMelone/melonapp/milestone/4) | Tauri-Android + Autofill Service | später |
 
 Was in einem Meilenstein noch fehlt, steht in seinem
