@@ -195,6 +195,21 @@ impl Session {
             .to_string())
     }
 
+    pub fn biometric_configured(&mut self, scope: &str, snapshot: Option<&str>) -> Result<bool> {
+        self.expire();
+        let account = self.require_account()?;
+        let Some(snapshot) = snapshot else {
+            return Ok(false);
+        };
+        if snapshot.len() > 48 * 1024 * 1024 {
+            return Err("cache_too_large");
+        }
+        let Ok(ciphertext) = parse(snapshot) else {
+            return Ok(false);
+        };
+        Ok(account.decrypt(&ciphertext, &biometric_aad(scope)).is_ok())
+    }
+
     pub fn biometric_restore(&mut self, key: &[u8], scope: &str, snapshot: &str) -> Result<Value> {
         self.lock();
         if !self.active {
@@ -520,6 +535,70 @@ mod tests {
             )
             .unwrap();
         (session, created)
+    }
+
+    #[test]
+    fn biometric_status_is_account_and_context_bound_and_requires_an_unlocked_session() {
+        let (mut session, _) = account();
+        let snapshot = session
+            .biometric_snapshot("server/biometric", json!({"token":"secret"}))
+            .unwrap();
+        assert_eq!(
+            session.biometric_configured("server/biometric", None),
+            Ok(false)
+        );
+        assert_eq!(
+            session.biometric_configured("server/biometric", Some(&snapshot)),
+            Ok(true)
+        );
+        assert_eq!(
+            session.biometric_configured("other/biometric", Some(&snapshot)),
+            Ok(false)
+        );
+        let (mut other, _) = account();
+        assert_eq!(
+            other.biometric_configured("server/biometric", Some(&snapshot)),
+            Ok(false)
+        );
+        assert_eq!(
+            session.biometric_configured("server/biometric", Some(&snapshot[..snapshot.len() - 1])),
+            Ok(false)
+        );
+        let cache = session.cache_seal("server/biometric", b"secret").unwrap();
+        assert_eq!(
+            session.biometric_configured("server/biometric", Some(&cache)),
+            Ok(false)
+        );
+        session.lock();
+        assert_eq!(
+            session.biometric_configured("server/biometric", Some(&snapshot)),
+            Err("locked")
+        );
+        assert_eq!(
+            session.biometric_configured("server/biometric", None),
+            Err("locked")
+        );
+        assert!(session.is_locked());
+    }
+
+    #[test]
+    fn biometric_status_does_not_extend_the_native_lock_timeout() {
+        let (mut session, _) = account();
+        let snapshot = session
+            .biometric_snapshot("server/biometric", json!({}))
+            .unwrap();
+        let activity = session.last_activity;
+        assert_eq!(
+            session.biometric_configured("server/biometric", Some(&snapshot)),
+            Ok(true)
+        );
+        assert_eq!(session.last_activity, activity);
+        session.last_activity = Instant::now() - Duration::from_secs(301);
+        assert_eq!(
+            session.biometric_configured("server/biometric", Some(&snapshot)),
+            Err("locked")
+        );
+        assert!(session.is_locked());
     }
 
     #[test]

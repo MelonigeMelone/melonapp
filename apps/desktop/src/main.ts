@@ -27,6 +27,7 @@ const platform = {
     const { vaults, ...metadata } = session;
     await invoke('biometric_enable', { metadata });
   },
+  async biometricStatus() { return invoke<boolean>('biometric_status'); },
   async unlockBiometric() {
     const s = await invoke<Omit<Session, 'vaults'>>('biometric_unlock');
     return open(s.email, s.userId, s.token, s);

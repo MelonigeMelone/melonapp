@@ -30,6 +30,7 @@ pub fn run() {
             platform::set_server,
             platform::api_request,
             platform::biometric_enable,
+            platform::biometric_status,
             platform::biometric_unlock,
             platform::biometric_keeps_token,
             platform::biometric_disable,

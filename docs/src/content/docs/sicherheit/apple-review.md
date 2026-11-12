@@ -78,3 +78,17 @@ nicht abgenommen.
   Schutz vor Zurücksetzen der Systemzeit oder Wiedereinspielen alter gültiger Dateien.
 - Native Zwischenablage und globale Hotkey-Aktivierung benötigen noch interaktive
   Abnahme; die Umgebung erlaubt keine macOS-Accessibility-Automatisierung ([#25](https://github.com/MelonigeMelone/melonapp/issues/25)).
+
+## Statusanzeige der Biometrie-Einstellungen
+
+Stand dieser Ergänzung: 12. November 2026. Die Ergänzung zu #80 prüft vorhandene Einrichtungsdaten nativ und kontogebunden, ohne
+Keychain-Lesezugriff oder Entsperren. Manuell geprüfte Grenzen: kein Schlüssel-/Token-Export,
+keine Verlängerung der Sperrfrist, Ablehnung eines zwischenzeitlichen Serverwechsels sowie gesperrter Sitzungen und keine Erfolgsanzeige
+allein aufgrund eines abgeschlossenen UI-Aufrufs. Manipulierte oder kontextfremde
+Snapshots werden nicht als eingerichtet angezeigt. Die Anzeige behauptet ausdrücklich
+keine aktuelle Hardware-, Keychain- oder Server-Verfügbarkeit.
+
+Die automatischen Angriffs- und UI-Tests stehen in `sicherheit/pruefungen.md`. Der separate
+vorgeschriebene `/security-review` für diese Ergänzung wurde in der aktuellen Codex-
+Umgebung nicht ausgeführt und bleibt vor dem Merge des zugehörigen PR erforderlich;
+der frühere Review für #29 deckt diese neue Änderung nicht ab.
