@@ -9,3 +9,17 @@ body {
 input, textarea {
   font-size: max(16px, 1em);
 }
+html .MuiAppBar-root {
+  top: env(safe-area-inset-top);
+}
+html .MuiAppBar-root::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: env(safe-area-inset-top);
+  background-color: inherit;
+  -webkit-backdrop-filter: inherit;
+  backdrop-filter: inherit;
+}
