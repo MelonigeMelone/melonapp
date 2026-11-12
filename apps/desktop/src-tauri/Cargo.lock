@@ -2263,6 +2263,8 @@ dependencies = [
 name = "melon-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "melon-crypto",
  "melon-native",
  "objc2-foundation",
  "reqwest 0.12.28",

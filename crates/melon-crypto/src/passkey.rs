@@ -98,6 +98,37 @@ pub fn create_passkey(
     })
 }
 
+pub fn open_passkey_key(
+    cache_key: &SymmetricKey,
+    rp: &str,
+    id: &[u8],
+    encrypted_key: &str,
+) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
+    if !valid_rp(rp) || id.len() != 32 {
+        return Err(CryptoError::Malformed);
+    }
+    let private = Zeroizing::new(
+        cache_key
+            .decrypt(&EncString::parse(encrypted_key)?, &aad(rp, id))?
+            .to_vec(),
+    );
+    SigningKey::from_slice(&private).map_err(|_| CryptoError::Malformed)?;
+    Ok(private)
+}
+
+pub fn seal_passkey_key(
+    cache_key: &SymmetricKey,
+    rp: &str,
+    id: &[u8],
+    private: &[u8],
+) -> Result<String, CryptoError> {
+    if !valid_rp(rp) || id.len() != 32 || private.len() != 32 {
+        return Err(CryptoError::Malformed);
+    }
+    SigningKey::from_slice(private).map_err(|_| CryptoError::Malformed)?;
+    Ok(cache_key.encrypt(private, &aad(rp, id)).to_string())
+}
+
 pub fn assert_passkey(
     cache_key: &SymmetricKey,
     rp: &str,
@@ -124,6 +155,77 @@ pub fn assert_passkey(
 mod tests {
     use super::*;
     use p256::ecdsa::{VerifyingKey, signature::Verifier};
+
+    #[test]
+    fn exported_key_reseals_and_signs_like_the_original() {
+        let device = SymmetricKey::generate();
+        let r = create_passkey(&device, "example.com").unwrap();
+        let private =
+            open_passkey_key(&device, "example.com", &r.credential_id, &r.encrypted_key).unwrap();
+        assert_eq!(private.len(), 32);
+        let other = SymmetricKey::generate();
+        let resealed = seal_passkey_key(&other, "example.com", &r.credential_id, &private).unwrap();
+        let original = assert_passkey(
+            &device,
+            "example.com",
+            &r.credential_id,
+            &r.encrypted_key,
+            &[7; 32],
+        )
+        .unwrap();
+        let moved =
+            assert_passkey(&other, "example.com", &r.credential_id, &resealed, &[7; 32]).unwrap();
+        assert_eq!(original.authenticator_data, moved.authenticator_data);
+        assert_eq!(original.signature, moved.signature);
+    }
+
+    #[test]
+    fn export_rejects_wrong_key_rp_id_and_tampering() {
+        let key = SymmetricKey::generate();
+        let r = create_passkey(&key, "example.com").unwrap();
+        let open = |k: &SymmetricKey, rp: &str, id: &[u8], enc: &str| {
+            open_passkey_key(k, rp, id, enc).is_err()
+        };
+        assert!(open(
+            &SymmetricKey::generate(),
+            "example.com",
+            &r.credential_id,
+            &r.encrypted_key
+        ));
+        assert!(open(
+            &key,
+            "evil.example.com",
+            &r.credential_id,
+            &r.encrypted_key
+        ));
+        assert!(open(&key, "example.com", &[0; 32], &r.encrypted_key));
+        assert!(open(
+            &key,
+            "example.com",
+            &r.credential_id[..31],
+            &r.encrypted_key
+        ));
+        assert!(open(
+            &key,
+            "Example.com",
+            &r.credential_id,
+            &r.encrypted_key
+        ));
+        let mut tampered = r.encrypted_key.clone();
+        tampered.replace_range(tampered.len() - 2.., "AA");
+        assert!(open(&key, "example.com", &r.credential_id, &tampered));
+    }
+
+    #[test]
+    fn seal_rejects_invalid_scalars_rp_and_ids() {
+        let key = SymmetricKey::generate();
+        assert!(seal_passkey_key(&key, "example.com", &[1; 32], &[0; 32]).is_err());
+        assert!(seal_passkey_key(&key, "example.com", &[1; 32], &[0xFF; 32]).is_err());
+        assert!(seal_passkey_key(&key, "example.com", &[1; 32], &[1; 31]).is_err());
+        assert!(seal_passkey_key(&key, "example.com", &[1; 31], &[1; 32]).is_err());
+        assert!(seal_passkey_key(&key, "bad rp", &[1; 32], &[1; 32]).is_err());
+        assert!(seal_passkey_key(&key, "example.com", &[1; 32], &[1; 32]).is_ok());
+    }
 
     #[test]
     fn registration_and_assertion_verify_and_bind_challenge() {

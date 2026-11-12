@@ -135,7 +135,7 @@ export function ExportDialog({
                     <Stack sx={{ py: 0.75 }}>
                       <Typography sx={{ fontWeight: 700 }}>Unverschlüsselt (CSV)</Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Für den Umzug zu einem anderen Passwortmanager (Bitwarden-Format, das die meisten importieren).
+                        Für den Umzug zu einem anderen Passwortmanager (Bitwarden-Format, das die meisten importieren). Passkeys sind nicht enthalten.
                       </Typography>
                     </Stack>
                   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyItem, fieldValue, newId, type Item, type VaultItem } from '../../../vault/item';
+import { emptyItem, fieldValue, newId, passkeyItem, passkeyOf, type Item, type VaultItem } from '../../../vault/item';
 import { parseCsvExport } from '../import/formats';
 import { bitwardenCsv, fileName, melonPayload, parseMelonPayload } from './formats';
 
@@ -89,5 +89,17 @@ describe('CSV export', () => {
   it('marks unencrypted files in their name', () => {
     expect(fileName('csv', new Date('2026-11-12T10:00:00Z'))).toBe('melonapp-export-2026-11-12-UNVERSCHLUESSELT.csv');
     expect(fileName('melon', new Date('2026-11-12T10:00:00Z'))).toBe('melonapp-export-2026-11-12.melon.json');
+  });
+
+  it('keeps passkeys only in the encrypted export, never in CSV', () => {
+    const key = 'c2VjcmV0LXByaXZhdGUta2V5LW1hdGVyaWFsLTMyYg';
+    const passkey = passkeyItem({ rp: 'webauthn.io', userName: 'mia', credentialId: 'Y3JlZA', userHandle: 'aGFuZGxl', privateKey: key });
+    const csv = bitwardenCsv([vault(login()), vault(passkey)], names);
+    expect(csv).not.toContain(key);
+    expect(csv).not.toContain('webauthn.io');
+    expect(parseCsvExport(csv).items).toHaveLength(1);
+    const [back] = parseMelonPayload(melonPayload([vault(passkey)], names));
+    expect(back?.type).toBe('passkey');
+    expect(passkeyOf(back!)).toEqual(passkeyOf(passkey));
   });
 });

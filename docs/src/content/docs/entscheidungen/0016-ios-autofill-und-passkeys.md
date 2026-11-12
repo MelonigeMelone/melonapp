@@ -38,15 +38,13 @@ flag“ ab, nur BE reicht nicht (im Simulator mit iOS 26.1 geprüft). Relying Pa
 MelonApp-Passkeys dadurch für synchronisiert, obwohl sie es nicht sind. Ein Verlust des
 Geräts oder der App-Daten verliert sie unwiderruflich.
 
-Passkeys bleiben in dieser Ausbaustufe lokal auf diesem Gerät. Server-Sync, Export,
-Wiederherstellung und Verwaltungsoberfläche benötigen ein separates Datenmodell und
-sind nicht Bestandteil der ersten Extension. Die Registrierung muss deshalb vor
-Benutzung für wichtige Konten gegen echte Relying Parties geprüft werden.
+Passkeys waren in der ersten Ausbaustufe nur lokal auf dem Gerät. Seit
+[ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/) übernimmt die App sie in den
+verschlüsselten Tresor; damit gelten Sync, verschlüsselter Export und Wiederherstellung.
 
 Weil BS gesetzt ist, kann eine Relying Party annehmen, ein MelonApp-Passkey sei
-wiederherstellbar, und etwa das Passwort als Rückfall entfernen. Konten deshalb nie nur an
-einen MelonApp-Passkey binden, sondern immer Passwort oder zweiten Faktor behalten, bis
-Sync und Wiederherstellung (#32) umgesetzt sind.
+wiederherstellbar. Das stimmt, sobald die App den Passkey nach dem nächsten Entsperren in
+den Tresor übernommen hat; bis dahin liegt er nur auf dem Gerät.
 
 ## Alternativen
 

@@ -70,7 +70,7 @@ function row(v: VaultItem, folder: string): string[] {
 }
 
 export function bitwardenCsv(items: VaultItem[], vaultName: (id: string) => string): string {
-  const rows = [COLUMNS, ...items.map((v) => row(v, vaultName(v.vaultId)))];
+  const rows = [COLUMNS, ...items.filter((v) => v.item.type !== 'passkey').map((v) => row(v, vaultName(v.vaultId)))];
   return `${rows.map((r) => r.map((value, column) => cell(value, column)).join(',')).join('\r\n')}\r\n`;
 }
 
