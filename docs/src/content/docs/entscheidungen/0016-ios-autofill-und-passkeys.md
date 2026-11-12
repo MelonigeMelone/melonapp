@@ -39,7 +39,7 @@ MelonApp-Passkeys dadurch für synchronisiert, obwohl sie es nicht sind. Ein Ver
 Geräts oder der App-Daten verliert sie unwiderruflich.
 
 Passkeys waren in der ersten Ausbaustufe nur lokal auf dem Gerät. Seit
-[ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/) übernimmt die App sie in den
+[ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/) übernimmt die App sie in den
 verschlüsselten Tresor; damit gelten Sync, verschlüsselter Export und Wiederherstellung.
 
 Weil BS gesetzt ist, kann eine Relying Party annehmen, ein MelonApp-Passkey sei

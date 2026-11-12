@@ -130,7 +130,7 @@ Neue Passkeys landen zuerst als einzelne Datei im Briefkasten der App Group
 Konto schon aktiv, veröffentlicht die App gleich neu; dabei landen alle Passkeys aus dem
 Tresor als `{scope}.synced.enc` bei der Extension. Ein neues iPhone bekommt so nach Anmelden,
 Face ID einrichten und „Passwörter für iOS AutoFill aktualisieren“ alle Passkeys zurück
-([ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/)). Alte gerätelokale Passkeys
+([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)). Alte gerätelokale Passkeys
 aus `{scope}.passkeys.enc` werden dabei einmalig mit übernommen. Bei jedem entsperrten Aufruf
 ersetzt die Extension die Passkey-Vorschläge von iOS durch die aktuelle Liste.
 

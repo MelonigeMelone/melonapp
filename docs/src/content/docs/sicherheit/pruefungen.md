@@ -10,7 +10,7 @@ sidebar:
 | `cargo clippy -D warnings`, `cargo test` | jeder Push/PR | Code-Qualität und Sicherheits-Tests |
 | `cargo-deny` | jeder Push/PR + täglich | bekannte Schwachstellen (RustSec), Lizenzen, unbekannte Paketquellen |
 | CodeQL (`security-extended`) | jeder Push/PR + täglich | statische Code-Analyse für Rust und die Workflows. Testverzeichnisse (`crates/*/tests`, `apps/*/e2e`) sind ausgenommen (`.github/codeql/codeql-config.yml`), weil feste Testpasswörter und -Salts dort gewollt sind. |
-| gitleaks | jeder Push/PR + täglich | versehentlich committete Secrets |
+| gitleaks | jeder Push/PR + täglich | versehentlich committete Secrets. Geprüfte Fehlalarme stehen mit Fingerprint (Commit:Datei:Regel:Zeile) in `.gitleaksignore`; bisher nur ein erfundener Testwert in `export/formats.test.ts`. |
 | Fuzzing (`cargo-fuzz`, `fuzz/`) | täglich + manuell, je Ziel 2 Minuten | Abstürze und falsche Annahmen bei kaputten Eingaben. `formats`: `EncString`, `SealedKey`, Recovery-Key, öffentlicher Schlüssel (Parsen, Rundweg, Entschlüsseln mit falschem Schlüssel schlägt fehl). `passkey`: Passkey-Signatur mit beliebiger RP-ID, ID und Schlüssel. `native_session`: jede Methode der nativen Sitzung mit beliebigem JSON, Auflösen von Login-Nachweisen, Cache und biometrischem Zustand; Login-Schlüssel kommen nie im Klartext heraus. Funde landen als Artefakt `fuzz-<Ziel>`. |
 | GitHub Secret Scanning mit Push-Schutz | jeder Push | lehnt Pushes mit erkannten Secrets ab, bevor sie im Repo landen |
 | Dependabot-Alerts und -Sicherheitsupdates | laufend | Warnung und automatischer PR, sobald eine Abhängigkeit eine bekannte Schwachstelle hat |
@@ -73,6 +73,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Erweiterung im echten Chromium: kein Ausfüllen ohne Klick, nichts auf fremder Domain, Speichern landet verschlüsselt im Bereich, Sperren beendet Ausfüllen | CI-Job `e2e` (`apps/extension/e2e`) |
 | Zwei Personen im echten Browser: Einladen, automatische Freigabe, Entfernen mit Schlüsselwechsel, Zugriff danach weg | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
 | Datenbank enthält nach dem Browser-Test keinen Klartext, auch keine Tresor-Namen | CI-Job `e2e`, Schritt „no plaintext“ |
+| Backups verlassen den Server nur mit age verschlüsselt (ohne Empfänger wird nichts kopiert); falscher Schlüssel oder veränderte Datei lassen die Datenbank unberührt, der richtige stellt sie wieder her | CI-Job „Server scripts“, `deploy/test/backup-restore.sh` |
 
 ## Lokal ausführen
 

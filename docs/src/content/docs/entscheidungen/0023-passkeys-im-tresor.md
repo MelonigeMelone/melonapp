@@ -1,5 +1,5 @@
 ---
-title: "0022: Passkeys als verschlüsselte Tresor-Einträge"
+title: "0023: Passkeys als verschlüsselte Tresor-Einträge"
 description: Passkeys werden eigener Eintragstyp im Tresor, die iOS-Extension übergibt neue Passkeys über einen Briefkasten in der App Group.
 ---
 

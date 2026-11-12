@@ -4,22 +4,45 @@ cd "$(dirname "$(readlink -f "$0")")/.."
 
 keep_days="${MELON_BACKUP_KEEP_DAYS:-14}"
 keep_count="${MELON_BACKUP_KEEP_COUNT:-60}"
+umask 077
 mkdir -p backups
 chmod 700 backups
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 target="backups/melon-$stamp.dump"
-trap 'rm -f "$target.tmp"' EXIT
+sealed="offsite/melon-$stamp.dump.age"
+trap 'rm -f "$target.tmp" "$sealed.tmp"' EXIT
+
+prune() {
+  find "$1" -maxdepth 1 -name "$2" -mtime "+$keep_days" -delete
+  find "$1" -maxdepth 1 -name "$2" -printf '%T@ %p\n' | sort -rn | tail -n "+$((keep_count + 1))" | cut -d' ' -f2- | xargs -r rm -f
+}
 
 docker compose exec -T db pg_dump -U melon -d melon --format=custom > "$target.tmp"
 docker compose exec -T db pg_restore --list < "$target.tmp" > /dev/null
 mv "$target.tmp" "$target"
 chmod 600 "$target"
-find backups -name 'melon-*.dump' -mtime "+$keep_days" -delete
-find backups -name 'melon-*.dump' -printf '%T@ %p\n' | sort -rn | tail -n "+$((keep_count + 1))" | cut -d' ' -f2- | xargs -r rm -f
+prune backups 'melon-*.dump'
+find backups -maxdepth 1 -name 'restore-*.dump' -mmin +60 -delete
 echo "backup: $target ($(du -h "$target" | cut -f1))"
 
-if [[ "${1:-}" != "--local" && -f backup.env ]]; then
-  source ./backup.env
-  rsync -a -e "ssh -p ${BACKUP_PORT:-23} -i '$BACKUP_SSH_KEY' -o BatchMode=yes" backups/ "$BACKUP_TARGET"
-  echo "copied to $BACKUP_TARGET"
+if [[ "${1:-}" == "--local" || ! -f backup.env ]]; then
+  exit 0
 fi
+
+source ./backup.env
+recipients="${BACKUP_RECIPIENTS:-backup.recipients}"
+if ! command -v age > /dev/null; then
+  echo "age is not installed, nothing copied (apt install age)" >&2
+  exit 1
+fi
+if ! grep -qE '^(age1|ssh-)' "$recipients" 2> /dev/null; then
+  echo "no age recipient in $recipients, nothing copied (backups are only copied encrypted)" >&2
+  exit 1
+fi
+mkdir -p offsite
+chmod 700 offsite
+age -R "$recipients" -o "$sealed.tmp" "$target"
+mv "$sealed.tmp" "$sealed"
+prune offsite 'melon-*.dump.age'
+rsync -a --exclude '*.tmp' -e "ssh -p ${BACKUP_PORT:-23} -i '$BACKUP_SSH_KEY' -o BatchMode=yes" offsite/ "$BACKUP_TARGET"
+echo "copied $sealed to $BACKUP_TARGET"

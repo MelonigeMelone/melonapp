@@ -3,10 +3,27 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 
 dump="${1:-}"
+identity=""
+if [[ "${3:-}" == "--identity" ]]; then
+  identity="${4:-}"
+fi
 if [[ ! -f "$dump" || "${2:-}" != "--yes" ]]; then
-  echo "usage: melon-restore <backups/melon-….dump> --yes" >&2
+  echo "usage: melon-restore <backups/melon-….dump | melon-….dump.age> --yes [--identity <key file>]" >&2
   echo "replaces the whole database with the dump" >&2
   exit 2
+fi
+
+if [[ "$dump" == *.age ]]; then
+  if [[ ! -f "$identity" ]]; then
+    echo "encrypted dump: pass the backup key with --identity <key file>" >&2
+    exit 2
+  fi
+  umask 077
+  mkdir -p backups
+  plain="backups/restore-$$.dump"
+  trap 'rm -f "$plain"' EXIT
+  age -d -i "$identity" -o "$plain" "$dump"
+  dump="$plain"
 fi
 docker compose exec -T db pg_restore --list < "$dump" > /dev/null
 
@@ -16,4 +33,4 @@ docker compose exec -T db psql -U melon -d postgres -v ON_ERROR_STOP=1 \
   -c "CREATE DATABASE melon OWNER melon"
 docker compose exec -T db pg_restore -U melon -d melon --no-owner --exit-on-error < "$dump"
 docker compose start server
-echo "restored $dump"
+echo "restored ${1}"

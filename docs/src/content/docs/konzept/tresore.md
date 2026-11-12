@@ -90,7 +90,7 @@ Jeder Eintrag hat einen **Typ**. Der Typ legt die Standardfelder fest:
 | Passkey | Website (RP-ID), Benutzername, Credential-ID, User-Handle, privater Schlüssel (verborgen, nie angezeigt) |
 
 Passkeys entstehen nur über die iOS-AutoFill-Extension und lassen sich nicht von Hand anlegen
-oder ihre Schlüsselfelder bearbeiten ([ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/)).
+oder ihre Schlüsselfelder bearbeiten ([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)).
 
 Zusätzlich kann jeder Eintrag **eigene Abschnitte und Felder** haben, mit frei wählbarem Namen:
 

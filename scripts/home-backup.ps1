@@ -9,7 +9,8 @@
 
 $ErrorActionPreference = 'Stop'
 $Sftp = Join-Path $env:SystemRoot 'System32\OpenSSH\sftp.exe'
-$DumpPattern = '^melon-\d{8}T\d{6}Z\.dump$'
+$DumpPattern = '^melon-\d{8}T\d{6}Z\.dump\.age$'
+$AgeHeader = "age-encryption.org/v1`n"
 
 function Read-Settings {
     if (-not (Test-Path $Config)) { throw "Konfiguration fehlt: $Config (Vorlage: deploy/home-backup.example.json)" }
@@ -55,10 +56,10 @@ function Write-Log($s, [string]$Text) {
 }
 
 function Test-Dump([string]$Path) {
-    $bytes = New-Object byte[] 5
+    $bytes = New-Object byte[] $AgeHeader.Length
     $stream = [IO.File]::OpenRead($Path)
-    try { $read = $stream.Read($bytes, 0, 5) } finally { $stream.Dispose() }
-    $read -eq 5 -and [Text.Encoding]::ASCII.GetString($bytes) -eq 'PGDMP'
+    try { $read = $stream.Read($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+    $read -eq $bytes.Length -and [Text.Encoding]::ASCII.GetString($bytes) -ceq $AgeHeader
 }
 
 function Invoke-Backup {
@@ -73,7 +74,7 @@ function Invoke-Backup {
     $listing = Invoke-Sftp $s @("cd `"$($s.RemoteDir)`"", 'ls -1')
     $newest = $listing | ForEach-Object { ($_ -split '/')[-1].Trim() } | Where-Object { $_ -match $DumpPattern } |
         Sort-Object -Descending | Select-Object -First 1
-    if (-not $newest) { throw "Auf $($s.Host) liegt kein Backup (melon-*.dump)." }
+    if (-not $newest) { throw "Auf $($s.Host) liegt kein verschlüsseltes Backup (melon-*.dump.age)." }
 
     $final = Join-Path $s.Target $newest
     if (-not (Test-Path $final)) {
@@ -81,12 +82,12 @@ function Invoke-Backup {
         Invoke-Sftp $s @("cd `"$($s.RemoteDir)`"", "get `"$newest`" `"$partial`"") | Out-Null
         if (-not (Test-Dump $partial)) {
             Remove-Item $partial -ErrorAction SilentlyContinue
-            throw "$newest ist kein gültiges PostgreSQL-Backup."
+            throw "$newest ist kein mit age verschlüsseltes Backup."
         }
         Move-Item $partial $final -Force
     }
 
-    Get-ChildItem $s.Target -Filter 'melon-*.dump' | Where-Object { $_.Name -match $DumpPattern } |
+    Get-ChildItem $s.Target -Filter 'melon-*.dump.age' | Where-Object { $_.Name -match $DumpPattern } |
         Sort-Object Name -Descending | Select-Object -Skip $s.Keep | Remove-Item
     (Get-Date).ToString('o', [Globalization.CultureInfo]::InvariantCulture) | Set-Content $marker
     Write-Log $s "ok $newest"

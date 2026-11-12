@@ -94,7 +94,7 @@ den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
 - **Passkeys** (`passkey`) entstehen nur über die iOS-Extension (`vault/passkeys.ts` übernimmt sie
   aus dem Briefkasten). Ihr Schlüsselfeld `privateKey` blendet die Detailansicht aus
   (`visibleFields`), der Editor zeigt die Passkey-Felder nicht, und „Neu“ bietet den Typ nicht an
-  (`CREATABLE_TYPES`). Siehe [ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/).
+  (`CREATABLE_TYPES`). Siehe [ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/).
 - Links entstehen nur für `http(s):`, `mailto:` und `tel:` (`safeHref`).
 
 ## Sync

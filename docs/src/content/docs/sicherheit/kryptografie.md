@@ -202,4 +202,4 @@ Credential-ID und gültigem P-256-Skalar; `seal_passkey_key` verpackt ihn mit de
 neu. Im Tresor liegt der Skalar im verschlüsselten Eintrag (Bereichsschlüssel, AAD mit Bereich,
 Eintrag und Schlüsselversion). Briefkasten-Dateien der Extension sind zusätzlich an Scope und
 Credential-ID im Dateinamen gebunden; umbenannte, fremde oder manipulierte Dateien werden
-ignoriert ([ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/)).
+ignoriert ([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)).
