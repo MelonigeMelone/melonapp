@@ -21,6 +21,8 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import { useColorScheme } from '@mui/material/styles';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
+import DevicesOutlinedIcon from '@mui/icons-material/DevicesOutlined';
+import PhoneIphoneOutlinedIcon from '@mui/icons-material/PhoneIphoneOutlined';
 import ContrastOutlinedIcon from '@mui/icons-material/ContrastOutlined';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
@@ -35,6 +37,7 @@ import { StrengthMeter } from '../components/StrengthMeter';
 import { cryptoCall } from '../crypto/client';
 import { count } from '../layout';
 import { AUTO_LOCK_CHOICES, setAutoLockMinutes, useAutoLockMinutes, type AutoLockMinutes } from '../prefs';
+import { authed, type DeviceSession } from '../api';
 import { changePassword, describeError, type Account, type Session } from '../session';
 import type { ShellContext } from '../Shell';
 import { audit } from '../vault/audit';
@@ -187,6 +190,101 @@ function ChangePasswordDialog({ session, onClose, onChanged }: { session: Sessio
 
 const MODE_LABELS = { system: 'System', light: 'Hell', dark: 'Dunkel' } as const;
 
+const relative = new Intl.RelativeTimeFormat('de', { numeric: 'auto' });
+const day = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' });
+
+function ago(seconds: number, now = Date.now() / 1000): string {
+  const diff = Math.max(0, now - seconds);
+  if (diff < 10 * 60) return 'gerade eben';
+  if (diff < 3600) return relative.format(-Math.round(diff / 60), 'minute');
+  if (diff < 86400) return relative.format(-Math.round(diff / 3600), 'hour');
+  return relative.format(-Math.round(diff / 86400), 'day');
+}
+
+function DevicesSection({ session, onToast }: { session: Session; onToast: (text: string) => void }) {
+  const api = useMemo(() => authed(session.token), [session.token]);
+  const [devices, setDevices] = useState<DeviceSession[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      setDevices((await api.listSessions()).sessions.sort((x, y) => Number(y.current) - Number(x.current)));
+    } catch (e) {
+      setError(describeError(e));
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, [api]);
+
+  const revoke = async (key: string, fn: () => Promise<void>, done: string) => {
+    setBusy(key);
+    setError(null);
+    try {
+      await fn();
+      onToast(done);
+      await load();
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const others = devices?.filter((d) => !d.current).length ?? 0;
+
+  return (
+    <Section title="Geräte" id="account-devices">
+      {devices === null && !error && (
+        <Box component="li" sx={{ listStyle: 'none', px: 2.5, py: 2 }}>
+          <Typography color="text.secondary">Wird geladen …</Typography>
+        </Box>
+      )}
+      {devices?.map((d) => (
+        <Row
+          key={d.id}
+          id={`device-${d.id}`}
+          icon={/iPhone|iOS|Android/.test(d.device) ? <PhoneIphoneOutlinedIcon /> : <DevicesOutlinedIcon />}
+          tone={d.current ? 'ok' : 'neutral'}
+          title={d.device || 'Unbekanntes Gerät'}
+          status={
+            d.current
+              ? `Dieses Gerät, angemeldet am ${day.format(new Date(d.created_at * 1000))}`
+              : `Zuletzt aktiv ${ago(d.last_seen_at)}, angemeldet am ${day.format(new Date(d.created_at * 1000))}`
+          }
+          action={
+            !d.current && (
+              <Button
+                variant="outlined"
+                color="error"
+                fullWidth
+                loading={busy === d.id}
+                onClick={() => void revoke(d.id, () => api.revokeSession(d.id), `„${d.device || 'Unbekanntes Gerät'}“ abgemeldet.`)}
+              >
+                Abmelden
+              </Button>
+            )
+          }
+        />
+      ))}
+      {others > 1 && (
+        <Box component="li" sx={{ listStyle: 'none', px: { xs: 2, sm: 2.5 }, py: 2 }}>
+          <Button color="error" loading={busy === 'others'} onClick={() => void revoke('others', api.revokeOtherSessions, 'Alle anderen Geräte abgemeldet.')}>
+            Alle anderen Geräte abmelden
+          </Button>
+        </Box>
+      )}
+      {error && (
+        <Box component="li" sx={{ listStyle: 'none', px: 2.5, py: 2 }}>
+          <Alert severity="error">{error}</Alert>
+        </Box>
+      )}
+    </Section>
+  );
+}
+
 export function AccountScreen({ ctx, onUpdate }: { ctx: ShellContext; onUpdate: (update: Partial<Account>) => void }) {
   const { session, snapshot, navigate, openKit } = ctx;
   const [code, setCode] = useState('');
@@ -318,6 +416,8 @@ export function AccountScreen({ ctx, onUpdate }: { ctx: ShellContext; onUpdate: 
             </Collapse>
           </Row>
         </Section>
+
+        <DevicesSection session={session} onToast={setToast} />
 
         <Section title="Einstellungen" id="account-settings">
           <Row

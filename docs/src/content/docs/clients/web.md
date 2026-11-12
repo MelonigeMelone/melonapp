@@ -282,6 +282,11 @@ rausgeht.
 Für das erneute Bestätigen des Passworts hält die Sitzung Salt, KDF-Parameter und den
 verschlüsselten Konto-Schlüssel, nie das Passwort selbst.
 
+### Geräte
+
+„Konto → Geräte“ listet alle angemeldeten Geräte, das aktuelle zuerst. Andere lassen sich
+einzeln oder zusammen abmelden ([Authentifizierung](/melonapp/server/authentifizierung/#sitzungen)).
+
 ## Schutzmaßnahmen
 
 | Maßnahme | Warum |

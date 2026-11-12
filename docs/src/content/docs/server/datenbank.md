@@ -37,6 +37,9 @@ Alle Revisionen (Tresore und Einträge) kommen aus derselben Sequenz `revision_s
 `token_hash` (SHA-256 des Tokens), `user_id`, `expires_at` und `scope` (Migration 0002):
 `full` für normale Sitzungen, `recovery` für die 15-Minuten-Sitzung beim Wiederherstellen.
 
+Seit Migration 0003 außerdem `id` (zufällige UUID, für die Geräteliste, nie das Token),
+`device` (Name vom Client, höchstens 64 Zeichen) und `last_seen_at`.
+
 ## `vaults`
 
 | Spalte | Inhalt |

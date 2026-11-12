@@ -50,6 +50,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Sicherheitscode beider Seiten stimmt überein | CI-Job `e2e`, Schritt „security code“ |
 | Server speichert keinen Klartext | `api::personal_vault_flow` |
 | Login-Sperre nach Fehlversuchen | `api::wrong_password_and_lockout` |
+| Geräte: nur eigene Sitzungen sichtbar und abmeldbar, abgemeldete verlieren sofort den Zugriff | `api::devices_can_be_listed_and_signed_out_but_only_your_own`, E2E-Schritt „devices: see the other device and sign it out“ |
 | Sperre pro Adresse über alle Konten, gefälschter erster `X-Forwarded-For`-Eintrag hilft nicht, ohne vertrauten Proxy zählt der Header nicht | `api::many_failed_logins_from_one_address_are_blocked_across_accounts`, `client_ip::tests` |
 | Gleichzeitige Anfragen kommen nicht an den Limits vorbei | `api::simultaneous_failed_logins_cannot_slip_past_the_limits` |
 | `prelogin` verrät keine Konten | `api::prelogin_does_not_reveal_accounts` |
