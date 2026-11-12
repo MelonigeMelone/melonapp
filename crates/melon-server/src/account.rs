@@ -10,6 +10,7 @@ use crate::{
         AuthUser, RecoveryUser, create_session, decode_auth_key, hash_auth_key, normalize_email,
         verify_auth_key,
     },
+    client_ip::{self, ClientIp},
     error::{ApiError, ApiResult},
     state::AppState,
 };
@@ -95,7 +96,7 @@ async fn store_credentials(state: &AppState, user_id: Uuid, c: &ValidCredentials
 
 async fn require_current_password(state: &AppState, user_id: Uuid, current: &str) -> ApiResult<()> {
     let limiter_key = format!("reauth:{user_id}");
-    if state.limiter.is_blocked(&limiter_key) {
+    if !state.begin_attempt(&limiter_key, None) {
         return Err(ApiError::TooManyRequests);
     }
     let (phc,): (String,) = sqlx::query_as("SELECT auth_hash FROM users WHERE id = $1")
@@ -104,10 +105,9 @@ async fn require_current_password(state: &AppState, user_id: Uuid, current: &str
         .await?;
     let candidate = decode_auth_key(current).unwrap_or([0u8; 32]);
     if verify(candidate, phc).await? {
-        state.limiter.reset(&limiter_key);
+        state.attempt_succeeded(&limiter_key, None);
         Ok(())
     } else {
-        state.limiter.record_failure(&limiter_key);
         Err(ApiError::Forbidden("wrong_password"))
     }
 }
@@ -177,11 +177,13 @@ pub struct RecoverStarted {
 
 pub async fn recover_start(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     Json(req): Json<RecoverStart>,
 ) -> ApiResult<Json<RecoverStarted>> {
     let email = normalize_email(&req.email)?;
     let limiter_key = format!("recover:{email}");
-    if state.limiter.is_blocked(&limiter_key) {
+    let ip_key = ip.map(client_ip::limiter_key);
+    if !state.begin_attempt(&limiter_key, ip_key.as_deref()) {
         return Err(ApiError::TooManyRequests);
     }
     let row: Option<(Uuid, Option<String>, Option<String>)> = sqlx::query_as(
@@ -202,11 +204,10 @@ pub async fn recover_start(
         _ => None,
     });
     let Some((user_id, recovery_wrapped_account_key)) = found else {
-        state.limiter.record_failure(&limiter_key);
         tracing::info!("failed recovery attempt");
         return Err(ApiError::Unauthorized);
     };
-    state.limiter.reset(&limiter_key);
+    state.attempt_succeeded(&limiter_key, ip_key.as_deref());
     let token = create_session(&state, user_id, "recovery", RECOVERY_MINUTES).await?;
     Ok(Json(RecoverStarted {
         token,

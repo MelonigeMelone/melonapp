@@ -48,9 +48,27 @@ herausfinden, welche Konten existieren. Ein zufälliges Salt würde sich bei jed
 - **Gleiche Laufzeit:** Auch bei unbekanntem Konto oder kaputtem Auth-Key läuft genau eine
   Argon2-Prüfung, dann gegen einen Dummy-Hash, der beim Start erzeugt wird. Sonst würde
   die Antwortzeit verraten, ob das Konto existiert.
-- **Sperre:** Nach 10 Fehlversuchen pro E-Mail innerhalb von 15 Minuten antwortet der
-  Server mit `429`, auch bei richtigem Passwort. Die Zähler liegen im Speicher (höchstens
-  10 000 Einträge, alte werden aufgeräumt). Nach erfolgreichem Login wird der Zähler gelöscht.
+- **Sperre pro Konto:** Nach 10 Fehlversuchen pro E-Mail innerhalb von 15 Minuten antwortet
+  der Server mit `429`, auch bei richtigem Passwort. Nach erfolgreichem Login wird der Zähler
+  gelöscht.
+- **Sperre pro Adresse:** Nach 30 Fehlversuchen (Login und Recovery zusammen) von derselben
+  IP-Adresse innerhalb von 15 Minuten antwortet der Server für **alle** Konten mit `429`. Das
+  bremst Angriffe, die viele E-Mails durchprobieren. IPv6-Adressen zählen je /64-Netz, sonst
+  könnte ein Angreifer einfach die Adresse wechseln. Ein erfolgreicher Login setzt diesen
+  Zähler **nicht** zurück, sonst könnte ein Angreifer mit eigenem Konto ihn leeren.
+- **Woher die Adresse kommt:** Mit `MELON_TRUST_PROXY=true` aus dem **letzten** Eintrag von
+  `X-Forwarded-For`, also dem, den der eigene Reverse Proxy angehängt hat. Caddy ignoriert
+  mitgeschickte Werte unbekannter Clients und setzt die echte Adresse. Ohne die Variable zählt
+  die Adresse der TCP-Verbindung, und der Header wird ignoriert, weil ihn jeder setzen kann.
+- Jeder Versuch wird **vor** der langsamen Argon2-Prüfung gezählt, in einem Schritt mit der
+  Prüfung auf Sperre. Viele gleichzeitige Anfragen kommen so nicht an den Limits vorbei. Ein
+  erfolgreicher Versuch gibt seinen Platz wieder frei.
+- **Kehrseite:** Wer sich eine Adresse teilt (Büro, Familie, Mobilfunk-NAT), kann die anderen
+  für 15 Minuten aussperren. Dasselbe gilt, wenn Docker die echten Adressen nicht durchreicht
+  (rootless Docker oder IPv6 ohne IPv6 im Docker-Netz): Dann sehen alle Anfragen wie die
+  Docker-Bridge aus. Im Zweifel in den Server-Logs prüfen, welche Adressen ankommen.
+- Die Zähler liegen im Speicher (höchstens 10 000 Einträge, alte werden aufgeräumt). Ein
+  Neustart setzt sie zurück.
 - Argon2 läuft in `spawn_blocking`, damit es den Async-Server nicht blockiert.
 
 ## Master-Passwort ändern

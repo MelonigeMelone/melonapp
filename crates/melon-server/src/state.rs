@@ -17,6 +17,7 @@ pub struct Inner {
     pub config: Config,
     pub dummy_hash: String,
     pub limiter: LoginLimiter,
+    pub ip_limiter: LoginLimiter,
 }
 
 impl AppState {
@@ -26,7 +27,28 @@ impl AppState {
             config,
             dummy_hash: hash_auth_key(&[0u8; 32])?,
             limiter: LoginLimiter::default(),
+            ip_limiter: LoginLimiter::with_max(MAX_FAILURES_PER_IP),
         })))
+    }
+}
+
+impl Inner {
+    pub fn begin_attempt(&self, key: &str, ip_key: Option<&str>) -> bool {
+        if !self.limiter.try_begin(key) {
+            return false;
+        }
+        let ip_ok = ip_key.is_none_or(|ip| self.ip_limiter.try_begin(ip));
+        if !ip_ok {
+            self.limiter.release(key);
+        }
+        ip_ok
+    }
+
+    pub fn attempt_succeeded(&self, key: &str, ip_key: Option<&str>) {
+        self.limiter.reset(key);
+        if let Some(ip) = ip_key {
+            self.ip_limiter.release(ip);
+        }
     }
 }
 
@@ -38,22 +60,30 @@ impl Deref for AppState {
 }
 
 const MAX_FAILURES: u32 = 10;
+const MAX_FAILURES_PER_IP: u32 = 30;
 const WINDOW: Duration = Duration::from_secs(15 * 60);
 const MAX_TRACKED: usize = 10_000;
 
-#[derive(Default)]
 pub struct LoginLimiter {
     failures: Mutex<HashMap<String, (u32, Instant)>>,
+    max: u32,
+}
+
+impl Default for LoginLimiter {
+    fn default() -> Self {
+        Self::with_max(MAX_FAILURES)
+    }
 }
 
 impl LoginLimiter {
-    pub fn is_blocked(&self, key: &str) -> bool {
-        let map = self.failures.lock().expect("limiter mutex poisoned");
-        map.get(key)
-            .is_some_and(|(n, since)| *n >= MAX_FAILURES && since.elapsed() < WINDOW)
+    pub fn with_max(max: u32) -> Self {
+        Self {
+            failures: Mutex::new(HashMap::new()),
+            max,
+        }
     }
 
-    pub fn record_failure(&self, key: &str) {
+    pub fn try_begin(&self, key: &str) -> bool {
         let mut map = self.failures.lock().expect("limiter mutex poisoned");
         if map.len() >= MAX_TRACKED {
             map.retain(|_, (_, since)| since.elapsed() < WINDOW);
@@ -62,7 +92,22 @@ impl LoginLimiter {
         if entry.1.elapsed() >= WINDOW {
             *entry = (0, Instant::now());
         }
+        if entry.0 >= self.max {
+            return false;
+        }
         entry.0 += 1;
+        true
+    }
+
+    pub fn release(&self, key: &str) {
+        if let Some(entry) = self
+            .failures
+            .lock()
+            .expect("limiter mutex poisoned")
+            .get_mut(key)
+        {
+            entry.0 = entry.0.saturating_sub(1);
+        }
     }
 
     pub fn reset(&self, key: &str) {
@@ -78,16 +123,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn blocks_after_max_failures() {
+    fn blocks_after_max_attempts_and_counts_before_the_slow_check() {
         let l = LoginLimiter::default();
-        for _ in 0..MAX_FAILURES - 1 {
-            l.record_failure("a");
+        for _ in 0..MAX_FAILURES {
+            assert!(l.try_begin("a"));
         }
-        assert!(!l.is_blocked("a"));
-        l.record_failure("a");
-        assert!(l.is_blocked("a"));
-        assert!(!l.is_blocked("b"));
+        assert!(!l.try_begin("a"));
+        assert!(l.try_begin("b"));
+        l.release("a");
+        assert!(l.try_begin("a"));
+        assert!(!l.try_begin("a"));
         l.reset("a");
-        assert!(!l.is_blocked("a"));
+        assert!(l.try_begin("a"));
     }
 }

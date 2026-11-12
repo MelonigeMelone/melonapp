@@ -10,6 +10,7 @@ pub struct Config {
     pub allow_registration: bool,
     pub session_ttl_hours: i32,
     pub cors_origins: Vec<String>,
+    pub trust_proxy: bool,
 }
 
 impl Config {
@@ -47,6 +48,10 @@ impl Config {
             })
             .unwrap_or_default();
 
+        let trust_proxy = env::var("MELON_TRUST_PROXY")
+            .map(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+
         Ok(Self {
             database_url,
             bind_addr,
@@ -54,6 +59,7 @@ impl Config {
             allow_registration,
             session_ttl_hours,
             cors_origins,
+            trust_proxy,
         })
     }
 }

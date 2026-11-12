@@ -1,6 +1,7 @@
 pub mod access;
 pub mod account;
 pub mod auth;
+pub mod client_ip;
 pub mod config;
 pub mod error;
 pub mod members;
