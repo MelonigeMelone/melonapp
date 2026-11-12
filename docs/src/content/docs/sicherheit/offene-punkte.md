@@ -34,7 +34,6 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Ein kompromittierter Server kann Änderungen zurückhalten oder Einträge weglassen, und neue Geräte erkennen zurückgespielte Versionen nicht | Rückschritte bekannter Einträge erkennen die Apps bereits ([Rollback-Erkennung](/melonapp/clients/web/#rollback-erkennung)). Vollständig nur mit einem signierten Gesamtstand je Tresor lösbar. |
 | Web-App wird vom eigenen Server ausgeliefert | ein übernommener Server könnte manipulierten Code ausliefern. Erweiterung und kommende Apps sind davon nicht betroffen. |
 | Erweiterung in Firefox: kein `trackVisibility` | Firefox meldet nicht, ob ein Element verdeckt ist. Dort greifen nur die Stil-Prüfungen und `elementFromPoint`. Ein darübergelegtes Element mit `pointer-events: none` wird nicht erkannt (siehe [Erweiterung](/melonapp/clients/erweiterung/#schutzmaßnahmen)). |
-| Images werden standardmäßig als `latest` gezogen | im Betrieb auf `sha-…`-Tags festlegen ([Selbst hosten](/melonapp/betrieb/selbst-hosten/#updates)) → [#39](https://github.com/MelonigeMelone/melonapp/issues/39) |
 
 ## Native Apple-Clients
 

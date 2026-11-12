@@ -180,6 +180,21 @@ describe('VaultStore', () => {
     expect(a.rolledBackCount + b.rolledBackCount).toBe(0);
   });
 
+  it('does not delete an item that changed state while the delete was pending', async () => {
+    const server = new FakeServer();
+    const a = device(server, ['t']);
+    const b = device(server);
+    const id = await a.save(null, { ...login('Alt', 'pw'), trashedAt: '2026-01-01T00:00:00.000Z' });
+    await b.sync();
+    const restored = { ...b.get(id)!.item };
+    delete restored.trashedAt;
+    await b.save(id, restored);
+    await a.remove(id, (item) => item.trashedAt !== undefined);
+    await b.sync();
+    expect(b.get(id)?.item.title).toBe('Alt');
+    expect(server.rows.get(id)?.deleted).toBe(false);
+  });
+
   it('skips items it cannot decrypt and starts over after reset', async () => {
     const server = new FakeServer();
     server.rows.set('bad', { id: 'bad', data: 'garbage', key_version: 1, revision: 1, deleted: false });
