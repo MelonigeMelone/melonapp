@@ -5,7 +5,9 @@ use chacha20poly1305::{
     Key, KeyInit, XChaCha20Poly1305, XNonce,
     aead::{Aead, Payload},
 };
-use rand::{RngCore, rngs::OsRng};
+use rand::Rng;
+
+use crate::rng::os_rng;
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
@@ -21,7 +23,7 @@ pub struct SymmetricKey([u8; 32]);
 impl SymmetricKey {
     pub fn generate() -> Self {
         let mut key = Self([0u8; 32]);
-        OsRng.fill_bytes(&mut key.0);
+        os_rng().fill_bytes(&mut key.0);
         key
     }
 
@@ -35,10 +37,10 @@ impl SymmetricKey {
 
     pub fn encrypt(&self, plaintext: &[u8], aad: &[u8]) -> EncString {
         let mut nonce = [0u8; NONCE_LEN];
-        OsRng.fill_bytes(&mut nonce);
-        let ciphertext = XChaCha20Poly1305::new(Key::from_slice(&self.0))
+        os_rng().fill_bytes(&mut nonce);
+        let ciphertext = XChaCha20Poly1305::new(&Key::from(self.0))
             .encrypt(
-                XNonce::from_slice(&nonce),
+                &XNonce::from(nonce),
                 Payload {
                     msg: plaintext,
                     aad,
@@ -53,9 +55,10 @@ impl SymmetricKey {
 
     pub fn decrypt(&self, enc: &EncString, aad: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
         let (nonce, ciphertext) = enc.raw.split_at(NONCE_LEN);
-        XChaCha20Poly1305::new(Key::from_slice(&self.0))
+        let nonce = XNonce::try_from(nonce).map_err(|_| CryptoError::Malformed)?;
+        XChaCha20Poly1305::new(&Key::from(self.0))
             .decrypt(
-                XNonce::from_slice(nonce),
+                &nonce,
                 Payload {
                     msg: ciphertext,
                     aad,

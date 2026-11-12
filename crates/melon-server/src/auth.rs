@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use argon2::{
     Algorithm, Argon2, Params, Version,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},
 };
 use axum::{
     Json,
@@ -12,9 +12,9 @@ use base64::{
     Engine,
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use melon_crypto::{EncString, KdfParams, PublicKey, SealedKey};
-use rand::{RngCore, rngs::OsRng};
+use rand::{Rng, rand_core::UnwrapErr, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -32,9 +32,7 @@ fn server_argon() -> Argon2<'static> {
 }
 
 pub fn hash_auth_key(auth_key: &[u8]) -> anyhow::Result<String> {
-    let salt = SaltString::generate(&mut OsRng);
-    server_argon()
-        .hash_password(auth_key, &salt)
+    PasswordHasher::<PasswordHash>::hash_password(&server_argon(), auth_key)
         .map(|h| h.to_string())
         .map_err(|e| anyhow!("hashing failed: {e}"))
 }
@@ -437,7 +435,7 @@ pub(crate) async fn create_session(
     minutes: i32,
 ) -> ApiResult<String> {
     let mut raw = [0u8; 32];
-    OsRng.fill_bytes(&mut raw);
+    UnwrapErr(SysRng).fill_bytes(&mut raw);
     let token = URL_SAFE_NO_PAD.encode(raw);
     sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND expires_at < now()")
         .bind(user_id)

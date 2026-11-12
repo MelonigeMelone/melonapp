@@ -96,7 +96,7 @@ Konto-Schlüssel verschlüsselt gespeichert, der öffentliche liegt im Klartext 
 
 Tresor-Schlüssel werden mit **HPKE** (RFC 9180) für den öffentlichen Schlüssel jedes Mitglieds
 verschlüsselt: Base-Modus, `DHKEM(X25519, HKDF-SHA256)`, `HKDF-SHA256`, `ChaCha20Poly1305`,
-Crate `hpke` 0.13. HPKE ist der IETF-Standard für „verschlüssle für einen öffentlichen
+Crate `hpke` 0.15. HPKE ist der IETF-Standard für „verschlüssle für einen öffentlichen
 Schlüssel“. Eine eigene Konstruktion aus X25519 + HKDF wäre selbst gebaute Kryptografie.
 
 Der HPKE-`info`-Parameter bindet jede Kopie an ihren Zweck:
@@ -113,9 +113,24 @@ Der Server prüft beim Speichern nur dieses Format.
 
 ### Zufall
 
-HPKE braucht `rand_core` 0.9, der Rest der Crate nutzt 0.6. Beide holen ihren Zufall aus dem
-Betriebssystem. In WASM liefert ihn `getrandom` 0.3 über `crypto.getRandomValues`, eingestellt
-per `getrandom_backend="wasm_js"` in `.cargo/config.toml`.
+Aller Zufall kommt direkt aus dem Betriebssystem: `rng::os_rng()` ist `SysRng` aus `rand` 0.10
+(über `getrandom` 0.4), ohne Zwischen-Generator. HPKE bekommt dieselbe Quelle ausdrücklich
+übergeben (`gen_keypair_with_rng`, `single_shot_seal_with_rng`). In WASM liefert `getrandom` den
+Zufall über `crypto.getRandomValues` (Feature `wasm_js`, `getrandom_backend="wasm_js"` in
+`.cargo/config.toml`).
+
+### Updates der Krypto-Crates
+
+Neue Hauptversionen von RustCrypto, `hpke` oder `rand` werden gemeinsam eingespielt
+(Dependabot gruppiert sie). Bedingung ist, dass die **Kompatibilitätstests**
+(`crates/melon-crypto/tests/compat.rs`) unverändert grün bleiben. Sie enthalten Daten, die mit
+den vorherigen Versionen erzeugt wurden: abgeleitete Schlüssel aus einem Master-Passwort, einen
+verpackten Konto-Schlüssel, Eintrag und Tresorname, ein Notfall-Kit, ein Schlüsselpaar mit
+geteiltem Tresor-Schlüssel und eine Passkey-Signatur. Auf dem Server prüfen
+`auth::tests::stored_auth_hashes_still_verify` und
+`auth::tests::stored_session_tokens_and_fake_salts_stay_the_same` gespeicherte Hashes. Diese
+Werte dürfen nie neu erzeugt werden, sonst würde ein Update bestehende Tresore unlesbar machen,
+ohne dass ein Test es merkt.
 
 ## Recovery-Key und Sicherheitscode (`recovery.rs`)
 
@@ -139,7 +154,7 @@ genullt (`zeroize`) und implementieren kein `Debug`. Klartexte kommen als
 
 ## Passwort-Generator (`generator.rs`)
 
-- Zufall direkt aus dem Betriebssystem (`OsRng`), gleichverteilt über `gen_range`.
+- Zufall direkt aus dem Betriebssystem (`os_rng()`), gleichverteilt über `random_range`.
 - Jede aktivierte Zeichenklasse kommt mindestens einmal vor: Zuerst wird je Klasse ein
   Zeichen gezogen, der Rest aus allen Klassen, danach wird gemischt.
 - Länge 8–256, Standard 20 mit allen Klassen (≈ 128 bit Entropie).
@@ -147,8 +162,8 @@ genullt (`zeroize`) und implementieren kein `Debug`. Klartexte kommen als
 
 ## WASM
 
-Für `wasm32-unknown-unknown` holt `getrandom` den Zufall über `crypto.getRandomValues`
-(Feature `js`). Die CI baut die Crate bei jedem Push für WASM.
+Für `wasm32-unknown-unknown` holt `getrandom` 0.4 den Zufall über `crypto.getRandomValues`
+(Feature `wasm_js`). Die CI baut die Crate bei jedem Push für WASM.
 
 ## Native Passkeys
 

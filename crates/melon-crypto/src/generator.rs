@@ -1,4 +1,6 @@
-use rand::{Rng, rngs::OsRng, seq::SliceRandom};
+use rand::{RngExt, seq::SliceRandom};
+
+use crate::rng::os_rng;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
@@ -58,13 +60,13 @@ pub fn generate_password(opts: &PasswordOptions) -> Result<Zeroizing<String>, Cr
     }
 
     let all: Vec<u8> = sets.concat();
-    let mut rng = OsRng;
+    let mut rng = os_rng();
     let mut out = Zeroizing::new(Vec::with_capacity(opts.length));
     for set in &sets {
-        out.push(set[rng.gen_range(0..set.len())]);
+        out.push(set[rng.random_range(0..set.len())]);
     }
     while out.len() < opts.length {
-        out.push(all[rng.gen_range(0..all.len())]);
+        out.push(all[rng.random_range(0..all.len())]);
     }
     out.shuffle(&mut rng);
 

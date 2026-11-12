@@ -1,6 +1,8 @@
 use data_encoding::BASE32_NOPAD;
 use hkdf::Hkdf;
-use rand::{RngCore, rngs::OsRng};
+use rand::Rng;
+
+use crate::rng::os_rng;
 use sha2::{Digest, Sha256};
 use zeroize::Zeroizing;
 
@@ -26,7 +28,7 @@ fn checksum(secret: &[u8]) -> [u8; CHECK_LEN] {
 impl RecoveryKey {
     pub fn generate() -> Self {
         let mut secret = Zeroizing::new([0u8; SECRET_LEN]);
-        OsRng.fill_bytes(secret.as_mut());
+        os_rng().fill_bytes(secret.as_mut());
         Self { secret }
     }
 

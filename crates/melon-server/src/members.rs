@@ -7,7 +7,7 @@ use axum::{
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use melon_crypto::EncString;
-use rand::{RngCore, rngs::OsRng};
+use rand::{Rng, rand_core::UnwrapErr, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -382,7 +382,7 @@ pub async fn create_invite(
         return Err(ApiError::Conflict("user_exists"));
     }
     let mut raw = [0u8; 32];
-    OsRng.fill_bytes(&mut raw);
+    UnwrapErr(SysRng).fill_bytes(&mut raw);
     let token = URL_SAFE_NO_PAD.encode(raw);
     let id = Uuid::new_v4();
     sqlx::query(

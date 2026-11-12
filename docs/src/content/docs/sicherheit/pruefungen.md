@@ -23,6 +23,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 
 | Eigenschaft | Test |
 |---|---|
+| Bestehende Tresore bleiben nach Krypto-Updates lesbar (feste Daten aus älteren Versionen) | `compat::*` in `melon-crypto`, `auth::tests::stored_auth_hashes_still_verify`, `auth::tests::stored_session_tokens_and_fake_salts_stay_the_same` |
 | Manipulierter Chiffretext wird erkannt | `cipher::tests::tampering_is_detected` |
 | Chiffretext lässt sich nicht in anderen Eintrag/Tresor/Schlüsselversion verschieben | `sharing::tests::item_aad_separates_contexts`, `api::personal_vault_flow` |
 | Geteilter Tresor-Schlüssel ist an Tresor, Person und Version gebunden | `sharing::tests::sealed_key_is_bound_to_vault_user_and_version` |

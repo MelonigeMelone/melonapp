@@ -4,6 +4,7 @@ mod generator;
 mod kdf;
 mod passkey;
 mod recovery;
+mod rng;
 mod sharing;
 
 pub use cipher::{EncString, SymmetricKey};
