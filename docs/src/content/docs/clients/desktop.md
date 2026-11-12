@@ -122,7 +122,9 @@ Allgemein → Automatisch ausfüllen & Passwörter** (die Bezeichnung variiert j
 
 Die Extension enthält iOS-17-Callbacks für Passkey-Registrierung und Assertions. Diese
 Passkeys bleiben gerätelokal: keine Synchronisation, kein Export, keine
-Wiederherstellungszusage. Biometrie, App-Group-Provisioning und echte Safari-Passkey-
+Wiederherstellungszusage. Die Authenticator-Daten melden trotzdem BE und BS („gesichert“), weil iOS
+Passkeys von Drittanbietern sonst ablehnt (siehe [ADR 0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/)).
+Relying Parties halten sie deshalb für synchronisiert; Passwort oder zweiten Faktor behalten. Biometrie, App-Group-Provisioning und echte Safari-Passkey-
 Abläufe sind vor Einsatz mit wichtigen Konten noch auf einem Gerät zu prüfen.
 
 Die Extension nutzt dieselben Farben wie die App (`MelonTheme` in
