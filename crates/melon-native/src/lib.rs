@@ -125,6 +125,10 @@ impl Session {
         }
     }
 
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
     pub fn is_locked(&self) -> bool {
         self.account.is_none()
             && self.wrapping.is_none()
