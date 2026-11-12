@@ -39,6 +39,8 @@ sidebar:
   `sicherheit`, `manuell` (braucht Hardware, Konten oder Handarbeit) und `blockiert`
   (mit „Blockiert durch #NN“ im Text).
 - Milestones folgen dem [Fahrplan](/melonapp/konzept/fahrplan/).
+- Das [Board](https://github.com/users/MelonigeMelone/projects/9) zeigt den Stand: Backlog,
+  Als Nächstes, In Arbeit, Blockiert, Fertig. Neue Issues kommen dort in den Backlog.
 - Der PR schließt sein Issue mit `Fixes #NN`. Was am Ende einer Sitzung offen bleibt,
   wird ein neues Issue oder ein Kommentar am bestehenden.
 - Schwachstellen nie als Issue, sondern über **Security → Report a vulnerability**.
