@@ -9,9 +9,11 @@ sidebar:
 |---|---|---|
 | `cargo clippy -D warnings`, `cargo test` | jeder Push/PR | Code-Qualität und Sicherheits-Tests |
 | `cargo-deny` | jeder Push/PR + täglich | bekannte Schwachstellen (RustSec), Lizenzen, unbekannte Paketquellen |
-| CodeQL (`security-extended`) | jeder Push/PR + täglich | statische Code-Analyse für Rust und die Workflows |
+| CodeQL (`security-extended`) | jeder Push/PR + täglich | statische Code-Analyse für Rust und die Workflows. Testverzeichnisse (`crates/*/tests`, `apps/*/e2e`) sind ausgenommen (`.github/codeql/codeql-config.yml`), weil feste Testpasswörter und -Salts dort gewollt sind. |
 | gitleaks | jeder Push/PR + täglich | versehentlich committete Secrets |
-| Dependabot | wöchentlich | Updates für Cargo, npm, Actions, Docker. Krypto-Crates (RustCrypto, `hpke`, `rand`) kommen als **ein** gemeinsamer PR, im Haupt-Workspace und in `apps/desktop/src-tauri`, weil sie voneinander abhängen. `dtolnay/rust-toolchain` wird ignoriert: Die Version im MSRV-Job ist absichtlich gleich `rust-version` aus `Cargo.toml`. |
+| GitHub Secret Scanning mit Push-Schutz | jeder Push | lehnt Pushes mit erkannten Secrets ab, bevor sie im Repo landen |
+| Dependabot-Alerts und -Sicherheitsupdates | laufend | Warnung und automatischer PR, sobald eine Abhängigkeit eine bekannte Schwachstelle hat |
+| Dependabot | wöchentlich | Updates für Cargo, npm, Actions, Docker. Krypto-Crates (RustCrypto, `hpke`, `rand`) kommen als **ein** gemeinsamer PR, im Haupt-Workspace und in `apps/desktop/src-tauri`, weil sie voneinander abhängen. Die Rust-Version steht als `toolchain`-Eingabe im Workflow, nicht im Action-Tag. Im MSRV-Job ist sie absichtlich gleich `rust-version` aus `Cargo.toml`. |
 | Image-Provenance + SBOM | jeder Image-Build | nachweisbar, aus welchem Commit das Server-Image stammt |
 
 **Warum täglich?** Neue Schwachstellen in Abhängigkeiten werden laufend veröffentlicht.

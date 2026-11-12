@@ -24,6 +24,11 @@ Images: `ghcr.io/melonigemelone/melonapp-server` und `ghcr.io/melonigemelone/mel
 
 ## Öffentliches oder privates Repo
 
+Alle Actions sind auf einen **Commit-SHA** festgelegt, die Version steht als Kommentar dahinter
+(`actions/checkout@3d3c42e… # v7.0.1`). Ein Tag wie `v7` kann nachträglich auf anderen Code
+zeigen, ein SHA nicht. Dependabot erkennt den Kommentar und hebt SHA und Kommentar gemeinsam an.
+Bei `dtolnay/rust-toolchain` steht die Rust-Version als Eingabe `toolchain`.
+
 CodeQL und GitHub Pages sind für **öffentliche** Repos kostenlos. Bei einem privaten Repo
 brauchen sie einen kostenpflichtigen Plan (Advanced Security bzw. Pro). Deshalb laufen der
 CodeQL-Job und das Veröffentlichen der Doku nur, wenn das Repo öffentlich ist. Gebaut wird
