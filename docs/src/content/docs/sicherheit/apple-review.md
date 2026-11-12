@@ -95,7 +95,8 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   Schutz vor Zurücksetzen der Systemzeit oder Wiedereinspielen alter gültiger Dateien.
 - Passkey-Sync über den Tresor ([ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/)) ist
   in Tests und im Simulator geprüft; Übernahme auf einem echten iPhone, Wiederherstellung auf einem
-  zweiten Gerät und das Bereinigen gelöschter Passkeys aus den iOS-Vorschlägen stehen aus.
+  zweiten Gerät stehen aus. Gelöschte Passkeys verschwinden aus den iOS-Vorschlägen erst beim
+  nächsten entsperrten AutoFill-Vorgang.
 - Notarisierung und TestFlight ([#30](https://github.com/MelonigeMelone/melonapp/issues/30)) sowie die Safari-Web-Erweiterung
   ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) stehen aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
   biometrische Aussagen gelten nur für die Hardware-Abnahme oben.

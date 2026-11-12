@@ -65,7 +65,9 @@ Passkey nur lokal erzeugen und muss ihn der App übergeben.
   Neue Passkeys landen immer im persönlichen Bereich.
 - Ältere Apps kennen den Typ nicht und zeigen ihn als Login mit verborgenem Schlüsselfeld.
   Speichern dort würde den Typ verlieren. Alle Apps zusammen aktualisieren.
-- Gelöschte Passkeys bleiben bis zum nächsten Veröffentlichen auf dem iPhone nutzbar; die
-  Vorschläge im iOS-Schlüsselbund (`ASCredentialIdentityStore`) werden noch nicht bereinigt.
+- Gelöschte Passkeys bleiben bis zum nächsten Veröffentlichen auf dem iPhone nutzbar. Die
+  Vorschläge von iOS (`ASCredentialIdentityStore`) ersetzt die Extension bei jedem entsperrten
+  Aufruf durch die aktuelle Passkey-Liste; ein gelöschter Passkey verschwindet dort also beim
+  nächsten AutoFill-Vorgang.
 - Passkeys nutzen kann weiterhin nur die iOS-Extension. Mac, Browser-Erweiterung und Web
   verwalten sie nur.

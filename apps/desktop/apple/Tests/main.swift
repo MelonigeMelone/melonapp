@@ -61,4 +61,8 @@ let planted = StoredPasskey(id: own.id, rp: own.rp, userName: "planted", userHan
 try Data(encryptCache(key: key, plaintext: JSONEncoder().encode([planted]), scope: "autofill/v1/\(scope)/synced").utf8).write(to: shadowDirectory.appendingPathComponent("\(scope).synced.enc"))
 try shadowVault.saveOutbox(own, key: key)
 precondition(shadowVault.passkeys(key: key).map(\.userName) == ["own"], "the device's own passkey must win over a synced one with the same ID")
+let suggestions = CredentialVault.suggestions(vault.passkeys(key: key))
+precondition(suggestions.count == 3)
+precondition(Set(suggestions.map(\.credentialID)) == Set(vault.passkeys(key: key).map(\.id)))
+precondition(suggestions.allSatisfy { s in vault.passkeys(key: key).contains { $0.id == s.credentialID && $0.rp == s.relyingPartyIdentifier && $0.userHandle == s.userHandle } })
 print("Swift AutoFill matching, expiry, UniFFI encryption, passkey sources and attack checks passed")

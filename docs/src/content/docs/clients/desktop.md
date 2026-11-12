@@ -131,7 +131,8 @@ Konto schon aktiv, veröffentlicht die App gleich neu; dabei landen alle Passkey
 Tresor als `{scope}.synced.enc` bei der Extension. Ein neues iPhone bekommt so nach Anmelden,
 Face ID einrichten und „Passwörter für iOS AutoFill aktualisieren“ alle Passkeys zurück
 ([ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/)). Alte gerätelokale Passkeys
-aus `{scope}.passkeys.enc` werden dabei einmalig mit übernommen.
+aus `{scope}.passkeys.enc` werden dabei einmalig mit übernommen. Bei jedem entsperrten Aufruf
+ersetzt die Extension die Passkey-Vorschläge von iOS durch die aktuelle Liste.
 
 Die Extension nutzt dieselben Farben wie die App (`MelonTheme` in
 `CredentialProviderViewController.swift`): fast schwarzer bzw. kühl-weißer Hintergrund und

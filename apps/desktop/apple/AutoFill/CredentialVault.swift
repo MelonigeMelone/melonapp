@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import Security
 import LocalAuthentication
@@ -94,6 +95,7 @@ final class CredentialVault {
             defer { plaintext.resetBytes(in: plaintext.startIndex..<plaintext.endIndex) }
             let cache = try JSONDecoder().decode(PasswordCache.self, from: plaintext)
             try cache.validate()
+            refreshSuggestions(passkeys(key: key))
             return cache.passwords
         }
     }
@@ -123,6 +125,19 @@ final class CredentialVault {
         result += decode([StoredPasskey].self, "\(scope).synced.enc", scope: "autofill/v1/\(scope)/synced", key: key, limit: 48 * 1024 * 1024) ?? []
         var seen = Set<Data>()
         return result.filter { seen.insert($0.id).inserted }
+    }
+
+    static func suggestions(_ passkeys: [StoredPasskey]) -> [ASPasskeyCredentialIdentity] {
+        passkeys.map { ASPasskeyCredentialIdentity(relyingPartyIdentifier: $0.rp, userName: $0.userName, credentialID: $0.id, userHandle: $0.userHandle, recordIdentifier: $0.id.base64EncodedString()) }
+    }
+
+    func refreshSuggestions(_ passkeys: [StoredPasskey]) {
+        let store = ASCredentialIdentityStore.shared
+        let identities = Self.suggestions(passkeys)
+        store.getState { state in
+            guard state.isEnabled else { return }
+            store.replaceCredentialIdentities(identities) { _, _ in }
+        }
     }
 
     func saveOutbox(_ passkey: StoredPasskey, key: Data) throws {
