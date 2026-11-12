@@ -89,9 +89,10 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 | Maßnahme | Wogegen |
 |---|---|
 | Ausfüllen **nur nach Klick**, nie automatisch beim Laden | unsichtbare Formulare, die beim Seitenaufruf Passwörter abgreifen |
-| Symbol und Menü reagieren nur auf **echte** Klicks (`isTrusted`) an der Stelle, an der das Menü wirklich zu sehen ist (`elementFromPoint`) | Seiten-Skripte, die Symbol und Menü per `click()` bedienen und das Passwort danach aus dem Feld lesen |
-| Klicks zählen nur, wenn das Menü voll sichtbar ist: eigene Stile mit `!important`, Prüfung von Deckkraft und Sichtbarkeit von Menü, `<html>` und `<body>`. Verändert die Seite die Stile, wird der Klick ignoriert. | Clickjacking: Die Seite macht das Menü unsichtbar und lockt den Klick darauf |
-| Menüeinträge sind erst 300 ms nach dem Öffnen klickbar | Doppelklick-Fallen, bei denen der zweite Klick unbemerkt einen Login wählt |
+| Symbol und Menü liegen in einem **geschlossenen** Shadow DOM (`mode: 'closed'`). Die Seite kommt nicht an die Knöpfe heran, kann sie weder per `click()` oder `focus()` bedienen noch per CSS umgestalten. | Seiten-Skripte, die das Menü bedienen oder verstecken und das Passwort danach aus dem Feld lesen |
+| Symbol und Menü reagieren nur auf **echte** Klicks (`isTrusted`) an der Stelle, an der das Menü wirklich liegt (`elementFromPoint`). Tastatur-Klicks zählen nur nach einem echten Enter/Leertaste auf genau diesem Knopf. | synthetische Klicks und Events |
+| Ein Knopf ist erst klickbar, wenn der Browser ihn als **tatsächlich sichtbar** meldet (Intersection Observer mit `trackVisibility`: nicht verdeckt, nicht durchsichtig, nicht gefiltert). Menüeinträge erst, wenn sie 300 ms ununterbrochen sichtbar waren. | Clickjacking: Die Seite legt etwas über das Menü (auch mit `pointer-events: none`), macht es durchsichtig oder lockt mit Doppelklick-Fallen |
+| Zusätzlich: eigene Stile am Host mit `!important`, und Deckkraft, Sichtbarkeit, `filter`, `clip-path`, Maske und `mix-blend-mode` werden für den Knopf und alle Vorfahren bis `<html>` geprüft | Browser ohne `trackVisibility` (Firefox), siehe [offene Punkte](/melonapp/sicherheit/offene-punkte/) |
 | Nur echte Absende-Knöpfe lösen die Speicher-Karte aus, nicht z. B. „Passwort zeigen“ | Speicher-Karten mit halb eingegebenen Passwörtern |
 | Nur sichtbare, aktivierte Felder werden erkannt und befüllt | versteckte Felder |
 | Nur im Hauptframe, nicht in iframes | fremde, eingebettete Seiten |
@@ -99,7 +100,6 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 | Treffer nur bei gleicher Domain oder Subdomain, nicht `github.com.evil.example` oder Eltern-Domains | Phishing-Domains |
 | Kein Ausfüllen von `https`-Logins in `http`-Seiten (außer `localhost`) | abgehörte, unverschlüsselte Verbindungen |
 | Auch das Popup bindet „Ausfüllen“ an die URLs des Logins, das Content-Script prüft sie | Tab hat zwischenzeitlich die Seite gewechselt |
-| Symbol und Menü im Shadow DOM | Seiten-CSS und -Skripte, die das Menü umgestalten wollen |
 | Nachrichten nur von der eigenen Erweiterung (`sender.id`) | andere Erweiterungen |
 | CSP der Erweiterungsseiten: `script-src 'self' 'wasm-unsafe-eval'` | eingeschleuster Code im Popup |
 | Speicher-Karte ist eine Erweiterungsseite im iframe, keine HTML-Einfügung in die Seite | Website liest oder verändert die Karte |
@@ -115,7 +115,9 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
   versteckte/deaktivierte Felder, Ausfüllen mit Events.
 - **E2E** (`apps/extension/e2e/extension.e2e.mjs`, CI-Job `e2e`): echtes Chromium mit geladener
   Erweiterung gegen den kompletten Stack. Kein Ausfüllen ohne Klick, Ausfüllen auf passender
-  Domain, 2FA-Code auf der Bestätigungsseite, Seiten-Skripte können per synthetischem Klick weder
-  Menü öffnen noch ausfüllen (auch nicht bei unsichtbar gemachtem Menü), nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
+  Domain, 2FA-Code auf der Bestätigungsseite, Seiten-Skripte erreichen das Shadow DOM nicht,
+  synthetische Klicks öffnen nichts, und durch ein darübergelegtes Element oder eine unsichtbar
+  gemachte Seite wird nicht ausgefüllt (der echte Klick danach schon). Die Tests finden Symbol und
+  Menü über den Accessibility-Baum (CDP) und klicken per Koordinaten. Nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
   Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, Sperren
   beendet das Ausfüllen.

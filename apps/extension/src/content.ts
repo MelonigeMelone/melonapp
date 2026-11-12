@@ -7,12 +7,12 @@ const ICON = `<svg viewBox="1 11 30 16" aria-hidden="true"><path d="M2 12a14 14 
 const STYLE = `
   :host { all: initial; }
   .btn { position: fixed; z-index: 2147483646; border: 0; border-radius: 6px; padding: 0; margin: 0;
-    background: transparent; display: grid; place-items: center; cursor: pointer; opacity: .9;
-    transition: background-color .12s ease, opacity .12s ease; }
+    background: transparent; display: grid; place-items: center; cursor: pointer;
+    transition: background-color .12s ease; }
   .btn svg { width: 78%; height: auto; display: block; }
-  .btn:hover { background: rgb(226 54 95 / .12); opacity: 1; }
-  .btn:focus-visible { outline: 2px solid #1F6B8F; outline-offset: 1px; opacity: 1; }
-  .btn.locked { opacity: .55; filter: grayscale(.6); }
+  .btn:hover { background: rgb(226 54 95 / .12); }
+  .btn:focus-visible { outline: 2px solid #1F6B8F; outline-offset: 1px; }
+  .btn.locked svg { opacity: .55; filter: grayscale(.6); }
   .menu { position: fixed; z-index: 2147483647; box-sizing: border-box; background: #fff; color: #17231C;
     border: 1px solid #D3E0D2; border-radius: 12px; box-shadow: 0 10px 28px rgb(23 35 28 / .16); padding: 6px;
     font: 14px/1.4 "Atkinson Hyperlegible", system-ui, sans-serif; }
@@ -31,27 +31,68 @@ const HOST_STYLE =
   'width: 0 !important; height: 0 !important; overflow: visible !important; z-index: 2147483647 !important; opacity: 1 !important; ' +
   'visibility: visible !important; pointer-events: auto !important; transform: none !important;';
 const MENU_ARM_MS = 300;
+const KEY_CLICK_MS = 1000;
 
 const host = document.createElement('melon-autofill');
 host.setAttribute('style', HOST_STYLE);
-const shadow = host.attachShadow({ mode: 'open' });
+const shadow = host.attachShadow({ mode: 'closed' });
 shadow.innerHTML = `<style>${STYLE}</style>`;
-let menuShownAt = 0;
 
-function fullyShown(el: Element | null): boolean {
-  if (!el) return true;
-  const s = getComputedStyle(el);
-  return Number(s.opacity) >= 1 && s.visibility === 'visible';
+type VisibilityEntry = IntersectionObserverEntry & { isVisible?: boolean };
+const tracksVisibility = 'isVisible' in IntersectionObserverEntry.prototype;
+const visibleSince = new WeakMap<Element, number>();
+const visibility = tracksVisibility
+  ? new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries as VisibilityEntry[]) {
+          if (!entry.isVisible) visibleSince.delete(entry.target);
+          else if (!visibleSince.has(entry.target)) visibleSince.set(entry.target, performance.now());
+        }
+      },
+      { trackVisibility: true, delay: 100 } as IntersectionObserverInit,
+    )
+  : null;
+
+function watchVisibility(el: Element) {
+  if (visibility) visibility.observe(el);
+  else visibleSince.set(el, performance.now());
 }
 
-function genuineClick(e: MouseEvent): boolean {
-  if (!e.isTrusted) return false;
+function remove(el: Element) {
+  visibility?.unobserve(el);
+  el.querySelectorAll('button').forEach((b) => visibility?.unobserve(b));
+  el.remove();
+}
+
+let keyTarget: EventTarget | null = null;
+let keyAt = 0;
+shadow.addEventListener('keydown', (e) => {
+  const key = (e as KeyboardEvent).key;
+  if (!e.isTrusted || (key !== 'Enter' && key !== ' ')) return;
+  keyTarget = e.target;
+  keyAt = performance.now();
+});
+
+function unaltered(el: Element): boolean {
+  for (let n: Element | null = el; n; n = n.parentElement ?? ((n.getRootNode() as ShadowRoot).host || null)) {
+    const s = getComputedStyle(n);
+    if (Number(s.opacity) < 1 || s.visibility !== 'visible') return false;
+    if (s.filter !== 'none' || s.clipPath !== 'none' || s.maskImage !== 'none' || s.mixBlendMode !== 'normal') return false;
+  }
+  return true;
+}
+
+function genuineClick(e: MouseEvent, armMs: number): boolean {
+  const el = e.currentTarget;
+  if (!e.isTrusted || !(el instanceof Element)) return false;
   if (host.getAttribute('style') !== HOST_STYLE) {
     host.setAttribute('style', HOST_STYLE);
     return false;
   }
-  if (![host, document.documentElement, document.body].every(fullyShown)) return false;
-  return e.detail === 0 || document.elementFromPoint(e.clientX, e.clientY) === host;
+  const since = visibleSince.get(el);
+  if (since === undefined || performance.now() - since < armMs || !unaltered(el)) return false;
+  if (e.detail === 0) return keyTarget === el && performance.now() - keyAt < KEY_CLICK_MS;
+  return document.elementFromPoint(e.clientX, e.clientY) === host;
 }
 let attached = false;
 let active: LoginFields | null = null;
@@ -100,7 +141,7 @@ function ensureHost() {
 }
 
 function clear() {
-  shadow.querySelectorAll('.btn, .menu').forEach((n) => n.remove());
+  shadow.querySelectorAll('.btn, .menu').forEach(remove);
 }
 
 function placeButton(btn: HTMLElement, input: HTMLInputElement) {
@@ -147,14 +188,15 @@ function menuItem(menu: HTMLElement, title: string, sub: string, onClick: () => 
     b.append(s);
   }
   b.addEventListener('click', (e) => {
-    if (!genuineClick(e) || performance.now() - menuShownAt < MENU_ARM_MS) return;
-    onClick();
+    if (genuineClick(e, MENU_ARM_MS)) onClick();
   });
   menu.append(b);
+  watchVisibility(b);
 }
 
 async function openMenu(fields: LoginFields, input: HTMLInputElement) {
-  shadow.querySelector('.menu')?.remove();
+  const old = shadow.querySelector('.menu');
+  if (old) remove(old);
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.setAttribute('role', 'menu');
@@ -164,7 +206,6 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
   head.innerHTML = `${ICON}<span>MelonApp</span>`;
   menu.append(head);
   shadow.append(menu);
-  menuShownAt = performance.now();
   placeMenu(menu, input);
 
   const res = await ask<MatchesResponse | null>({ type: 'matches' });
@@ -245,12 +286,13 @@ function showButton(fields: LoginFields, input: HTMLInputElement, locked: boolea
   btn.innerHTML = ICON;
   btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.addEventListener('click', (e) => {
-    if (!genuineClick(e)) return;
+    if (!genuineClick(e, 0)) return;
     cached = null;
     void openMenu(fields, input);
   });
   shadow.append(btn);
   placeButton(btn, input);
+  watchVisibility(btn);
 }
 
 function fieldsFor(input: HTMLInputElement): LoginFields | undefined {

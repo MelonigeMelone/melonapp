@@ -134,6 +134,32 @@ await step('unlock the extension', async () => {
 
 const site = await ctx.newPage();
 watch(site);
+const cdp = await ctx.newCDPSession(site);
+const ICON_NAME = 'Mit MelonApp ausfüllen';
+const findInMelon = async (role, text, timeout = 10000) => {
+  const end = Date.now() + timeout;
+  for (;;) {
+    const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+    for (const n of nodes) {
+      if (n.ignored || n.role?.value !== role || !String(n.name?.value ?? '').includes(text) || !n.backendDOMNodeId) continue;
+      const box = await cdp.send('DOM.getBoxModel', { backendNodeId: n.backendDOMNodeId }).catch(() => null);
+      if (!box) continue;
+      const q = box.model.border;
+      return { x: (q[0] + q[4]) / 2, y: (q[1] + q[5]) / 2, width: q[4] - q[0], height: q[5] - q[1] };
+    }
+    if (Date.now() > end) throw new Error(`${role} "${text}" not shown`);
+    await site.waitForTimeout(100);
+  }
+};
+const melonShown = async (role, text) => findInMelon(role, text, 0).then(() => true, () => false);
+const clickMelon = async (role, text) => {
+  const at = await findInMelon(role, text);
+  await site.waitForTimeout(text === ICON_NAME ? 300 : 600);
+  await site.mouse.click(at.x, at.y);
+};
+const clickIcon = () => clickMelon('button', ICON_NAME);
+const clickItem = (text) => clickMelon('button', text);
+
 const valueOf = async (selector, expected) => {
   await site.waitForFunction(([sel, want]) => document.querySelector(sel)?.value === want, [selector, expected], { timeout: 5000 }).catch(() => undefined);
   return site.locator(selector).inputValue();
@@ -145,23 +171,21 @@ await step('fill a matching site only after a click', async () => {
   await site.waitForTimeout(300);
   if ((await site.locator('#pw').inputValue()) !== '') throw new Error('filled without user action');
   await site.locator('#pw').focus();
-  const melon = site.getByRole('button', { name: 'Mit MelonApp ausfüllen' });
-  await melon.waitFor();
-  const a = await melon.boundingBox();
+  const c = await findInMelon('button', ICON_NAME);
+  const a = { x: c.x - c.width / 2, width: c.width };
   const b = await site.locator('#eye').boundingBox();
-  if (!a || !b) throw new Error('missing boxes');
+  if (!b) throw new Error('missing boxes');
   if (a.x < b.x + b.width && b.x < a.x + a.width) throw new Error('melon icon covers the page\'s own icon');
   await site.locator('#eye').click();
   await site.waitForTimeout(400);
   if (await site.locator('iframe[name="melonapp-save"]').count()) throw new Error('show-password click triggered a save prompt');
   await site.locator('#user').focus();
-  await melon.waitFor();
+  await findInMelon('button', ICON_NAME);
   await site.screenshot({ path: `${OUT}/ext-2a-icon.png`, clip: { x: 0, y: 0, width: 520, height: 260 } });
-  await melon.click();
-  await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').waitFor();
+  await clickIcon();
+  await findInMelon('button', 'Beispiel-Login');
   await site.screenshot({ path: `${OUT}/ext-2-menu.png`, clip: { x: 0, y: 0, width: 520, height: 300 } });
-  await site.waitForTimeout(350);
-  await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').click();
+  await clickItem('Beispiel-Login');
   if ((await valueOf('#user', 'mia@example.test')) !== 'mia@example.test') throw new Error('username not filled');
   if ((await valueOf('#pw', 'alt-passwort-1')) !== 'alt-passwort-1') throw new Error('password not filled');
 });
@@ -169,56 +193,62 @@ await step('fill a matching site only after a click', async () => {
 await step('fill the 2FA code on the verification page', async () => {
   await site.goto('https://login.example.test/2fa');
   await site.locator('#otp').focus();
-  const melon = site.getByRole('button', { name: 'Mit MelonApp ausfüllen' });
-  await melon.click();
-  const menu = site.getByRole('menu', { name: 'MelonApp' });
-  await menu.getByText('Einmalcode für mia@example.test').waitFor();
+  await clickIcon();
+  await findInMelon('button', 'Einmalcode für mia@example.test');
   await site.screenshot({ path: `${OUT}/ext-2b-otp.png`, clip: { x: 0, y: 0, width: 520, height: 260 } });
-  await site.waitForTimeout(350);
-  await menu.getByText('Beispiel-Login').click();
+  await clickItem('Beispiel-Login');
   await site.waitForFunction(() => document.querySelector('#otp')?.value.length === 6, null, { timeout: 10000 });
   const value = await site.locator('#otp').inputValue();
   if (!validCodes('JBSWY3DPEHPK3PXP').includes(value)) throw new Error(`filled 2FA code ${value} is wrong`);
 });
 
-await step('page scripts cannot open the menu or fill by synthetic clicks', async () => {
+await step('page scripts can neither reach nor trick the menu', async () => {
   await site.goto('https://login.example.test/');
   await site.locator('#pw').focus();
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).waitFor();
-  const filled = await site.evaluate(async () => {
-    const root = document.querySelector('melon-autofill')?.shadowRoot;
-    root?.querySelector('.btn')?.click();
-    root?.querySelector('.btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
-    await new Promise((r) => setTimeout(r, 800));
-    const opened = !!root?.querySelector('.menu');
-    return { opened, pw: document.querySelector('#pw').value };
+  await findInMelon('button', ICON_NAME);
+  const reach = await site.evaluate(() => {
+    const host = document.querySelector('melon-autofill');
+    host?.click();
+    host?.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    return { root: !!host?.shadowRoot };
   });
-  if (filled.opened) throw new Error('a synthetic click opened the menu');
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
-  const menu = site.getByRole('menu', { name: 'MelonApp' });
-  await menu.getByText('Beispiel-Login').waitFor();
-  const stolen = await site.evaluate(async () => {
-    const root = document.querySelector('melon-autofill')?.shadowRoot;
-    await new Promise((r) => setTimeout(r, 400));
-    for (const b of root?.querySelectorAll('.menu button') ?? []) b.click();
-    await new Promise((r) => setTimeout(r, 800));
-    return document.querySelector('#pw').value;
-  });
-  if (stolen || filled.pw) throw new Error('a synthetic click filled the password');
-  await site.evaluate(() => {
-    document.querySelector('melon-autofill').style.setProperty('opacity', '0', 'important');
-  });
-  await site.waitForTimeout(350);
-  await menu.getByText('Beispiel-Login').click({ force: true });
+  if (reach.root) throw new Error('the page can reach the shadow root');
   await site.waitForTimeout(500);
+  if (await melonShown('menu', 'MelonApp')) throw new Error('a synthetic click opened the menu');
+
+  await clickIcon();
+  const item = await findInMelon('button', 'Beispiel-Login');
+  await site.evaluate(() => {
+    const cover = document.createElement('div');
+    cover.id = 'cover';
+    cover.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#fff;pointer-events:none';
+    document.documentElement.append(cover);
+  });
+  await site.waitForTimeout(700);
+  await site.mouse.click(item.x, item.y);
+  await site.waitForTimeout(600);
+  if (await site.locator('#pw').inputValue()) throw new Error('filled through a click-through overlay');
+
+  await site.evaluate(() => {
+    document.querySelector('#cover').remove();
+    document.documentElement.style.setProperty('filter', 'opacity(0)', 'important');
+  });
+  await site.waitForTimeout(700);
+  await site.mouse.click(item.x, item.y);
+  await site.waitForTimeout(600);
   if (await site.locator('#pw').inputValue()) throw new Error('filled while the page had hidden the menu');
+
+  await site.evaluate(() => document.documentElement.style.removeProperty('filter'));
+  await site.waitForTimeout(700);
+  await site.mouse.click(item.x, item.y);
+  if ((await valueOf('#pw', 'alt-passwort-1')) !== 'alt-passwort-1') throw new Error('a genuine click after the attack was ignored');
 });
 
 await step('other domains get nothing, not even the icon', async () => {
   await site.goto('https://evil.example.test/');
   await site.locator('#pw').focus();
   await site.waitForTimeout(800);
-  if (await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).count()) throw new Error('icon shown without a matching login');
+  if (await melonShown('button', ICON_NAME)) throw new Error('icon shown without a matching login');
   const leaked = await sw.evaluate(async () => 'x');
   if (!leaked) throw new Error('service worker unreachable');
 });
@@ -227,20 +257,16 @@ await step('two-step login: e-mail page first, then password page', async () => 
   current = site;
   await site.goto('https://twostep.login.example.test/');
   await site.locator('#email').focus();
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
-  await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').waitFor();
-  await site.waitForTimeout(350);
-  await site.getByRole('menu', { name: 'MelonApp' }).getByText('Beispiel-Login').click();
+  await clickIcon();
+  await clickItem('Beispiel-Login');
   if ((await valueOf('#email', 'mia@example.test')) !== 'mia@example.test') throw new Error('e-mail step not filled');
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/password/);
   await site.locator('#pw').focus();
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
-  const first = site.getByRole('menu', { name: 'MelonApp' }).getByRole('button').first();
-  await first.getByText('eben gewählt', { exact: false }).waitFor();
+  await clickIcon();
+  await findInMelon('button', 'eben gewählt');
   await site.screenshot({ path: `${OUT}/ext-2b-two-step.png` });
-  await site.waitForTimeout(350);
-  await first.click();
+  await clickItem('eben gewählt');
   if ((await valueOf('#pw', 'alt-passwort-1')) !== 'alt-passwort-1') throw new Error('password step not filled');
 });
 
@@ -263,10 +289,9 @@ await step('generate a password on sign-up and save the new login', async () => 
   await site.goto('https://signup.example.test/');
   await site.locator('#user').fill('neu@example.test');
   await site.locator('#pw').focus();
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
-  await site.getByText('Sicheres Passwort vorschlagen').waitFor();
-  await site.waitForTimeout(350);
-  await site.getByText('Sicheres Passwort vorschlagen').click();
+  await clickIcon();
+  await clickItem('Sicheres Passwort vorschlagen');
+  await site.waitForFunction(() => document.querySelector('#pw')?.value.length === 20, null, { timeout: 5000 }).catch(() => undefined);
   const generated = await site.locator('#pw').inputValue();
   if (generated.length !== 20) throw new Error(`generated ${generated.length} characters`);
   await site.getByRole('button', { name: 'Weiter' }).click();
@@ -317,8 +342,8 @@ await step('locking the extension stops autofill', async () => {
   current = site;
   await site.goto('https://login.example.test/');
   await site.locator('#user').focus();
-  await site.getByRole('button', { name: 'Mit MelonApp ausfüllen' }).click();
-  await site.getByText('MelonApp ist gesperrt', { exact: false }).waitFor();
+  await clickIcon();
+  await findInMelon('StaticText', 'MelonApp ist gesperrt');
 });
 
 await ctx.close();
