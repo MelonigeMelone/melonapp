@@ -5,8 +5,9 @@ description: Prüfumfang, behobene Befunde und offene Abnahmen der nativen Clien
 
 Stand: 11. November 2026. Diese lokale Implementierungsprüfung ersetzt keine unabhängige
 Abnahme. Der Claude-Code-Befehl `/security-review` ist in dieser Codex-Sitzung nicht als
-Werkzeug verfügbar und wurde **nicht ausgeführt**. Der Branch ist inzwischen gemergt;
-der Review wird in [#29](https://github.com/MelonigeMelone/melonapp/issues/29) nachgeholt.
+Werkzeug verfügbar und wurde **nicht ausgeführt**. Der Review wurde beim Merge nachgeholt
+([#29](https://github.com/MelonigeMelone/melonapp/issues/29)): keine ausnutzbaren Befunde, vier
+kleinere Punkte und ein Bedienfehler, alle behoben (#61–#65, siehe unten).
 
 ## Geprüfte Grenzen und behobene Befunde
 
@@ -21,9 +22,13 @@ der Review wird in [#29](https://github.com/MelonigeMelone/melonapp/issues/29) n
   Suspendieren löschen Schlüssel; Hintergrundzustand verhindert verspätetes Entsperren.
   Biometrische Wiederaufnahme prüft außerdem, dass der Server nicht gewechselt wurde.
 - Tauri lädt ausschließlich die gemeinsame lokale Oberfläche mit begrenzter CSP.
-  Serverwechsel erfordert eine gesperrte Sitzung. API-URLs erlauben HTTPS und für lokale
+  Serverwechsel erfordert, dass kein Tresor offen ist; eine abgebrochene Anmeldung samt
+  Login-Nachweis wird dabei verworfen (#63, #65). API-URLs erlauben HTTPS und für lokale
   Entwicklung HTTP auf Loopback; Weiterleitungen sind abgeschaltet.
-- Caches verwenden authentifizierte Verschlüsselung mit Konto-/Server-/Formatkontext.
+- Jedes Sperren, auch Fokusverlust, Suspendieren und der native Timer, meldet beim Server ab. Ausgenommen ist nur genau das Token, das im biometrischen Wiederaufnahmezustand steckt (#61).
+- Caches verwenden authentifizierte Verschlüsselung mit Konto-/Server-/Formatkontext. Der
+  biometrische Wiederaufnahmezustand hat einen eigenen Kontext und lässt sich nicht mit
+  einer Cache-Datei vertauschen (#62). Deaktivieren löscht auch den AutoFill-Schlüssel (#64).
   Schreibvorgänge verwenden private temporäre Dateien und atomaren Ersatz. Schlüssel
   liegen nur in der Keychain mit `biometryCurrentSet` und gerätegebundener Zugriffsart.
 - AutoFill lehnt HTTP, ähnliche Domains und automatisch passende Subdomains ab.

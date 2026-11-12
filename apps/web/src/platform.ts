@@ -8,6 +8,7 @@ export interface NativePlatform {
   enableBiometric(session: Session): Promise<void>;
   unlockBiometric(): Promise<Session>;
   disableBiometric(): Promise<void>;
+  biometricKeepsToken(token: string): Promise<boolean>;
   onLock(callback: () => void): Promise<() => void>;
 }
 
