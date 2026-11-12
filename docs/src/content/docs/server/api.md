@@ -20,6 +20,9 @@ Formate: `EncString` = `1.<base64url>` (XChaCha20-Poly1305), `SealedKey` = `h1.<
 | POST | `/auth/register` | alle* | Konto + persönlicher Tresor |
 | POST | `/auth/login` | alle | Sitzung + verschlüsseltes Schlüsselmaterial |
 | POST | `/auth/logout` | angemeldet | Sitzung beenden |
+| GET | `/sessions` | angemeldet | eigene angemeldete Geräte |
+| DELETE | `/sessions/{id}` | angemeldet | ein eigenes Gerät abmelden |
+| DELETE | `/sessions` | angemeldet | alle eigenen Geräte außer diesem abmelden |
 | POST | `/auth/invites/preview` | alle | E-Mail und Einladender zu einem Einladungslink |
 | POST | `/auth/recover/start` | alle | Recovery-Sitzung mit Recovery-Auth-Key |
 | POST | `/auth/recover/complete` | Recovery-Sitzung | neues Master-Passwort setzen |
@@ -74,7 +77,10 @@ bei der Registrierung an sie gebunden wird. Mit Einladungs-Token wird die Person
 
 ### `POST /auth/login`
 
-`{ "email", "auth_key" }` → `200`
+`{ "email", "auth_key", "device"? }` → `200`
+
+`device` ist ein Name für die Geräteliste, z. B. „Firefox auf Windows“. Der Server entfernt
+Steuerzeichen und kürzt auf 64 Zeichen. Er ist eine Angabe des Clients, kein Nachweis.
 
 ```json
 { "token": "…", "expires_in_seconds": 1209600, "user_id": "…",
@@ -90,6 +96,23 @@ bei der Registrierung an sie gebunden wird. Mit Einladungs-Token wird die Person
 
 Der Token steht im Link hinter `#`. Browser schicken diesen Teil nie an den Server, er landet
 also nicht in Server- oder Proxy-Logs. Die Web-App sendet ihn nur im Body dieser Anfrage.
+
+## Geräte
+
+### `GET /sessions`
+
+```json
+{ "sessions": [ { "id": "…", "device": "Firefox auf Windows", "created_at": 1794480000,
+                  "last_seen_at": 1794488000, "current": true } ] }
+```
+
+Nur normale Sitzungen (`full`) des eigenen Kontos, die noch gelten, zuletzt aktive zuerst. Zeiten
+in Unix-Sekunden. `last_seen_at` wird höchstens alle 5 Minuten aktualisiert.
+
+### `DELETE /sessions/{id}` · `DELETE /sessions`
+
+`204`. Eine fremde oder unbekannte ID ergibt `404 session_not_found`. `DELETE /sessions` beendet
+alle eigenen Sitzungen außer der aufrufenden.
 
 ## Konto
 

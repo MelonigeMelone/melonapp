@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")/.."
+
+dump="${1:-}"
+if [[ ! -f "$dump" || "${2:-}" != "--yes" ]]; then
+  echo "usage: melon-restore <backups/melon-….dump> --yes" >&2
+  echo "replaces the whole database with the dump" >&2
+  exit 2
+fi
+docker compose exec -T db pg_restore --list < "$dump" > /dev/null
+
+docker compose stop server
+docker compose exec -T db psql -U melon -d postgres -v ON_ERROR_STOP=1 \
+  -c "DROP DATABASE IF EXISTS melon WITH (FORCE)" \
+  -c "CREATE DATABASE melon OWNER melon"
+docker compose exec -T db pg_restore -U melon -d melon --no-owner --exit-on-error < "$dump"
+docker compose start server
+echo "restored $dump"

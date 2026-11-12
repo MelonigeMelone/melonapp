@@ -276,6 +276,8 @@ pub async fn register(
 pub struct LoginRequest {
     email: String,
     auth_key: String,
+    #[serde(default)]
+    device: String,
 }
 
 #[derive(Serialize)]
@@ -329,7 +331,8 @@ pub async fn login(
     state.attempt_succeeded(&email, ip_key.as_deref());
 
     let ttl_hours = state.config.session_ttl_hours;
-    let token = create_session(&state, user_id, "full", ttl_hours * 60).await?;
+    let device = crate::sessions::device_label(&req.device);
+    let token = create_session(&state, user_id, "full", ttl_hours * 60, &device).await?;
 
     Ok(Json(LoginResponse {
         token,
@@ -379,6 +382,7 @@ pub async fn logout(State(state): State<AppState>, user: AuthUser) -> ApiResult<
 pub struct AuthUser {
     pub user_id: Uuid,
     pub(crate) token_hash: Vec<u8>,
+    pub(crate) session_id: Uuid,
 }
 
 pub struct RecoveryUser {
@@ -389,7 +393,7 @@ async fn session(
     parts: &Parts,
     state: &AppState,
     scope: &str,
-) -> Result<(Uuid, Vec<u8>), ApiError> {
+) -> Result<(Uuid, Vec<u8>, Uuid), ApiError> {
     let token = parts
         .headers
         .get(AUTHORIZATION)
@@ -398,25 +402,33 @@ async fn session(
         .filter(|t| !t.is_empty() && t.len() <= 128)
         .ok_or(ApiError::Unauthorized)?;
     let hash = token_hash(token);
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT user_id FROM sessions WHERE token_hash = $1 AND scope = $2 AND expires_at > now()",
+    let row: Option<(Uuid, Uuid, bool)> = sqlx::query_as(
+        "SELECT user_id, id, last_seen_at < now() - interval '5 minutes'
+         FROM sessions WHERE token_hash = $1 AND scope = $2 AND expires_at > now()",
     )
     .bind(&hash)
     .bind(scope)
     .fetch_optional(&state.db)
     .await?;
-    let (user_id,) = row.ok_or(ApiError::Unauthorized)?;
-    Ok((user_id, hash))
+    let (user_id, session_id, stale) = row.ok_or(ApiError::Unauthorized)?;
+    if stale {
+        sqlx::query("UPDATE sessions SET last_seen_at = now() WHERE id = $1")
+            .bind(session_id)
+            .execute(&state.db)
+            .await?;
+    }
+    Ok((user_id, hash, session_id))
 }
 
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let (user_id, token_hash) = session(parts, state, "full").await?;
+        let (user_id, token_hash, session_id) = session(parts, state, "full").await?;
         Ok(Self {
             user_id,
             token_hash,
+            session_id,
         })
     }
 }
@@ -425,7 +437,7 @@ impl FromRequestParts<AppState> for RecoveryUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let (user_id, _) = session(parts, state, "recovery").await?;
+        let (user_id, _, _) = session(parts, state, "recovery").await?;
         Ok(Self { user_id })
     }
 }
@@ -435,6 +447,7 @@ pub(crate) async fn create_session(
     user_id: Uuid,
     scope: &str,
     minutes: i32,
+    device: &str,
 ) -> ApiResult<String> {
     let mut raw = [0u8; 32];
     UnwrapErr(SysRng).fill_bytes(&mut raw);
@@ -444,13 +457,14 @@ pub(crate) async fn create_session(
         .execute(&state.db)
         .await?;
     sqlx::query(
-        "INSERT INTO sessions (token_hash, user_id, scope, expires_at)
-         VALUES ($1, $2, $3, now() + make_interval(mins => $4))",
+        "INSERT INTO sessions (token_hash, user_id, scope, expires_at, device)
+         VALUES ($1, $2, $3, now() + make_interval(mins => $4), $5)",
     )
     .bind(token_hash(&token))
     .bind(user_id)
     .bind(scope)
     .bind(minutes)
+    .bind(device)
     .execute(&state.db)
     .await?;
     Ok(token)

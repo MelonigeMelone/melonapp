@@ -152,7 +152,8 @@ impl Person {
             "POST",
             "/api/v1/auth/login",
             None,
-            Some(json!({ "email": self.email, "auth_key": mk.auth_key().to_base64() })),
+            Some(json!({ "email": self.email, "auth_key": mk.auth_key().to_base64(), "device": " Testgerät
+" })),
         )
         .await;
         if s == StatusCode::OK {
@@ -1360,4 +1361,79 @@ async fn simultaneous_failed_logins_cannot_slip_past_the_limits() {
         checked, 10,
         "exactly the per-account limit reaches the password check"
     );
+}
+
+#[tokio::test]
+async fn devices_can_be_listed_and_signed_out_but_only_your_own() {
+    let Some(app) = app(true).await else {
+        return;
+    };
+    let mut alice = Person::new("alice");
+    assert_eq!(alice.register(&app, None).await, StatusCode::CREATED);
+    alice.login(&app).await;
+    let first = alice.token.clone();
+    alice.login(&app).await;
+    let second = alice.token.clone();
+    let mut bob = Person::new("bob");
+    assert_eq!(bob.register(&app, None).await, StatusCode::CREATED);
+    bob.login(&app).await;
+
+    let (s, list) = alice.get(&app, "/api/v1/sessions").await;
+    assert_eq!(s, StatusCode::OK);
+    let sessions = list["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 2);
+    assert!(sessions.iter().all(|x| x["device"] == "Testgerät"));
+    let current: Vec<_> = sessions.iter().filter(|x| x["current"] == true).collect();
+    assert_eq!(current.len(), 1);
+    let other_id = sessions.iter().find(|x| x["current"] == false).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let (s, _) = bob
+        .send(
+            &app,
+            "DELETE",
+            &format!("/api/v1/sessions/{other_id}"),
+            json!(null),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NOT_FOUND, "bob cannot sign out alice");
+    let (s, _) = call(&app, "GET", "/api/v1/vaults", Some(&first), None).await;
+    assert_eq!(s, StatusCode::OK);
+
+    let (s, _) = alice
+        .send(
+            &app,
+            "DELETE",
+            &format!("/api/v1/sessions/{other_id}"),
+            json!(null),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (s, _) = call(&app, "GET", "/api/v1/vaults", Some(&first), None).await;
+    assert_eq!(
+        s,
+        StatusCode::UNAUTHORIZED,
+        "signed-out device loses access"
+    );
+
+    alice.login(&app).await;
+    let (s, _) = alice
+        .send(&app, "DELETE", "/api/v1/sessions", json!(null))
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (s, _) = call(&app, "GET", "/api/v1/vaults", Some(&second), None).await;
+    assert_eq!(
+        s,
+        StatusCode::UNAUTHORIZED,
+        "all other devices are signed out"
+    );
+    let (s, list) = alice.get(&app, "/api/v1/sessions").await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(list["sessions"].as_array().unwrap().len(), 1);
+    let (s, _) = bob.get(&app, "/api/v1/vaults").await;
+    assert_eq!(s, StatusCode::OK, "other users are untouched");
+    let (s, _) = call(&app, "GET", "/api/v1/sessions", None, None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
 }

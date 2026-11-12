@@ -1,5 +1,6 @@
 mod cipher;
 mod error;
+mod export;
 mod generator;
 mod kdf;
 mod passkey;
@@ -9,6 +10,7 @@ mod sharing;
 
 pub use cipher::{EncString, SymmetricKey};
 pub use error::CryptoError;
+pub use export::{is_export, open_export, seal_export};
 pub use generator::{PasswordOptions, generate_password};
 pub use kdf::{AuthKey, KdfParams, MasterKey, SALT_LEN, derive_master_key, generate_salt};
 pub use recovery::{RecoveryKey, fingerprint};
