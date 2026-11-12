@@ -17,6 +17,7 @@ export default defineConfig({
       input: {
         popup: fileURLToPath(new URL('./src/popup.html', import.meta.url)),
         save: fileURLToPath(new URL('./src/save.html', import.meta.url)),
+        options: fileURLToPath(new URL('./src/options.html', import.meta.url)),
       },
     },
   },

@@ -335,6 +335,30 @@ await step('a changed password offers an update, and "never" silences the site',
   if (await site.locator('iframe[name="melonapp-save"]').count()) throw new Error('prompt shown despite "never"');
 });
 
+await step('the settings page lists the silenced site and can bring the prompt back', async () => {
+  const options = await ctx.newPage();
+  current = options;
+  await options.goto(`chrome-extension://${extId}/options.html`);
+  const list = options.getByRole('list', { name: 'Ausgeschlossene Seiten' });
+  await list.getByText('login.example.test').waitFor({ timeout: 10000 });
+  await options.screenshot({ path: `${OUT}/ext-4-options.png` });
+  await options.getByRole('button', { name: 'login.example.test wieder fragen' }).click();
+  await options.getByText('Für login.example.test wird wieder gefragt.').waitFor();
+  await options.getByText('Keine. Seiten landen hier').waitFor();
+  await options.close();
+
+  current = site;
+  await site.goto('https://login.example.test/');
+  await site.locator('#user').fill('mia@example.test');
+  await site.locator('#pw').fill('wieder-gefragt-4');
+  await site.getByRole('button', { name: 'Weiter' }).click();
+  await site.waitForURL(/done/);
+  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  await prompt.getByText('Passwort für login.example.test aktualisieren?').waitFor({ timeout: 15000 });
+  await prompt.getByRole('button', { name: 'Nie für diese Seite' }).click();
+  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
+});
+
 await step('locking the extension stops autofill', async () => {
   current = popup;
   await popup.getByRole('button', { name: 'Sperren' }).click();

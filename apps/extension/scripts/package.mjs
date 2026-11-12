@@ -37,6 +37,7 @@ const base = {
   description: 'Logins aus deiner MelonApp ausfüllen und neue speichern. Ende-zu-Ende verschlüsselt.',
   icons,
   action: { default_popup: 'popup.html', default_title: 'MelonApp', default_icon: icons },
+  options_ui: { page: 'options.html', open_in_tab: true },
   permissions: ['storage', 'activeTab', 'alarms'],
   host_permissions: ['<all_urls>'],
   content_scripts: [{ matches: ['http://*/*', 'https://*/*'], js: ['content.js'], run_at: 'document_idle', all_frames: false }],

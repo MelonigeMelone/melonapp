@@ -25,6 +25,7 @@ import { count } from '@web/layout';
 import { describeError } from '@web/session';
 import { parseTotp, totpCode } from '@web/vault/totp';
 import { anyUrlMatches, hostOf } from '../shared/match';
+import { neverHosts, onNeverChange, removeNever } from '../shared/never';
 import type { Login, PendingSave, TabMessage } from '../shared/messages';
 import { PendingCard } from './PendingCard';
 import {
@@ -139,12 +140,20 @@ function Vault({ unlocked, onLock, onChange }: { unlocked: Unlocked; onLock: () 
   const [pending, setPending] = useState<PendingSave | null>(null);
   const [query, setQuery] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [never, setNever] = useState<string[]>([]);
   const { snapshot } = unlocked;
 
   useEffect(() => {
     void activeTab().then(setTab);
     void pendingSave().then(setPending);
   }, [unlocked]);
+
+  useEffect(() => {
+    void neverHosts().then(setNever);
+    return onNeverChange(setNever);
+  }, []);
+
+  const tabHost = tab?.url ? hostOf(tab.url) : null;
 
   const here = useMemo(() => (tab?.url ? snapshot.logins.filter((l) => anyUrlMatches(tab.url as string, l.urls)) : []), [tab, snapshot.logins]);
   const q = query.trim().toLowerCase();
@@ -195,6 +204,19 @@ function Vault({ unlocked, onLock, onChange }: { unlocked: Unlocked; onLock: () 
         />
       )}
 
+      {tabHost && never.includes(tabHost) && !pending && (
+        <Alert
+          severity="info"
+          action={
+            <Button color="inherit" size="small" onClick={() => void removeNever(tabHost)}>
+              Wieder fragen
+            </Button>
+          }
+        >
+          Für {tabHost} fragt MelonApp nicht nach dem Speichern.
+        </Alert>
+      )}
+
       <TextField
         type="search"
         size="small"
@@ -239,9 +261,14 @@ function Vault({ unlocked, onLock, onChange }: { unlocked: Unlocked; onLock: () 
       )}
 
       <Divider />
-      <Typography variant="caption" color="text.secondary">
-        {snapshot.email}, {count(snapshot.logins.length, 'Login', 'Logins')}
-      </Typography>
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+          {snapshot.email}, {count(snapshot.logins.length, 'Login', 'Logins')}
+        </Typography>
+        <Button size="small" onClick={() => void chrome.runtime.openOptionsPage()} sx={{ color: 'text.secondary' }}>
+          Einstellungen
+        </Button>
+      </Stack>
       {toast && (
         <Alert severity="success" onClose={() => setToast(null)}>
           {toast}
