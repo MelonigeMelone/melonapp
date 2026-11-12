@@ -242,7 +242,7 @@ verschlüsselten Konto-Schlüssel, nie das Passwort selbst.
 
 | Maßnahme | Warum |
 |---|---|
-| Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' https://api.pwnedpasswords.com`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. Die einzige fremde Adresse ist der Datenleck-Abgleich ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)). `style-src` erlaubt `'unsafe-inline'` für MUI ([warum](/melonapp/entscheidungen/0008-mui/#folge-für-die-content-security-policy)). |
+| Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' https://api.pwnedpasswords.com`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. Die einzige fremde Adresse ist der Datenleck-Abgleich ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)). `style-src 'self' 'nonce-…'`: Caddy erzeugt je Aufruf einen Nonce, nur Emotions Style-Elemente tragen ihn. Eingeschleustes CSS wird blockiert ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)). |
 | Links in Einträgen nur mit `http(s):`, `mailto:`, `tel:` | verhindert `javascript:`-Links in gespeicherten Feldern |
 | Einladungs-Token im URL-Fragment (`/#/invite/…`) | landet nie in Server- oder Proxy-Logs |
 | Auto-Lock nach 5 Minuten ohne Eingabe (einstellbar 1 bis 30 Minuten, nicht abschaltbar) | Schlüssel liegen nicht unbegrenzt im Speicher |

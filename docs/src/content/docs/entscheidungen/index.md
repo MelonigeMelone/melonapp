@@ -29,5 +29,7 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0015](/melonapp/entscheidungen/0015-native-apple-clients/) | Native Apple-Clients und Schlüsselisolation | angenommen |
 | [0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/) | iOS AutoFill, UniFFI und lokale Passkeys | angenommen |
 | [0017](/melonapp/entscheidungen/0017-issues-fuer-offene-arbeit/) | GitHub Issues für offene Arbeit | angenommen |
+| [0018](/melonapp/entscheidungen/0018-aurora-design/) | Aurora-Design statt Wassermelonen-Farben | angenommen |
+| [0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/) | CSP-Nonce für Styles statt 'unsafe-inline' | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.
