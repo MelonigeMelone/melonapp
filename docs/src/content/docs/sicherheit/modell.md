@@ -80,7 +80,11 @@ praktisch nicht zu knacken.
 Beim Hinzufügen holt die App den öffentlichen Schlüssel vom Server. Ein kompromittierter Server
 könnte einen eigenen unterschieben und so den Tresor-Schlüssel abfangen. Dagegen hilft der
 **Sicherheitscode**: Die App zeigt ihn vor dem Hinzufügen an, und die andere Person sieht ihren
-eigenen unter „Konto“. Stimmen beide überein, ist es der richtige Schlüssel
+eigenen unter „Konto“. Den eigenen Code berechnet die App aus dem öffentlichen Schlüssel, der zum
+gerade entschlüsselten privaten Schlüssel gehört, nicht aus der Angabe des Servers. Meldet der
+Server beim Login einen anderen öffentlichen Schlüssel, bricht die App die Anmeldung ab. Sonst
+könnte ein Server beiden Seiten denselben falschen Schlüssel zeigen, und die Codes würden trotzdem
+übereinstimmen. Stimmen beide überein, ist es der richtige Schlüssel
 ([ADR 0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/)).
 
 Eingeladene Personen werden automatisch freigeschaltet. Ihren Code prüft man danach im Tresor-Dialog.

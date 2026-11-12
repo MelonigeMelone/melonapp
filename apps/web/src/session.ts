@@ -29,15 +29,19 @@ export async function login(email: string, password: string): Promise<Session> {
   const authKey = await cryptoCall('derive', { password, salt: pre.salt, kdf: pre.kdf });
   try {
     const res = await api.login({ email, auth_key: authKey, device: deviceName() });
-    await cryptoCall('unlock', {
+    const publicKey = await cryptoCall('unlock', {
       wrappedAccountKey: res.wrapped_account_key,
       encryptedPrivateKey: res.encrypted_private_key,
     });
+    if (publicKey !== res.public_key) {
+      await api.logout(res.token).catch(() => undefined);
+      throw new ApiError(409, 'public_key_mismatch');
+    }
     return open(email, res.user_id, res.token, {
       kdf: pre.kdf,
       salt: pre.salt,
       wrappedAccountKey: res.wrapped_account_key,
-      publicKey: res.public_key,
+      publicKey,
       hasRecovery: res.has_recovery,
     });
   } catch (e) {
@@ -183,6 +187,8 @@ const messages: Record<string, string> = {
   verifications_unavailable:
     'Deine geprüften Sicherheitscodes konnten nicht geladen werden oder sind älter als zuletzt gesehen. Bis das geklärt ist, gibt die App keine Bereichs-Schlüssel weiter. Lade neu, und wenn es bleibt, prüfe den Server.',
   vault_not_found: 'Diesen Bereich gibt es nicht mehr, oder du hast keinen Zugriff mehr.',
+  public_key_mismatch:
+    'Der Server hat für dein Konto einen falschen öffentlichen Schlüssel gemeldet. Die Anmeldung wurde abgebrochen. Prüfe den Server, bevor du weitermachst.',
 };
 
 export function describeError(e: unknown): string {
