@@ -238,6 +238,20 @@
 			path = ../../../apple;
 			sourceTree = "<group>";
 		};
+		"TEMP_AD39B11B-57D1-4E64-A769-5A3AF2079BCB" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_B1EBF66D-92C7-4AF9-914B-23D19D94235E" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -293,6 +307,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					873DC7FD64BEB9F9B6321055 = {
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -484,6 +499,7 @@
 				);
 				CODE_SIGN_ENTITLEMENTS = MelonAutoFill/MelonAutoFill.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = MelonAutoFill/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -602,6 +618,7 @@
 				);
 				CODE_SIGN_ENTITLEMENTS = MelonAutoFill/MelonAutoFill.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = MelonAutoFill/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (

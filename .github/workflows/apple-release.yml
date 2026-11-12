@@ -52,12 +52,22 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple/AuthKey.p8
         run: bash scripts/build-macos-signed.sh --bundles app,dmg
+      - name: Notarize the disk image
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          for dmg in apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg; do
+            xcrun notarytool submit "$dmg" --key "$RUNNER_TEMP/apple/AuthKey.p8" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
+            xcrun stapler staple "$dmg"
+          done
       - name: Gatekeeper accepts the app and the disk image
         run: |
           app=apps/desktop/src-tauri/target/release/bundle/macos/MelonApp.app
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose=2 "$app"
           for dmg in apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg; do
+            xcrun stapler validate "$dmg"
             spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
           done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -121,6 +131,8 @@ jobs:
           echo "MELON_BUILD=$build" >> "$GITHUB_ENV"
       - run: bash scripts/build-apple-ffi.sh iphoneos
       - run: xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
       - name: Archive and export for App Store Connect
         env:
           APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}

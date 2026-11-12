@@ -140,6 +140,7 @@ targets:
         APPLICATION_EXTENSION_API_ONLY: true
         SKIP_INSTALL: true
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ${APPLE_DEVELOPMENT_TEAM}
     dependencies:
       - sdk: AuthenticationServices.framework
       - sdk: Security.framework

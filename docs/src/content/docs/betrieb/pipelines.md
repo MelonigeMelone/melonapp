@@ -70,11 +70,13 @@ getrennten Tauri-Workspace.
 (Actions → Apple release → Run workflow) für einen TestFlight-Build ohne Release.
 
 - **macOS:** `scripts/build-macos-signed.sh --bundles app,dmg` signiert mit Developer ID,
-  bettet das Profil ein und lässt Tauri notarisieren und stapeln. Danach prüfen
-  `stapler` und `spctl`, dass Gatekeeper App und DMG annimmt. Das DMG hängt am
+  bettet das Profil ein und lässt Tauri die App notarisieren und stapeln. Das DMG wird
+  anschließend mit `notarytool` notarisiert und gestapelt. Danach prüfen `stapler` und
+  `spctl`, dass Gatekeeper App und DMG annimmt. Das DMG hängt am
   GitHub-Release des Tags und liegt bei manuellen Läufen als Artefakt vor.
-- **iOS:** Build-Nummer = `github.run_number` für App und Extension. Xcode signiert
-  automatisch mit dem API-Schlüssel. Vor dem Upload prüft der Job im IPA die
+- **iOS:** Build-Nummer = `github.run_number` für App und Extension. Tauri setzt das Team
+  nur für die App; die Extension erhält es über `${APPLE_DEVELOPMENT_TEAM}` in
+  `project.yml` beim Generieren. Xcode signiert automatisch mit dem API-Schlüssel. Vor dem Upload prüft der Job im IPA die
   Build-Nummern, den Privacy-Manifest beider Targets, die App Group der Extension und
   dass die Extension nur Systembibliotheken lädt. `altool` lädt nach TestFlight hoch.
 
@@ -84,7 +86,7 @@ Secrets im Environment `apple-release` (nur `main` und Tags `v*`):
 | --- | --- | --- |
 | `APPLE_TEAM_ID` | Team-ID | – |
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` | Developer ID Application als `.p12` (Base64) | Dezember 2027 |
-| `MACOS_PROVISIONING_PROFILE` | Developer-ID-Profil für `de.melonigemelone.app` (Base64) | mit dem Zertifikat |
+| `MACOS_PROVISIONING_PROFILE` | Developer-ID-Profil für `de.melonigemelone.app` (Base64) | 2044, gilt nur mit gültigem Zertifikat |
 | `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD` | Apple Distribution als `.p12` (Base64) | November 2027 |
 | `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_KEY_P8` | App-Store-Connect-API-Schlüssel, Rolle App Manager | nie, widerrufbar |
 

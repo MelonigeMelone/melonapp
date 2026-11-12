@@ -164,6 +164,10 @@ auf dem Build-Mac: im Simulator unauffällig, auf dem iPhone stürzte die Extens
 („Library not loaded“). Die Apple-CI prüft deshalb mit `otool -L`, dass die Extension nur
 System-Bibliotheken lädt.
 
+Für signierte Gerätebuilds `APPLE_DEVELOPMENT_TEAM` beim `xcodegen generate` und beim
+`tauri ios build` setzen: Tauri trägt das Team nur in die App ein, die Extension bekommt
+es aus `project.yml`. Ohne die Variable bleibt das Team im generierten Projekt leer.
+
 Nicht erneut `tauri ios init` ausführen, um eigene Extension-Einstellungen zu erhalten.
 Die Quelle des Xcode-Projekts ist `project.yml`; generierte UniFFI-Bindings und Libraries
 werden nicht eingecheckt. Nach einem frischen Checkout zunächst `build-apple-ffi.sh`
