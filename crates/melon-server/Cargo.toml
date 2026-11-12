@@ -10,7 +10,7 @@ publish.workspace = true
 anyhow = "1"
 argon2 = "0.5"
 axum = "0.8"
-base64 = "0.22"
+base64 = "0.23"
 hmac = "0.12"
 melon-crypto = { path = "../melon-crypto" }
 rand = "0.8"

@@ -34,7 +34,7 @@ jobs:
       MELON_TEST_DATABASE_URL: postgres://melon:melon@localhost:5432/melon_test
       MELON_REQUIRE_DB: "1"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -47,7 +47,7 @@ jobs:
     name: Web app (WASM, tests, build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -62,7 +62,7 @@ jobs:
       - run: npm run build -w web
       - run: npm test -w extension
       - run: npm run build -w extension
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: melonapp-extension
           path: apps/extension/build
@@ -74,7 +74,7 @@ jobs:
     env:
       COMPOSE: docker compose -p melon-e2e --env-file apps/web/e2e/e2e.env -f deploy/docker-compose.yml -f apps/web/e2e/compose.override.yml
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - run: $COMPOSE build
       - run: $COMPOSE up -d --wait
@@ -101,7 +101,7 @@ jobs:
           hits=$(docker exec melon-e2e-db-1 psql -U melon -d melon -tAc "SELECT count(*) FROM items JOIN vaults ON vaults.id = items.vault_id WHERE data ILIKE '%github%' OR data ILIKE '%melone%' OR data ILIKE '%wlan-geheim%' OR data ILIKE '%recovery-code%' OR encrypted_meta ILIKE '%familie%'")
           test "$hits" = "0"
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-screenshots
           path: ${{ runner.temp }}/*.png
@@ -112,7 +112,7 @@ jobs:
     name: Minimum Rust version (1.87)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.87
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --locked

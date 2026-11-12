@@ -11,6 +11,9 @@ Passwortmanager. Die gesamte Doku liegt in `docs/src/content/docs/` (Starlight).
   Konfiguration, Pipelines oder Sicherheit ändern. Welche Seite zu welcher Änderung gehört,
   steht in `docs/src/content/docs/mitwirken/regeln.md`.
 - Neue Grundsatzentscheidung → neues ADR in `docs/src/content/docs/entscheidungen/`.
+- **Offene Arbeit gehört in GitHub Issues**, nicht in Markdown-Dateien (kein `HANDOFF.md`).
+  Labels, Milestones und Ablauf: `mitwirken/regeln.md` → „Offene Arbeit“. Zu Sitzungsbeginn
+  `gh issue list` lesen, PRs schließen Issues mit `Fixes #NN`.
 - Sicherheitsregeln aus `mitwirken/regeln.md` gelten immer. Bei Änderungen an Krypto,
   Auth oder Datenzugriff: Tests für den Angriffsfall und `/security-review` vor dem Abschluss.
 

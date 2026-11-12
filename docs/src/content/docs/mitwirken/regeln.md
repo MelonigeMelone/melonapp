@@ -28,7 +28,22 @@ sidebar:
 | Browser-Erweiterung | `clients/erweiterung.md` |
 | Workflow | `betrieb/pipelines.md` |
 | Neuer Sicherheitstest | Tabelle in `sicherheit/pruefungen.md` |
-| Bekannte Lücke | `sicherheit/offene-punkte.md` |
+| Bekannte Lücke | `sicherheit/offene-punkte.md`, und ein Issue, wenn sie behoben werden soll |
+
+## Offene Arbeit
+
+- **Jede offene Aufgabe ist ein [GitHub Issue](https://github.com/MelonigeMelone/melonapp/issues)**
+  ([ADR 0017](/melonapp/entscheidungen/0017-issues-fuer-offene-arbeit/)). Keine TODO-Listen,
+  `HANDOFF.md` oder Checklisten in Markdown-Dateien.
+- Labels: Bereich (`apple`, `web`, `erweiterung`, `server`, `krypto`, `betrieb`) plus bei Bedarf
+  `sicherheit`, `manuell` (braucht Hardware, Konten oder Handarbeit) und `blockiert`
+  (mit „Blockiert durch #NN“ im Text).
+- Milestones folgen dem [Fahrplan](/melonapp/konzept/fahrplan/).
+- Das [Board](https://github.com/users/MelonigeMelone/projects/9) zeigt den Stand: Backlog,
+  Als Nächstes, In Arbeit, Blockiert, Fertig. Neue Issues kommen dort in den Backlog.
+- Der PR schließt sein Issue mit `Fixes #NN`. Was am Ende einer Sitzung offen bleibt,
+  wird ein neues Issue oder ein Kommentar am bestehenden.
+- Schwachstellen nie als Issue, sondern über **Security → Report a vulnerability**.
 
 ## Sicherheit
 

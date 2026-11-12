@@ -8,7 +8,7 @@ publish.workspace = true
 
 [dependencies]
 argon2 = { version = "0.5", features = ["zeroize"] }
-base64 = "0.22"
+base64 = "0.23"
 chacha20poly1305 = "0.10"
 data-encoding = "2"
 hkdf = "0.12"
