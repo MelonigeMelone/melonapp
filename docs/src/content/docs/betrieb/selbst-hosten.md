@@ -108,6 +108,10 @@ Ein zweites Update gleichzeitig wird abgelehnt (`flock`). Von Hand geht dasselbe
    ssh-keyscan app.example.com | gh secret set DEPLOY_KNOWN_HOSTS --env production
    ```
 
+   `ssh-keyscan` unter Windows (OpenSSH 9.5) bricht bei aktuellen Servern mit `unsupported KEX
+   method` ab und liefert nichts, das Secret ist dann leer und der erste Deploy scheitert mit
+   `Host key verification failed`. Dann den Befehl in Git Bash oder auf dem Server ausführen und
+   den Fingerabdruck mit `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` auf dem Server vergleichen.
 4. Die lokale Datei `melon-deploy` löschen.
 5. Port 22 muss für GitHub erreichbar sein. Steht in der Firewall nur die eigene IP, kommt der
    Workflow nicht durch. Port 22 für alle ist in Ordnung, solange nur SSH-Schlüssel erlaubt sind.
@@ -127,6 +131,7 @@ Master-Passwort darin. Deshalb: starke Master-Passwörter und die Backups nicht 
 | `bin/melon-backup`: `pg_dump` im Custom-Format, danach mit `pg_restore --list` geprüft | nächtlich 03:30 (systemd-Timer) und vor jedem Update | `backups/` auf dem Server (`chmod 700`), 14 Tage |
 | Kopie per `rsync` (ohne `--delete`) | nächtlich, wenn `backup.env` existiert. Vor Updates nur lokal, damit ein Ausfall der Storage Box kein Deployment blockiert. | Hetzner Storage Box. Dort wird nichts gelöscht, auch nicht von einem übernommenen Server aus. |
 | Hetzner-Backups (Server-Snapshot) | täglich, 7 Tage | Hetzner, Schutz gegen „Server kaputt“ |
+| Kopie zu Hause (`scripts/home-backup.ps1`) | wenn das letzte Mal 30 Tage her ist, geprüft bei jeder Anmeldung und täglich um 12 Uhr | eigener Windows-Rechner, die 12 neuesten, Schutz gegen „Hetzner-Konto weg“ |
 
 **Timer einrichten (einmal):**
 
@@ -150,6 +155,38 @@ systemctl list-timers melon-backup.timer
    `bin/melon-backup` zeigt danach `copied to …`.
 
 Lokal hält `bin/melon-backup` höchstens 14 Tage und höchstens 60 Dumps.
+
+**Kopie zu Hause (Windows, optional):** Der eigene Rechner holt sich alle 30 Tage den neuesten
+Dump von der Storage Box. Er braucht dafür einen **eigenen, nur lesenden** Zugang, damit ein
+befallener Rechner dort nichts löschen kann.
+
+1. In der Storage Box einen zweiten Sub-Account für `melonapp/` anlegen, SSH an, noch **nicht**
+   schreibgeschützt.
+2. In PowerShell einen Schlüssel erzeugen und hinterlegen (fragt einmal nach dem Passwort des
+   Sub-Accounts). Beim ersten Verbinden den Fingerabdruck mit der Hetzner-Doku vergleichen und mit
+   `yes` bestätigen, dann steht der Host-Schlüssel in `~\.ssh\known_hosts`:
+
+   ```powershell
+   New-Item -ItemType Directory -Force $HOME\.melonapp | Out-Null
+   ssh-keygen -t ed25519 -N '""' -C melon-home -f $HOME\.melonapp\storagebox
+   Get-Content $HOME\.melonapp\storagebox.pub | ssh -p 23 u123456-sub2@u123456-sub2.your-storagebox.de install-ssh-key
+   ```
+
+3. Jetzt den Sub-Account in der Hetzner-Konsole auf **schreibgeschützt** stellen.
+4. `deploy/home-backup.example.json` nach `~\.melonapp\home-backup.json` kopieren und ausfüllen.
+   Optional: `Target` (Standard `~\MelonApp-Backups`), `IntervalDays` (30), `Keep` (12).
+5. Einmal von Hand holen, dann die geplante Aufgabe einrichten:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\home-backup.ps1 -Force
+   powershell -ExecutionPolicy Bypass -File scripts\home-backup.ps1 -Install
+   ```
+
+Das Skript lädt nur den neuesten Dump, prüft, dass er mit `PGDMP` beginnt (sonst wird er
+verworfen), behält die 12 neuesten und schreibt `home-backup.log` in den Zielordner. Läuft es als
+geplante Aufgabe und scheitert, erscheint ein Hinweisfenster. `-Uninstall` entfernt die Aufgabe.
+Der Dump ist schützenswert (siehe oben), der Zielordner gehört also nicht in einen geteilten
+Cloud-Ordner. Verschlüsselt wird er erst mit [#77](https://github.com/MelonigeMelone/melonapp/issues/77).
 
 **Wiederherstellen:**
 
