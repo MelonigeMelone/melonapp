@@ -49,7 +49,7 @@ import { ImportDialog } from './ImportDialog';
 import { ItemEditor } from './ItemEditor';
 import { SecurityCheck } from './SecurityCheck';
 import { audit } from '../../vault/audit';
-import { TRASH_DAYS } from '../../vault/trash';
+import { isTrashed, TRASH_DAYS } from '../../vault/trash';
 
 const ALL = 'all';
 const TRASH = 'trash';
@@ -143,7 +143,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
 
   const remove = (vaultId: string, id: string) =>
     attempt(async () => {
-      await manager.removeItem(vaultId, id);
+      await manager.removeItem(vaultId, id, inTrash ? isTrashed : undefined);
       setSelected(null);
     });
 

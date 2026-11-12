@@ -180,8 +180,9 @@ export class VaultsManager {
   }
 
   private async purge(store: VaultStore) {
+    const isExpired = (item: Item) => expired([{ vaultId: store.vaultId, id: '', revision: 0, item }], this.now()).length > 0;
     for (const v of expired(store.list(), this.now())) {
-      await store.remove(v.id).catch(() => undefined);
+      await store.remove(v.id, isExpired).catch(() => undefined);
     }
   }
 
@@ -201,7 +202,7 @@ export class VaultsManager {
 
   async emptyTrash() {
     for (const v of this.snapshot.trash) {
-      if (this.vault(v.vaultId)?.canWrite) await this.removeItem(v.vaultId, v.id);
+      if (this.vault(v.vaultId)?.canWrite) await this.removeItem(v.vaultId, v.id, isTrashed);
     }
   }
 
@@ -274,8 +275,8 @@ export class VaultsManager {
     return saved;
   }
 
-  async removeItem(vaultId: string, id: string) {
-    await this.store(vaultId).remove(id);
+  async removeItem(vaultId: string, id: string, still?: (item: Item) => boolean) {
+    await this.store(vaultId).remove(id, still);
     this.emit();
   }
 

@@ -18,7 +18,9 @@ export function fromTrash(item: Item): Item {
 }
 
 export function purgeDate(item: Item): Date | null {
-  return item.trashedAt ? new Date(Date.parse(item.trashedAt) + TRASH_DAYS * DAY) : null;
+  if (!item.trashedAt) return null;
+  const due = new Date(Date.parse(item.trashedAt) + TRASH_DAYS * DAY);
+  return Number.isNaN(due.getTime()) ? null : due;
 }
 
 export function expired(items: VaultItem[], now = new Date()): VaultItem[] {

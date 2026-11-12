@@ -31,5 +31,6 @@ describe('trash', () => {
   it('ignores invalid trash marks from other clients', () => {
     expect(parseItem('{"title":"x","trashedAt":"gestern"}').trashedAt).toBeUndefined();
     expect(parseItem('{"title":"x","trashedAt":5}').trashedAt).toBeUndefined();
+    expect(parseItem('{"title":"x","trashedAt":"+275760-09-13T00:00:00Z"}').trashedAt).toBeUndefined();
   });
 });

@@ -40,6 +40,7 @@ export interface VaultItem {
 }
 
 const HISTORY_LIMIT = 20;
+const LATEST_DATE = Date.UTC(9999, 0, 1);
 const KINDS: FieldKind[] = ['text', 'concealed', 'totp', 'url', 'email', 'phone', 'date', 'multiline'];
 const TYPES: ItemType[] = ['login', 'note', 'card', 'identity', 'wifi'];
 
@@ -155,7 +156,7 @@ export function parseItem(json: string): Item {
       return { fieldId: str(ho.fieldId), label: str(ho.label), value: str(ho.value), changedAt: str(ho.changedAt) };
     }),
     seq: Number.isSafeInteger(o.seq) && (o.seq as number) > 0 ? (o.seq as number) : 0,
-    ...(typeof o.trashedAt === 'string' && !Number.isNaN(Date.parse(o.trashedAt)) ? { trashedAt: o.trashedAt } : {}),
+    ...(typeof o.trashedAt === 'string' && Math.abs(Date.parse(o.trashedAt)) < LATEST_DATE ? { trashedAt: o.trashedAt } : {}),
   };
 }
 

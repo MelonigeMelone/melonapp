@@ -37,3 +37,11 @@ mitnehmen und dieselben Rechte beachten wie Bearbeiten.
 - Endgültig gelöscht wird erst, wenn nach 30 Tagen eine App mit Schreibrecht online ist. Bis
   dahin liegt der Chiffretext weiter auf dem Server.
 - Ältere Apps ohne Papierkorb zeigen Papierkorb-Einträge als normale Einträge an.
+- Automatisches und gesammeltes Löschen prüft **unmittelbar vor jedem** `DELETE` (auch nach einem
+  Konflikt), ob der Eintrag noch im Papierkorb liegt bzw. abgelaufen ist. Hat ein anderes Mitglied
+  ihn inzwischen wiederhergestellt, bleibt er.
+- `trashedAt` kommt von der Uhr des löschenden Geräts, abgelaufen wird nach der Uhr jedes Geräts
+  mit Schreibrecht. Eine stark falsch gehende Uhr kann Einträge in geteilten Bereichen früher
+  endgültig löschen. Das kann ein Mitglied mit Schreibrecht ohnehin, es ist also keine neue Lücke.
+- Bei Konflikten gewinnt wie immer die zuletzt speichernde Seite: Bearbeitet jemand einen Eintrag,
+  den ein anderer gerade gelöscht hat, ist er danach wieder da.
