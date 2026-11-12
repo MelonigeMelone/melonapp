@@ -154,7 +154,7 @@ genullt (`zeroize`) und implementieren kein `Debug`. Klartexte kommen als
 
 ## Passwort-Generator (`generator.rs`)
 
-- Zufall direkt aus dem Betriebssystem (`os_rng()`), gleichverteilt über `random_range`.
+- Zufall direkt aus dem Betriebssystem (`os_rng()`), gleichverteilt über `random_range` mit dem `rand`-Feature `unbiased` (ohne jede Verzerrung).
 - Jede aktivierte Zeichenklasse kommt mindestens einmal vor: Zuerst wird je Klasse ein
   Zeichen gezogen, der Rest aus allen Klassen, danach wird gemischt.
 - Länge 8–256, Standard 20 mit allen Klassen (≈ 128 bit Entropie).
