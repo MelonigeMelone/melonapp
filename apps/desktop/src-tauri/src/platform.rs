@@ -495,11 +495,19 @@ pub async fn autofill_publish(
                         .map_err(str::to_owned)?,
                 )
             };
-            let mut config =
-                PasswordOptions::new_generic_password("de.melonapp.autofill.v1", &scope);
-            config.use_protected_keychain();
-            config.set_access_group(group);
-            config.set_access_synchronized(Some(false));
+            let item = || {
+                let mut config =
+                    PasswordOptions::new_generic_password("de.melonapp.autofill.v1", &scope);
+                config.use_protected_keychain();
+                config.set_access_group(group);
+                config.set_access_synchronized(Some(false));
+                config
+            };
+            if passwords::delete_generic_password_options(item()).is_err_and(|e| e.code() != -25300)
+            {
+                return Err("biometric_unavailable".into());
+            }
+            let mut config = item();
             let access = SecAccessControl::create_with_protection(
                 Some(ProtectionMode::AccessibleWhenPasscodeSetThisDeviceOnly),
                 AccessControlOptions::BIOMETRY_CURRENT_SET.bits(),
