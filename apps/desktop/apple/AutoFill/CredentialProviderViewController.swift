@@ -26,6 +26,11 @@ enum MelonTheme {
             ? UIColor(red: 0x96 / 255, green: 0x86 / 255, blue: 0xFF / 255, alpha: 1)
             : UIColor(red: 0x5B / 255, green: 0x45 / 255, blue: 0xF0 / 255, alpha: 1)
     }
+    static let onAccent = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0x0A / 255, green: 0x08 / 255, blue: 0x18 / 255, alpha: 1)
+            : UIColor.white
+    }
 }
 
 final class CredentialProviderViewController: ASCredentialProviderViewController {
@@ -69,6 +74,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         var configuration: UIButton.Configuration = primary ? .filled() : .tinted()
         configuration.cornerStyle = .capsule
         configuration.buttonSize = .large
+        if primary { configuration.baseForegroundColor = MelonTheme.onAccent }
         button.configuration = configuration
         button.setTitle(title, for: .normal)
         button.addAction(UIAction { _ in action() }, for: .touchUpInside)

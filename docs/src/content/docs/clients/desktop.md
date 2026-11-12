@@ -117,6 +117,8 @@ Abläufe sind vor Einsatz mit wichtigen Konten noch auf einem Gerät zu prüfen.
 Die Extension nutzt dieselben Farben wie die App (`MelonTheme` in
 `CredentialProviderViewController.swift`): fast schwarzer bzw. kühl-weißer Hintergrund und
 Violett als Akzent, je nach Systemmodus. Buttons sind Pillen, „Abbrechen“ ist zurückhaltend getönt.
+Gefüllte Buttons tragen wie in der Web-App im Dunkelmodus dunkle Schrift (`#0A0818`, Kontrast 6,9 : 1),
+weil Weiß auf dem hellen Violett nur 2,9 : 1 erreicht.
 
 Für Änderungen an der Extension:
 
