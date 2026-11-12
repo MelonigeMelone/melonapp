@@ -81,6 +81,19 @@ Einträge anlegen, Suchen, Kopieren, Bearbeiten, Neuladen, falsches Passwort und
 Mobilansicht durch und legt Screenshots in `tmp/` ab. Er läuft über `localhost`, weil
 Browser bestimmte APIs nur dort oder unter HTTPS anbieten.
 
+## Fuzzing
+
+`fuzz/` ist ein eigener Cargo-Workspace (nightly, `cargo-fuzz`):
+
+```sh
+docker run --rm -v "$PWD:/src" -v melon-cargo:/usr/local/cargo/registry -w /src/fuzz rust:1-bookworm \
+  bash -c "rustup toolchain install nightly --profile minimal && cargo install cargo-fuzz --locked && \
+           cargo +nightly fuzz run formats -- -max_total_time=60"
+```
+
+Ziele: `formats`, `passkey`, `native_session`. Ein Fund liegt danach unter `fuzz/artifacts/<Ziel>/`
+und lässt sich mit `cargo +nightly fuzz run <Ziel> <Datei>` nachstellen.
+
 ## Doku
 
 Benötigt Node ≥ 22.23.
