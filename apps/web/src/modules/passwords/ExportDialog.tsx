@@ -24,6 +24,7 @@ const MIN_EXPORT_PASSWORD = 12;
 function message(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e);
   if (/wrong_password|decryption failed/.test(m)) return 'Das Master-Passwort stimmt nicht.';
+  if (/export_password_is_master_password/.test(m)) return 'Nimm ein anderes Export-Passwort als dein Master-Passwort.';
   if (/weak_export_password|at least 12/.test(m)) return `Das Export-Passwort braucht mindestens ${MIN_EXPORT_PASSWORD} Zeichen.`;
   return 'Der Export ist fehlgeschlagen. Versuche es noch einmal.';
 }

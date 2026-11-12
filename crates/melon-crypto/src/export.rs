@@ -51,6 +51,9 @@ pub fn open_export(password: &str, file: &str) -> Result<Zeroizing<Vec<u8>>, Cry
     if file.version != VERSION {
         return Err(CryptoError::UnsupportedVersion);
     }
+    if file.kdf != KdfParams::default() {
+        return Err(CryptoError::InvalidKdfParams);
+    }
     let salt = STANDARD
         .decode(&file.salt)
         .map_err(|_| CryptoError::InvalidSalt)?;
@@ -94,6 +97,14 @@ mod tests {
         assert_eq!(
             open_export(PASSWORD, &parsed.to_string()).err(),
             Some(CryptoError::InvalidKdfParams)
+        );
+
+        let mut parsed: serde_json::Value = serde_json::from_str(&file).unwrap();
+        parsed["kdf"]["memory_kib"] = (1024 * 1024).into();
+        assert_eq!(
+            open_export(PASSWORD, &parsed.to_string()).err(),
+            Some(CryptoError::InvalidKdfParams),
+            "a file must not force an expensive Argon2 run"
         );
 
         let mut parsed: serde_json::Value = serde_json::from_str(&file).unwrap();

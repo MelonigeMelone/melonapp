@@ -206,6 +206,7 @@ const handlers: CryptoMethods = {
     return fingerprint(publicKey);
   },
   sealExport(r) {
+    if (r.exportPassword.normalize('NFKC') === r.password.normalize('NFKC')) fail('export_password_is_master_password');
     return withAccountKey(r, () => sealExport(r.exportPassword, r.plaintext));
   },
   checkPassword(r) {

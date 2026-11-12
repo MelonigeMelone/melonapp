@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     time::{Duration, Instant},
 };
+use unicode_normalization::UnicodeNormalization;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
@@ -102,6 +103,10 @@ fn sealed(
 ) -> Result<String> {
     let public = PublicKey::from_base64(public).map_err(|_| "invalid_public_key")?;
     Ok(seal_vault_key(&public, key, &context(vault, user, version)).to_string())
+}
+
+fn same_password(a: &str, b: &str) -> bool {
+    a.nfkc().eq(b.nfkc())
 }
 
 fn biometric_aad(scope: &str) -> Vec<u8> {
@@ -412,6 +417,9 @@ impl Session {
             }
             "sealExport" => {
                 self.confirm_password(a)?;
+                if same_password(text(a, "password")?, text(a, "exportPassword")?) {
+                    return Err("export_password_is_master_password");
+                }
                 melon_crypto::seal_export(
                     text(a, "exportPassword")?,
                     text(a, "plaintext")?.as_bytes(),
@@ -827,6 +835,12 @@ mod tests {
         assert_eq!(
             session.call("sealExport", reauth("wrong")).err(),
             Some("wrong_password")
+        );
+        let mut same = reauth("test-password");
+        same["exportPassword"] = json!("test-password");
+        assert_eq!(
+            session.call("sealExport", same).err(),
+            Some("export_password_is_master_password")
         );
         assert_eq!(
             session.call("checkPassword", reauth("wrong")).err(),

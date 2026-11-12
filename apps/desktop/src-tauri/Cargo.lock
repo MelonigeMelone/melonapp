@@ -2285,6 +2285,7 @@ dependencies = [
  "melon-crypto",
  "serde",
  "serde_json",
+ "unicode-normalization",
  "zeroize",
 ]
 

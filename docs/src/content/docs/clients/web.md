@@ -187,15 +187,20 @@ Zugriff hat. Die Datei entsteht nur im Browser.
 | **Verschlüsselt** (`.melon.json`, empfohlen) | eigenes Backup, Umzug auf einen anderen MelonApp-Server | jeder Eintrag vollständig (alle Typen, Abschnitte, Verlauf, 2FA) mit dem Namen seines Bereichs. Verschlüsselt mit einem eigenen **Export-Passwort** (mindestens 12 Zeichen), siehe [Kryptografie](/melonapp/sicherheit/kryptografie/#export-exportrs). |
 | **Unverschlüsselt** (CSV im Bitwarden-Format) | Umzug zu einem anderen Passwortmanager | Logins mit allen Websites, Benutzername, Passwort und 2FA-Schlüssel; andere Typen als Notiz mit ihren Feldern; Bereich als Ordner. Kein Verlauf. |
 
-- **Beide brauchen das Master-Passwort.** Wer an einem entsperrten Gerät sitzt, kann so nicht
-  einfach alles mitnehmen. Geprüft wird es wie beim Passwortwechsel: Der daraus abgeleitete
+- **Beide brauchen das Master-Passwort.** Wer an einem entsperrten Gerät sitzt, kann so nicht mit
+  ein paar Klicks alles mitnehmen. Gegen Schadcode in der Seite schützt das nicht, der kommt ohnehin
+  an die entschlüsselten Einträge. Geprüft wird es wie beim Passwortwechsel: Der daraus abgeleitete
   Schlüssel muss den Konto-Schlüssel entpacken (`checkPassword` bzw. `sealExport` im Worker und
   in der nativen Sitzung).
 - **CSV nur nach Bestätigung:** roter Hinweis, Häkchen „Ich verstehe …“, roter Button, der
-  Dateiname enthält `UNVERSCHLUESSELT`. Passwörter werden **unverändert** geschrieben, auch wenn sie
-  mit `=` beginnen. Darum der Hinweis, die Datei nicht in Excel zu öffnen.
+  Dateiname enthält `UNVERSCHLUESSELT`. Passwörter und 2FA-Schlüssel werden **unverändert**
+  geschrieben, auch wenn sie mit `=` beginnen. Alle anderen Spalten (Titel, Notizen, Websites,
+  Bereichsname) bekommen vor `=`, `+`, `-`, `@` ein `'`, weil sie in geteilten Bereichen von
+  anderen stammen können: Eine Formel wie `=HYPERLINK(…)` im Titel könnte in einer
+  Tabellenkalkulation sonst die Passwörter der anderen Zeilen verschicken.
 - **Wieder einlesen:** Der Import erkennt eine `.melon.json`, fragt nach dem Export-Passwort und
-  zeigt danach die normale Vorschau mit Ziel-Bereich und Doppelten-Prüfung.
+  zeigt danach die normale Vorschau mit Ziel-Bereich und Doppelten-Prüfung. Importierte Einträge
+  bekommen neue IDs und beginnen bei `seq` 0.
 - Einträge, die sich nicht entschlüsseln ließen oder als älterer Stand verworfen wurden
   ([Rollback-Erkennung](#rollback-erkennung)), fehlen im Export. Der Dialog sagt das.
 - In der **Desktop-App** speichert der Browser-Download noch keine Datei, dafür fehlt ein nativer

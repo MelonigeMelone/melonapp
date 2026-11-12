@@ -160,10 +160,12 @@ Eine verschlüsselte Export-Datei ist JSON:
   HKDF-Schritt wie beim Master-Passwort (`wrapping_key`). Mit dem Konto hat er nichts zu tun: Wer
   die Datei und das Export-Passwort hat, kann sie öffnen, ohne Zugang zum Server.
 - Verschlüsselung: XChaCha20-Poly1305 mit AAD `melon/export/v1`.
-- Das Export-Passwort braucht mindestens 12 Zeichen (`WeakExportPassword`).
-- Beim Öffnen gelten dieselben Grenzen für die KDF-Parameter wie beim Login
-  (`KdfParams::validate`). Eine manipulierte Datei kann also weder einen schwachen noch einen
-  absurd teuren Argon2-Lauf erzwingen. Größer als 64 MB wird nicht gelesen.
+- Das Export-Passwort braucht mindestens 12 Zeichen (`WeakExportPassword`) und darf nicht das
+  Master-Passwort sein. Sonst würde jede Export-Datei, etwa in einem Cloud-Backup, zu einem
+  weiteren Ziel für Offline-Angriffe auf das Master-Passwort.
+- Exporte werden immer mit den Standard-Parametern versiegelt, und beim Öffnen werden **nur**
+  diese angenommen. Eine manipulierte Datei kann also weder einen schwachen noch einen teuren
+  Argon2-Lauf (bis 1 GiB im Browser) erzwingen. Größer als 64 MB wird nicht gelesen.
 - Dieselbe Funktion läuft im Browser (WASM: `sealExport`, `openExport`) und in der nativen
   Sitzung. Ein Export aus dem Browser lässt sich in der Desktop-App einlesen und umgekehrt.
 

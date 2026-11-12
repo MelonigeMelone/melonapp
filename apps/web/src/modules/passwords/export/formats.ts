@@ -23,14 +23,21 @@ export function parseMelonPayload(json: string): Item[] {
   if (o.app !== 'MelonApp' || o.version !== 1 || !Array.isArray(o.items)) throw new Error('invalid_export');
   return o.items.map((entry) => {
     const e = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : {};
-    return parseItem(JSON.stringify(e.item ?? {}));
+    return { ...parseItem(JSON.stringify(e.item ?? {})), seq: 0 };
   });
 }
 
 const COLUMNS = ['folder', 'favorite', 'type', 'name', 'notes', 'fields', 'reprompt', 'login_uri', 'login_username', 'login_password', 'login_totp'];
 
-function cell(value: string): string {
-  return /[",\r\n]|^\s|\s$/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+const SECRET_COLUMNS = new Set([9, 10]);
+
+function inert(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
+function cell(value: string, column: number): string {
+  const safe = SECRET_COLUMNS.has(column) ? value : inert(value);
+  return /[",\r\n]|^\s|\s$/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function lines(fields: Field[]): string {
@@ -64,7 +71,7 @@ function row(v: VaultItem, folder: string): string[] {
 
 export function bitwardenCsv(items: VaultItem[], vaultName: (id: string) => string): string {
   const rows = [COLUMNS, ...items.map((v) => row(v, vaultName(v.vaultId)))];
-  return `${rows.map((r) => r.map(cell).join(',')).join('\r\n')}\r\n`;
+  return `${rows.map((r) => r.map((value, column) => cell(value, column)).join(',')).join('\r\n')}\r\n`;
 }
 
 export function fileName(kind: 'melon' | 'csv', now = new Date()): string {
