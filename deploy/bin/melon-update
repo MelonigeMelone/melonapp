@@ -17,8 +17,9 @@ for f in "${files[@]}"; do
   curl -fsSL --max-time 30 "$source/$f" -o "$f.new"
 done
 
-bin/melon-backup
+bin/melon-backup --local
 
+rm -f ./*.previous bin/*.previous
 for f in "${files[@]}" .env; do
   if [[ -f "$f" ]]; then cp -p "$f" "$f.previous"; fi
 done
@@ -48,6 +49,7 @@ healthy() {
 }
 
 if docker compose pull && docker compose up -d --no-build --remove-orphans && healthy; then
+  rm -f ./*.previous bin/*.previous
   echo "running $version"
   exit 0
 fi

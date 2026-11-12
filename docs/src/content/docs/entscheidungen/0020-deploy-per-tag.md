@@ -18,7 +18,11 @@ gehen, und vor jedem Update muss ein Backup liegen.
   im Workflow „Images“ den Server auf. Ein Push auf `main` ändert am Server nichts.
 - **Eigener SSH-Schlüssel mit erzwungenem Befehl.** Der Schlüssel in GitHub darf nur
   `bin/melon-deploy-ssh` ausführen, und das nimmt nur `deploy <x.y.z>` an. Wer den Schlüssel
-  stiehlt, kann eine **veröffentlichte** Version einspielen, sonst nichts.
+  stiehlt, kann jede vorhandene Version einspielen (auch eine ältere), aber keine eigenen
+  Befehle ausführen.
+- **Nur geprüfter Code.** Ein Tag startet Code mit Root-Rechten auf dem Server. Ein Ruleset
+  erlaubt nur Admins, `v*`-Tags zu setzen. Das Environment `production` gibt seine Secrets nur an
+  `v*`-Tags, und der Job deployt nur Commits, die auf `main` liegen.
 - **`bin/melon-update` auf dem Server** holt Compose-Datei, Caddyfile und Skripte vom Tag,
   macht ein Backup, legt die Images in `.env` auf die Version fest, startet neu, prüft
   `/health` und geht bei einem Fehler auf den alten Stand zurück.
