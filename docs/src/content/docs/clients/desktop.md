@@ -28,6 +28,12 @@ Rust sperrt nach fünf Minuten ohne gemeldete Eingabe, zusätzlich zum vorhanden
 UI-Timer. Fokusverlust sperrt sofort. `⌘⇧M` bringt auf macOS das Fenster nach vorn,
 entsperrt es aber nicht. Hintergrund-Sperren werden als Ereignis an React gemeldet.
 
+Der Face-ID-Dialog macht die iOS-App kurz inaktiv (`sceneWillResignActive`), was wie jeder
+Fokusverlust sperrt. Nach erfolgreicher Biometrie wartet das Entsperren deshalb bis zu zwei
+Sekunden, bis die App wieder aktiv ist, und stellt die Sitzung erst dann unter derselben
+Sperre wieder her. Bleibt die App inaktiv oder im Hintergrund, scheitert es mit
+`background_locked`; einen Weg, im Hintergrund zu entsperren, gibt es weiterhin nicht.
+
 Jedes Sperren meldet beim Server ab, auch die nativen (Fokusverlust, iOS-Suspendieren,
 Rust-Timer). **Ausnahme:** Das Sitzungstoken ist genau das, das im biometrischen
 Wiederaufnahmezustand steckt. Dafür speichert die App beim Aktivieren

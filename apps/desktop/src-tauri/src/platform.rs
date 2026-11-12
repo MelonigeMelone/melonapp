@@ -6,11 +6,37 @@ use security_framework::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{fs, path::PathBuf, sync::Mutex};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{Mutex, MutexGuard},
+    thread,
+    time::Duration,
+};
 use tauri::Manager;
 use zeroize::Zeroizing;
 
 const SERVICE: &str = "de.melonigemelone.app.biometric.v1";
+const ACTIVE_ATTEMPTS: u32 = 20;
+const ACTIVE_DELAY: Duration = Duration::from_millis(100);
+
+fn wait_until_active(
+    state: &Mutex<Session>,
+    attempts: u32,
+    delay: Duration,
+) -> Result<MutexGuard<'_, Session>, String> {
+    for attempt in 0..=attempts {
+        let session = state.lock().map_err(|_| "session_unavailable")?;
+        if session.is_active() {
+            return Ok(session);
+        }
+        drop(session);
+        if attempt < attempts {
+            thread::sleep(delay);
+        }
+    }
+    Err("background_locked".into())
+}
 
 fn sha256_hex(input: &[u8]) -> String {
     Sha256::digest(input)
@@ -255,7 +281,7 @@ pub async fn biometric_unlock(app: tauri::AppHandle) -> Result<Value, String> {
             passwords::generic_password(options(&scope)).map_err(|_| "biometric_unavailable")?,
         );
         let state = app.state::<Mutex<Session>>();
-        let mut session = state.lock().map_err(|_| "session_unavailable")?;
+        let mut session = wait_until_active(&state, ACTIVE_ATTEMPTS, ACTIVE_DELAY)?;
         if format!("{}/biometric", server(&app)?) != scope {
             return Err("server_changed".into());
         }
@@ -336,6 +362,41 @@ fn autofill_remove() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    use melon_native::Session;
+    use std::{
+        sync::{Arc, Mutex},
+        thread,
+        time::Duration,
+    };
+
+    #[test]
+    fn unlock_waits_for_foreground_after_biometric_prompt() {
+        let state = Arc::new(Mutex::new(Session::default()));
+        state.lock().unwrap().set_active(false);
+        let other = Arc::clone(&state);
+        let resume = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(30));
+            other.lock().unwrap().set_active(true);
+        });
+        let session = super::wait_until_active(&state, 50, Duration::from_millis(10)).unwrap();
+        assert!(session.is_active());
+        drop(session);
+        resume.join().unwrap();
+    }
+
+    #[test]
+    fn unlock_stays_rejected_while_app_remains_in_background() {
+        let state = Mutex::new(Session::default());
+        state.lock().unwrap().set_active(false);
+        assert_eq!(
+            super::wait_until_active(&state, 3, Duration::from_millis(1)).err(),
+            Some("background_locked".to_owned())
+        );
+        let session = state.lock().unwrap();
+        assert!(!session.is_active());
+        assert!(session.is_locked());
+    }
+
     #[test]
     fn biometric_token_marker_is_bound_to_server_and_token() {
         let marker = super::token_marker("https://a.example", "t1");
