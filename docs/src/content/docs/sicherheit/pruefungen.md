@@ -130,3 +130,16 @@ Kurvenparameter oder Koordinaten fallen damit im Interoperabilitätstest auf.
 Die Swift-Tests gegen UniFFI lehnen zusätzlich einen fremden Cache-Kontext und
 abgeschnittenen Chiffretext ab. Die tatsächlich provisionierte App-Group-Grenze
 bleibt Teil der Hardware-Abnahme in #23 und #27.
+
+## Biometrie-Einstellungen
+
+`melon-native` prüft den gespeicherten Status ausschließlich in einer entsperrten Sitzung.
+Neue Angriffsprüfungen decken fremde Kontoschlüssel, fremde Server-Kontexte, beschädigte
+Snapshots, vertauschte API-Caches sowie gesperrte und abgelaufene Sitzungen ab. Eine
+Statusabfrage verlängert die Inaktivitätsfrist nicht und stellt keine Sitzung wieder her.
+
+Die React-Interaktionstests prüfen Wiederöffnen, verzögerte Aktivierung und gesperrte
+Bedienelemente, fehlende native Erfolgsbestätigung, fehlgeschlagene Deaktivierung mit
+Wiederholung, Status-Lesefehler, verspätete Antworten nach Kontowechsel und fehlgeschlagene
+AutoFill-Veröffentlichung. Die `.test.tsx`-Tests laufen in jsdom, bestehende `.test.ts`-Tests
+weiterhin in Node. Die Prüfung ist kein Ersatz für Touch ID oder Face ID auf Hardware.

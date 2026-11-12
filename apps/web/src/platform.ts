@@ -6,6 +6,7 @@ export interface NativePlatform {
   publishAutofill(session: Session): Promise<void>;
   setServer(server: string): Promise<void>;
   enableBiometric(session: Session): Promise<void>;
+  biometricStatus(): Promise<boolean>;
   unlockBiometric(): Promise<Session>;
   disableBiometric(): Promise<void>;
   biometricKeepsToken(token: string): Promise<boolean>;

@@ -49,6 +49,22 @@ Einträge dürfen nicht unbemerkt durch veraltete Daten ersetzt werden.
 
 ## Touch ID und Face ID
 
+Im Konto zeigt eine eigene Karte den gespeicherten Einrichtungsstatus für das aktuelle
+Konto und diesen Server an. Beim Öffnen wird der Status nativ neu geprüft; die Anzeige
+beruht weder auf einem früheren UI-Klick noch auf dem aktuellen Sitzungstoken. Aktivieren,
+Neu-Einrichten und Deaktivieren zeigen einen Ladezustand sowie eine sichtbare Inline-
+Bestätigung oder Fehlermeldung. Eine Erfolgsmeldung erscheint erst nach erneutem Lesen
+des erwarteten Status; ein Lesefehler wird als „Status unbekannt“ mit Wiederholen-Aktion angezeigt.
+Auch die iOS-AutoFill-Veröffentlichung meldet ihr Ergebnis direkt in dieser Karte.
+
+„Einrichtung gespeichert“ bedeutet: Wiederaufnahme-Datei und Token-Marker sind vorhanden,
+und die native, noch entsperrte Kontositzung kann die Datei im biometrischen Kontext
+authentifizieren. Die Abfrage liest keine Schlüssel aus der Keychain, löst keine Biometrie
+aus, gibt nur einen Wahrheitswert zurück und verlängert die Sperrfrist nicht. Sie bestätigt
+weder aktuelle Keychain-Verfügbarkeit noch gültige Server-Sitzung oder biometrischen Erfolg;
+diese Prüfungen bleiben Teil des tatsächlichen Entsperrens. Nach Änderungen an registrierten
+Fingerabdrücken oder Face ID kann die Person „Neu einrichten“ verwenden.
+
 Im Konto kann biometrisches Entsperren aktiviert oder deaktiviert werden. Der
 Kontoschlüssel liegt ausschließlich in der Data Protection Keychain, mit
 `biometryCurrentSet` und `WhenPasscodeSetThisDeviceOnly`, ohne iCloud-Synchronisation.

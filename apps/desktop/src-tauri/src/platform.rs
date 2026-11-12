@@ -213,6 +213,40 @@ pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<
 }
 
 #[tauri::command]
+pub async fn biometric_status(app: tauri::AppHandle) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = server(&app)?;
+        let scope = format!("{base}/biometric");
+        let mut snapshot = None;
+        for name in ["biometric.enc", "biometric.token"] {
+            match fs::metadata(location(&app, name)?) {
+                Ok(_) => {
+                    let value = read(&app, name)?;
+                    if name == "biometric.enc" {
+                        snapshot = Some(value);
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    snapshot = None;
+                    break;
+                }
+                Err(_) => return Err("storage_unavailable".into()),
+            }
+        }
+        let state = app.state::<Mutex<Session>>();
+        let mut session = state.lock().map_err(|_| "session_unavailable")?;
+        if server(&app)? != base {
+            return Err("server_changed".into());
+        }
+        session
+            .biometric_configured(&scope, snapshot.as_deref())
+            .map_err(str::to_owned)
+    })
+    .await
+    .map_err(|_| "status_unavailable")?
+}
+
+#[tauri::command]
 pub async fn biometric_unlock(app: tauri::AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let scope = format!("{}/biometric", server(&app)?);
