@@ -11,7 +11,7 @@ sidebar:
 | `cargo-deny` | jeder Push/PR + täglich | bekannte Schwachstellen (RustSec), Lizenzen, unbekannte Paketquellen |
 | CodeQL (`security-extended`) | jeder Push/PR + täglich | statische Code-Analyse für Rust und die Workflows |
 | gitleaks | jeder Push/PR + täglich | versehentlich committete Secrets |
-| Dependabot | wöchentlich | Updates für Cargo, npm, Actions, Docker |
+| Dependabot | wöchentlich | Updates für Cargo, npm, Actions, Docker. Krypto-Crates (RustCrypto, `hpke`, `rand`) kommen als **ein** gemeinsamer PR, im Haupt-Workspace und in `apps/desktop/src-tauri`, weil sie voneinander abhängen. `dtolnay/rust-toolchain` wird ignoriert: Die Version im MSRV-Job ist absichtlich gleich `rust-version` aus `Cargo.toml`. |
 | Image-Provenance + SBOM | jeder Image-Build | nachweisbar, aus welchem Commit das Server-Image stammt |
 
 **Warum täglich?** Neue Schwachstellen in Abhängigkeiten werden laufend veröffentlicht.

@@ -6,7 +6,7 @@ updates:
       interval: weekly
     groups:
       rustcrypto:
-        patterns: [aead, argon2, chacha20poly1305, digest, hkdf, hmac, password-hash, sha2, blake2, p256, crypto-bigint, ctutils, elliptic-curve, ecdsa]
+        patterns: [aead, argon2, chacha20poly1305, digest, hkdf, hmac, password-hash, sha2, blake2, p256, crypto-bigint, ctutils, elliptic-curve, ecdsa, hpke, rand, rand_core, getrandom]
       rust-minor:
         update-types: [minor, patch]
   - package-ecosystem: cargo
@@ -14,12 +14,16 @@ updates:
     schedule:
       interval: weekly
     groups:
+      rustcrypto:
+        patterns: [aead, argon2, chacha20poly1305, digest, hkdf, hmac, password-hash, sha2, blake2, p256, crypto-bigint, ctutils, elliptic-curve, ecdsa, hpke, rand, rand_core, getrandom]
       tauri-minor:
         update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: dtolnay/rust-toolchain
   - package-ecosystem: docker
     directory: /
     schedule:
