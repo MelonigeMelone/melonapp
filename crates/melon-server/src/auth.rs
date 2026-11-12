@@ -45,6 +45,15 @@ pub(crate) fn verify_auth_key(auth_key: &[u8], phc: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn fake_salt(server_secret: &[u8], email: &str) -> String {
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(server_secret).expect("HMAC accepts any key length");
+    mac.update(b"melon/prelogin-salt\0");
+    mac.update(email.as_bytes());
+    let fake = mac.finalize().into_bytes();
+    STANDARD.encode(&fake[..16])
+}
+
 pub(crate) fn token_hash(token: &str) -> Vec<u8> {
     Sha256::digest(token.as_bytes()).to_vec()
 }
@@ -102,17 +111,10 @@ pub async fn prelogin(
             kdf: kdf_from_row(m, i, p),
             salt,
         },
-        None => {
-            let mut mac = Hmac::<Sha256>::new_from_slice(&state.config.server_secret)
-                .expect("HMAC accepts any key length");
-            mac.update(b"melon/prelogin-salt\0");
-            mac.update(email.as_bytes());
-            let fake = mac.finalize().into_bytes();
-            PreloginResponse {
-                kdf: KdfParams::default(),
-                salt: STANDARD.encode(&fake[..16]),
-            }
-        }
+        None => PreloginResponse {
+            kdf: KdfParams::default(),
+            salt: fake_salt(&state.config.server_secret, &email),
+        },
     };
     Ok(Json(resp))
 }
@@ -475,5 +477,28 @@ mod tests {
         assert!(verify_auth_key(&[7u8; 32], &phc));
         assert!(!verify_auth_key(&[8u8; 32], &phc));
         assert!(!verify_auth_key(&[7u8; 32], "garbage"));
+    }
+
+    #[test]
+    fn stored_auth_hashes_still_verify() {
+        let phc = "$argon2id$v=19$m=19456,t=2,p=1$Cr4ISRSg7EVLuimSoLPotA$H+nxfnqFI0mcRjaOhdVJJ2WoDtL1gpxOHVZ81k0csi4";
+        assert!(verify_auth_key(&[42u8; 32], phc));
+        assert!(!verify_auth_key(&[43u8; 32], phc));
+    }
+
+    #[test]
+    fn stored_session_tokens_and_fake_salts_stay_the_same() {
+        assert_eq!(
+            hex(&token_hash("session-token")),
+            "c101e911469c969171040b50d70543313cf968fdef5bacc780776f8fb399ab36"
+        );
+        assert_eq!(
+            fake_salt(&[b'k'; 32], "nobody@example.com"),
+            "ekERi91FYaJeP/10s7BBlA=="
+        );
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 }
