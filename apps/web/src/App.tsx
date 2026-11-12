@@ -45,6 +45,7 @@ export function App() {
     setInviteToken(null);
     if (window.location.hash.startsWith('#/invite/')) window.history.replaceState(null, '', `${window.location.pathname}#/`);
     setSession(s);
+    void nativePlatform()?.syncPasskeys(s).catch(() => undefined);
   }, []);
 
   const onLock = useCallback(

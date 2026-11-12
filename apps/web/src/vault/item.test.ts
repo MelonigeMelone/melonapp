@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CREATABLE_TYPES,
+  passkeyItem,
+  passkeyOf,
+  visibleFields,
   charClass,
   cleanItem,
   emptyItem,
@@ -119,5 +123,35 @@ describe('item model', () => {
 
   it('classifies characters for the password display', () => {
     expect([...'aZ7%'].map(charClass)).toEqual(['lower', 'upper', 'digit', 'symbol']);
+  });
+});
+
+describe('passkey items', () => {
+  const data = { rp: 'webauthn.io', userName: 'mia', credentialId: 'Y3JlZA', userHandle: 'aGFuZGxl', privateKey: 'a2V5' };
+
+  it('round-trips through storage and keeps the type', () => {
+    const item = passkeyItem(data);
+    const back = parseItem(JSON.stringify(item));
+    expect(back.type).toBe('passkey');
+    expect(passkeyOf(back)).toEqual(data);
+    expect(back.title).toBe('webauthn.io (mia)');
+  });
+
+  it('hides the private key from visible fields and search', () => {
+    const item = passkeyItem(data);
+    expect(visibleFields(item).map((f) => f.id)).not.toContain('privateKey');
+    expect(matchesSearch(item, 'a2V5')).toBe(false);
+    expect(matchesSearch(item, 'webauthn')).toBe(true);
+  });
+
+  it('rejects incomplete or malformed passkey data', () => {
+    expect(passkeyOf(emptyItem('login'))).toBeNull();
+    expect(passkeyOf(passkeyItem({ ...data, rp: '' }))).toBeNull();
+    expect(passkeyOf(passkeyItem({ ...data, privateKey: 'not base64url!' }))).toBeNull();
+    expect(passkeyOf(passkeyItem({ ...data, credentialId: '' }))).toBeNull();
+  });
+
+  it('cannot be created by hand', () => {
+    expect(CREATABLE_TYPES).not.toContain('passkey');
   });
 });

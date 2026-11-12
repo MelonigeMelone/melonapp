@@ -17,10 +17,10 @@ export const MODULES: readonly ModuleDef[] = [
   {
     id: 'passwords',
     name: 'Passwörter',
-    description: 'Logins, Kreditkarten, Identitäten, WLAN und sichere Notizen',
+    description: 'Logins, Passkeys, Kreditkarten, Identitäten, WLAN und sichere Notizen',
     path: 'passwoerter',
     icon: VpnKeyOutlinedIcon,
-    types: ['login', 'note', 'card', 'identity', 'wifi'],
+    types: ['login', 'note', 'card', 'identity', 'wifi', 'passkey'],
   },
 ];
 

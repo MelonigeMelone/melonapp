@@ -41,7 +41,7 @@ import { ItemAvatar, TYPE_ICONS } from '../../components/TypeIcon';
 import { describeError } from '../../session';
 import { count, entries, TOOLBAR } from '../../layout';
 import type { ShellContext } from '../../Shell';
-import { emptyItem, matchesSearch, subtitle, TEMPLATES, type Item, type ItemType } from '../../vault/item';
+import { CREATABLE_TYPES, emptyItem, matchesSearch, subtitle, TEMPLATES, type Item, type ItemType } from '../../vault/item';
 import type { ModuleDef } from '../registry';
 import { ItemDetail } from './ItemDetail';
 import { ExportDialog } from './ExportDialog';
@@ -440,7 +440,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
   return (
     <>
       <Menu anchorEl={newMenu} open={newMenu !== null} onClose={() => setNewMenu(null)}>
-        {types.map((t) => {
+        {types.filter((t) => CREATABLE_TYPES.includes(t)).map((t) => {
           const Icon = TYPE_ICONS[t];
           return (
             <MenuItem key={t} onClick={() => startNew(t)}>
