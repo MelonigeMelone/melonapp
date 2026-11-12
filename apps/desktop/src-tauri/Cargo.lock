@@ -2252,6 +2252,7 @@ dependencies = [
  "p256",
  "rand",
  "serde",
+ "serde_json",
  "sha2 0.11.1",
  "thiserror 2.0.21",
  "unicode-normalization",
@@ -2284,6 +2285,7 @@ dependencies = [
  "melon-crypto",
  "serde",
  "serde_json",
+ "unicode-normalization",
  "zeroize",
 ]
 

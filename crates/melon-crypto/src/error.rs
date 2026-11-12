@@ -18,4 +18,6 @@ pub enum CryptoError {
     InvalidRecoveryKey,
     #[error("invalid password generator options")]
     InvalidGeneratorOptions,
+    #[error("export password must have at least 12 characters")]
+    WeakExportPassword,
 }

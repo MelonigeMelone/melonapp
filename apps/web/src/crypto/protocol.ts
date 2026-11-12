@@ -64,6 +64,9 @@ export interface CryptoMethods {
   recoveryAuth(a: { recoveryKey: string }): string;
   recoveryReset(a: { recoveryWrappedAccountKey: string; newPassword: string; newSalt: string; newKdf: Kdf }): Credentials;
   fingerprint(a: { publicKey: string }): string;
+  sealExport(a: Reauth & { exportPassword: string; plaintext: string }): string;
+  checkPassword(a: Reauth): boolean;
+  openExport(a: { password: string; data: string }): string;
   exportVaultKeys(): { vaultId: string; version: number; raw: number[] }[];
   importVaultKeys(a: { keys: { vaultId: string; version: number; raw: number[] }[] }): void;
   lock(): void;

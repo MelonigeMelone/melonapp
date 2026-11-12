@@ -5,7 +5,9 @@ import init, {
   generatePassword,
   generateSalt,
   Identity,
+  openExport,
   Recovery,
+  sealExport,
   sealVaultKey,
   VaultKey,
   type DerivedKeys,
@@ -202,6 +204,16 @@ const handlers: CryptoMethods = {
   },
   fingerprint({ publicKey }) {
     return fingerprint(publicKey);
+  },
+  sealExport(r) {
+    if (r.exportPassword.normalize('NFKC') === r.password.normalize('NFKC')) fail('export_password_is_master_password');
+    return withAccountKey(r, () => sealExport(r.exportPassword, r.plaintext));
+  },
+  checkPassword(r) {
+    return withAccountKey(r, () => true);
+  },
+  openExport({ password, data }) {
+    return openExport(password, data);
   },
   exportVaultKeys() {
     return [...vaults.entries()].map(([vaultId, v]) => ({ vaultId, version: v.version, raw: [...v.key.exportRaw()] }));

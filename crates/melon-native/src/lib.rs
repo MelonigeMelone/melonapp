@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     time::{Duration, Instant},
 };
+use unicode_normalization::UnicodeNormalization;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
@@ -104,6 +105,10 @@ fn sealed(
     Ok(seal_vault_key(&public, key, &context(vault, user, version)).to_string())
 }
 
+fn same_password(a: &str, b: &str) -> bool {
+    a.nfkc().eq(b.nfkc())
+}
+
 fn biometric_aad(scope: &str) -> Vec<u8> {
     format!("melon/native/biometric/v1/{scope}").into_bytes()
 }
@@ -168,6 +173,20 @@ impl Session {
 
     fn require_account(&self) -> Result<&SymmetricKey> {
         self.account.as_ref().ok_or("locked")
+    }
+
+    fn confirm_password(&self, a: &Value) -> Result<()> {
+        self.require_account()?;
+        let current = derive(a, "password", "salt", "kdf")?;
+        let account = unwrap_account_key(
+            &current.wrapping_key(),
+            &parse(text(a, "wrappedAccountKey")?)?,
+        )
+        .map_err(|_| "wrong_password")?;
+        if account.as_bytes() != self.require_account()?.as_bytes() {
+            return Err("wrong_account");
+        }
+        Ok(())
     }
 
     fn vault(&self, id: &str) -> Result<&Vault> {
@@ -407,6 +426,36 @@ impl Session {
             "fingerprint" => Ok(json!(melon_crypto::fingerprint(
                 &PublicKey::from_base64(text(a, "publicKey")?).map_err(|_| "invalid_public_key")?
             ))),
+            "checkPassword" => {
+                self.confirm_password(a)?;
+                Ok(json!(true))
+            }
+            "sealExport" => {
+                self.confirm_password(a)?;
+                if same_password(text(a, "password")?, text(a, "exportPassword")?) {
+                    return Err("export_password_is_master_password");
+                }
+                melon_crypto::seal_export(
+                    text(a, "exportPassword")?,
+                    text(a, "plaintext")?.as_bytes(),
+                )
+                .map(|file| json!(file))
+                .map_err(|e| match e {
+                    melon_crypto::CryptoError::WeakExportPassword => "weak_export_password",
+                    _ => "export_failed",
+                })
+            }
+            "openExport" => {
+                let plain = melon_crypto::open_export(text(a, "password")?, text(a, "data")?)
+                    .map_err(|e| match e {
+                        melon_crypto::CryptoError::Decrypt => "wrong_export_password",
+                        melon_crypto::CryptoError::UnsupportedVersion => "unsupported_export",
+                        _ => "invalid_export",
+                    })?;
+                String::from_utf8(plain.to_vec())
+                    .map(|s| json!(s))
+                    .map_err(|_| "invalid_export")
+            }
             "setupRecovery" | "changePassword" => {
                 self.require_account()?;
                 let current = derive(a, "password", "salt", "kdf")?;
@@ -853,6 +902,52 @@ mod tests {
                 Some("unsupported_method")
             );
         }
+    }
+
+    #[test]
+    fn export_needs_the_master_password_and_reopens_with_the_export_password() {
+        let (mut session, created) = account();
+        let reauth = |password: &str| {
+            json!({"password":password, "salt":STANDARD.encode(b"0123456789abcdef"), "kdf":KdfParams::minimum(),
+                   "wrappedAccountKey":created["wrappedAccountKey"], "exportPassword":"Export-Passwort 2026!", "plaintext":"{\"items\":[]}"})
+        };
+        assert_eq!(
+            session.call("sealExport", reauth("wrong")).err(),
+            Some("wrong_password")
+        );
+        let mut same = reauth("test-password");
+        same["exportPassword"] = json!("test-password");
+        assert_eq!(
+            session.call("sealExport", same).err(),
+            Some("export_password_is_master_password")
+        );
+        assert_eq!(
+            session.call("checkPassword", reauth("wrong")).err(),
+            Some("wrong_password")
+        );
+        assert_eq!(
+            session
+                .call("checkPassword", reauth("test-password"))
+                .unwrap(),
+            json!(true)
+        );
+        let file = session.call("sealExport", reauth("test-password")).unwrap();
+        let opened = session
+            .call(
+                "openExport",
+                json!({"password":"Export-Passwort 2026!", "data":file}),
+            )
+            .unwrap();
+        assert_eq!(opened, json!("{\"items\":[]}"));
+        assert_eq!(
+            session
+                .call(
+                    "openExport",
+                    json!({"password":"falsch falsch falsch", "data":file})
+                )
+                .err(),
+            Some("wrong_export_password")
+        );
     }
 
     #[test]
