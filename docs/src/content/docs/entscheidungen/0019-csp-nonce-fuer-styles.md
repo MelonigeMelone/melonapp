@@ -18,7 +18,8 @@ HTML brauchen und die Web-App statisch ist. Pigment CSS ist weiterhin nicht stab
 
 Caddy erzeugt das „dynamische“ HTML selbst, ohne dass die App aufhört, statisch zu sein:
 
-- Für `index.html` läuft Caddys `templates`-Modul (nur `text/html`). Es setzt
+- Nur für `index.html` (Matcher `path / /index.html`, nach dem SPA-Fallback) läuft Caddys
+  `templates`-Modul. Es setzt
   `{{placeholder "http.request.uuid"}}` in `<meta name="csp-nonce">` ein.
 - Derselbe Platzhalter `{http.request.uuid}` steht im CSP-Header:
   `style-src 'self' 'nonce-…'`. Er ist je Anfrage neu und zufällig (UUIDv4, 122 Bit).
@@ -40,7 +41,9 @@ Caddy erzeugt das „dynamische“ HTML selbst, ohne dass die App aufhört, stat
 
 - Eingeschleustes `<style>` oder `style="…"` in Markup wird blockiert. Geprüft mit einem echten
   Browser gegen den kompletten Stack.
-- `index.html` wird bei jedem Aufruf neu geladen (wenige hundert Byte). Die Assets bleiben ein
-  Jahr im Cache.
+- `index.html` wird bei jedem Aufruf neu geladen (wenige hundert Byte). Die Assets unter
+  `/assets/*` haben einen eigenen `handle`-Block: ein Jahr Cache (`immutable`), fehlende Dateien
+  geben `404` ohne Cache statt der App-Seite. So kann nie HTML mit festem Nonce lange im Cache
+  landen.
 - Die Desktop-App behält `'unsafe-inline'`: Ihre CSP ist fest in `tauri.conf.json`, ein Nonce je
   Aufruf geht dort nicht. Sie lädt aber nur eingebauten Code, kein HTML vom Server.
