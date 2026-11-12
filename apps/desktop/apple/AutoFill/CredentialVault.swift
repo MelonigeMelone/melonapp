@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import Security
 import LocalAuthentication
@@ -51,6 +52,11 @@ final class CredentialVault {
         self.scope = scope
     }
 
+    init(directory: URL, scope: String) {
+        self.directory = directory
+        self.scope = scope
+    }
+
     func withKey<T>(_ action: (Data) throws -> T) throws -> T {
         let context = LAContext()
         defer { context.invalidate() }
@@ -72,11 +78,15 @@ final class CredentialVault {
         return try action(key)
     }
 
-    func read(_ kind: String, key: Data) throws -> Data {
-        let url = directory.appendingPathComponent("\(scope).\(kind).enc")
+    private func read(_ name: String, scope aad: String, key: Data, limit: Int) throws -> Data {
+        let url = directory.appendingPathComponent(name)
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-        guard let size = attributes[.size] as? NSNumber, size.intValue <= 48 * 1024 * 1024 else { throw VaultError.invalid }
-        return try decryptCache(key: key, ciphertext: String(contentsOf: url, encoding: .utf8), scope: "autofill/v1/\(scope)/\(kind)")
+        guard attributes[.type] as? FileAttributeType == .typeRegular, let size = attributes[.size] as? NSNumber, size.intValue <= limit else { throw VaultError.invalid }
+        return try decryptCache(key: key, ciphertext: String(contentsOf: url, encoding: .utf8), scope: aad)
+    }
+
+    func read(_ kind: String, key: Data) throws -> Data {
+        try read("\(scope).\(kind).enc", scope: "autofill/v1/\(scope)/\(kind)", key: key, limit: 48 * 1024 * 1024)
     }
 
     func passwords() throws -> [PasswordEntry] {
@@ -85,21 +95,57 @@ final class CredentialVault {
             defer { plaintext.resetBytes(in: plaintext.startIndex..<plaintext.endIndex) }
             let cache = try JSONDecoder().decode(PasswordCache.self, from: plaintext)
             try cache.validate()
+            refreshSuggestions(passkeys(key: key))
             return cache.passwords
         }
     }
 
-    func passkeys(key: Data) throws -> [StoredPasskey] {
-        guard FileManager.default.fileExists(atPath: directory.appendingPathComponent("\(scope).passkeys.enc").path) else { return [] }
-        var plaintext = try read("passkeys", key: key)
+    private func decode<T: Decodable>(_ type: T.Type, _ name: String, scope aad: String, key: Data, limit: Int) -> T? {
+        guard FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path),
+              var plaintext = try? read(name, scope: aad, key: key, limit: limit) else { return nil }
         defer { plaintext.resetBytes(in: plaintext.startIndex..<plaintext.endIndex) }
-        return try JSONDecoder().decode([StoredPasskey].self, from: plaintext)
+        return try? JSONDecoder().decode(type, from: plaintext)
     }
 
-    func save(_ passkeys: [StoredPasskey], key: Data) throws {
-        var plaintext = try JSONEncoder().encode(passkeys)
+    static func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
+    }
+
+    func passkeys(key: Data) -> [StoredPasskey] {
+        var result: [StoredPasskey] = []
+        let prefix = "\(scope).outbox."
+        let names = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).sorted()
+        for name in names where name.hasPrefix(prefix) && name.hasSuffix(".enc") {
+            let id = String(name.dropFirst(prefix.count).dropLast(4))
+            guard id.count == 64, let passkey = decode(StoredPasskey.self, name, scope: "autofill/v1/\(scope)/outbox/\(id)", key: key, limit: 64 * 1024),
+                  Self.hex(passkey.id) == id else { continue }
+            result.append(passkey)
+        }
+        result += decode([StoredPasskey].self, "\(scope).passkeys.enc", scope: "autofill/v1/\(scope)/passkeys", key: key, limit: 8 * 1024 * 1024) ?? []
+        result += decode([StoredPasskey].self, "\(scope).synced.enc", scope: "autofill/v1/\(scope)/synced", key: key, limit: 48 * 1024 * 1024) ?? []
+        var seen = Set<Data>()
+        return result.filter { seen.insert($0.id).inserted }
+    }
+
+    static func suggestions(_ passkeys: [StoredPasskey]) -> [ASPasskeyCredentialIdentity] {
+        passkeys.map { ASPasskeyCredentialIdentity(relyingPartyIdentifier: $0.rp, userName: $0.userName, credentialID: $0.id, userHandle: $0.userHandle, recordIdentifier: $0.id.base64EncodedString()) }
+    }
+
+    func refreshSuggestions(_ passkeys: [StoredPasskey]) {
+        let store = ASCredentialIdentityStore.shared
+        let identities = Self.suggestions(passkeys)
+        store.getState { state in
+            guard state.isEnabled else { return }
+            store.replaceCredentialIdentities(identities) { _, _ in }
+        }
+    }
+
+    func saveOutbox(_ passkey: StoredPasskey, key: Data) throws {
+        let id = Self.hex(passkey.id)
+        guard passkey.id.count == 32 else { throw VaultError.invalid }
+        var plaintext = try JSONEncoder().encode(passkey)
         defer { plaintext.resetBytes(in: plaintext.startIndex..<plaintext.endIndex) }
-        let ciphertext = try encryptCache(key: key, plaintext: plaintext, scope: "autofill/v1/\(scope)/passkeys")
-        try Data(ciphertext.utf8).write(to: directory.appendingPathComponent("\(scope).passkeys.enc"), options: [.atomic, .completeFileProtection])
+        let ciphertext = try encryptCache(key: key, plaintext: plaintext, scope: "autofill/v1/\(scope)/outbox/\(id)")
+        try Data(ciphertext.utf8).write(to: directory.appendingPathComponent("\(scope).outbox.\(id).enc"), options: [.atomic, .completeFileProtection])
     }
 }

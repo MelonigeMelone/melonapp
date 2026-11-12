@@ -19,4 +19,7 @@ pub use sharing::{
     vault_meta_aad, wrap_account_key,
 };
 
-pub use passkey::{PasskeyAssertion, PasskeyRegistration, assert_passkey, create_passkey};
+pub use passkey::{
+    PasskeyAssertion, PasskeyRegistration, assert_passkey, create_passkey, open_passkey_key,
+    seal_passkey_key,
+};
