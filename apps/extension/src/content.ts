@@ -2,7 +2,7 @@ import { fillOtp, findIdentifierFields, findLoginFields, isOtpField, isVisible, 
 import { anyUrlMatches } from './shared/match';
 import type { ContentRequest, Match, MatchesResponse, TabMessage } from './shared/messages';
 
-const ICON = `<svg viewBox="1 11 30 16" aria-hidden="true"><path d="M2 12a14 14 0 0 0 28 0Z" fill="#2E6A43"/><path d="M5 12a11 11 0 0 0 22 0Z" fill="#A7D3A0"/><path d="M7 12a9 9 0 0 0 18 0Z" fill="#E2365F"/></svg>`;
+const ICON = `<svg viewBox="1 11 30 16" aria-hidden="true"><defs><linearGradient id="melon-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7B66FF"/><stop offset="1" stop-color="#1EA5F0"/></linearGradient></defs><path d="M2 12a14 14 0 0 0 28 0Z" fill="url(#melon-g)"/><path d="M5 12a11 11 0 0 0 22 0Z" fill="#fff" opacity=".85"/><path d="M7 12a9 9 0 0 0 18 0Z" fill="url(#melon-g)" opacity=".7"/></svg>`;
 
 const STYLE = `
   :host { all: initial; }
@@ -10,19 +10,27 @@ const STYLE = `
     background: transparent; display: grid; place-items: center; cursor: pointer;
     transition: background-color .12s ease; }
   .btn svg { width: 78%; height: auto; display: block; }
-  .btn:hover { background: rgb(226 54 95 / .12); }
-  .btn:focus-visible { outline: 2px solid #1F6B8F; outline-offset: 1px; }
+  .btn:hover { background: rgb(123 102 255 / .14); }
+  .btn:focus-visible { outline: 2px solid #5B45F0; outline-offset: 1px; }
   .btn.locked svg { opacity: .55; filter: grayscale(.6); }
-  .menu { position: fixed; z-index: 2147483647; box-sizing: border-box; background: #fff; color: #17231C;
-    border: 1px solid #D3E0D2; border-radius: 12px; box-shadow: 0 10px 28px rgb(23 35 28 / .16); padding: 6px;
+  .menu { position: fixed; z-index: 2147483647; box-sizing: border-box; background: #FFFFFF; color: #0D0F1A;
+    border: 1px solid #DDE0EB; border-radius: 14px; padding: 6px;
+    box-shadow: 0 18px 50px -12px rgb(91 69 240 / .35), 0 2px 8px rgb(13 15 26 / .08);
     font: 14px/1.4 "Atkinson Hyperlegible", system-ui, sans-serif; }
-  .head { display: flex; align-items: center; gap: 6px; padding: 4px 10px 6px; color: #5B6B61; font-size: 12px; font-weight: 700; }
+  .head { display: flex; align-items: center; gap: 6px; padding: 4px 10px 6px; color: #565C74; font-size: 12px; font-weight: 700; }
   .head svg { width: 18px; height: auto; }
-  .menu button { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-  .menu button:hover, .menu button:focus-visible { background: #E6EFE5; }
+  .menu button { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 8px 10px; border-radius: 9px; cursor: pointer; }
+  .menu button:hover, .menu button:focus-visible { background: rgb(91 69 240 / .1); }
   .title { font-weight: 700; }
-  .sub { color: #5B6B61; font-size: 12px; }
-  .note { padding: 6px 10px 8px; color: #5B6B61; }
+  .sub { color: #565C74; font-size: 12px; }
+  .note { padding: 6px 10px 8px; color: #565C74; }
+  @media (prefers-color-scheme: dark) {
+    .menu { background: #0D0F17; color: #E9EBF4; border-color: #1B1F2E;
+      box-shadow: 0 18px 50px -12px rgb(106 77 255 / .45), 0 2px 8px rgb(0 0 0 / .4); }
+    .head, .sub, .note { color: #8B91A8; }
+    .menu button:hover, .menu button:focus-visible { background: rgb(150 134 255 / .14); }
+    .btn:focus-visible { outline-color: #9686FF; }
+  }
   @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 `;
 

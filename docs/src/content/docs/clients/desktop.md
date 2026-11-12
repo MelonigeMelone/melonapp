@@ -78,6 +78,10 @@ Passkeys bleiben gerätelokal: keine Synchronisation, kein Export, keine
 Wiederherstellungszusage. Biometrie, App-Group-Provisioning und echte Safari-Passkey-
 Abläufe sind vor Einsatz mit wichtigen Konten noch auf einem Gerät zu prüfen.
 
+Die Extension nutzt dieselben Farben wie die App (`MelonTheme` in
+`CredentialProviderViewController.swift`): fast schwarzer bzw. kühl-weißer Hintergrund und
+Violett als Akzent, je nach Systemmodus. Buttons sind Pillen, „Abbrechen“ ist zurückhaltend getönt.
+
 Für Änderungen an der Extension:
 
 ```sh

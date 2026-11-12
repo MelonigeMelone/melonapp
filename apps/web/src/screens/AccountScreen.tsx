@@ -222,7 +222,7 @@ export function AccountScreen({ ctx, onUpdate }: { ctx: ShellContext; onUpdate: 
           }}>Deaktivieren</Button>
         </Stack>}
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-          <Avatar sx={{ width: 64, height: 64, bgcolor: 'secondary.main', color: 'secondary.contrastText', fontSize: '1.75rem', fontWeight: 700 }} aria-hidden="true">
+          <Avatar sx={{ width: 64, height: 64, color: 'primary.contrastText', fontSize: '1.75rem', fontWeight: 700 }} aria-hidden="true">
             {session.email.slice(0, 1).toUpperCase()}
           </Avatar>
           <Stack sx={{ flex: 1, minWidth: 0 }}>

@@ -24,6 +24,7 @@ import { RecoveryKitDialog } from './screens/RecoveryKit';
 import { HomeScreen } from './screens/HomeScreen';
 import { NewSpaceDialog, SpaceDialog } from './screens/SpaceDialog';
 import { TOOLBAR } from './layout';
+import { riseIn } from './motion';
 import { describeError, type Account, type Session } from './session';
 import type { Snapshot } from './vault/manager';
 
@@ -140,8 +141,7 @@ export function Shell({
                     height: 32,
                     fontSize: '0.95rem',
                     fontWeight: 700,
-                    bgcolor: path === ACCOUNT ? 'secondary.main' : 'melon.sunk',
-                    color: path === ACCOUNT ? 'secondary.contrastText' : 'text.primary',
+                    ...(path === ACCOUNT ? {} : { backgroundImage: 'none', bgcolor: 'melon.sunk', color: 'text.primary', border: 1, borderColor: 'divider' }),
                   }}
                 >
                   {session.email.slice(0, 1).toUpperCase()}
@@ -157,17 +157,19 @@ export function Shell({
         </Toolbar>
       </AppBar>
 
-      {module?.id === 'passwords' ? (
-        <PasswordsModule ctx={ctx} module={module} />
-      ) : path === ACCOUNT ? (
-        <AccountScreen ctx={ctx} onUpdate={onUpdate} />
-      ) : (
-        <HomeScreen ctx={ctx} />
-      )}
+      <Box key={module?.id ?? path} sx={riseIn()}>
+        {module?.id === 'passwords' ? (
+          <PasswordsModule ctx={ctx} module={module} />
+        ) : path === ACCOUNT ? (
+          <AccountScreen ctx={ctx} onUpdate={onUpdate} />
+        ) : (
+          <HomeScreen ctx={ctx} />
+        )}
+      </Box>
 
       {!wide && (
-        <Paper square sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderTop: 1, borderColor: 'divider', zIndex: 3 }}>
-          <BottomNavigation showLabels value={tab} onChange={(_, v: string) => navigate(v)} sx={{ bgcolor: 'background.default' }}>
+        <Paper square sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderTop: 1, borderColor: 'divider', zIndex: 3, bgcolor: 'transparent' }}>
+          <BottomNavigation showLabels value={tab} onChange={(_, v: string) => navigate(v)}>
             <BottomNavigationAction value={HOME} label="Start" icon={<HomeOutlinedIcon />} />
             {MODULES.map((m) => {
               const Icon = m.icon;

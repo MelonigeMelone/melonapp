@@ -34,7 +34,7 @@ async function touch(s: Snapshot) {
 
 async function setBadge(pending: boolean) {
   await chrome.action.setBadgeText({ text: pending ? '1' : '' });
-  if (pending) await chrome.action.setBadgeBackgroundColor({ color: '#E2365F' });
+  if (pending) await chrome.action.setBadgeBackgroundColor({ color: '#5B45F0' });
 }
 
 async function neverHosts(): Promise<string[]> {

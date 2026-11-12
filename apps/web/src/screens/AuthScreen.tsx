@@ -11,6 +11,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { MelonMark } from '../components/Brand';
 import { monoFont } from '../theme';
+import { float, reducedMotion, riseIn, shimmer, spin } from '../motion';
 import { describeError, login, recoverAccount, register, type Session } from '../session';
 import { ApiError } from '../api';
 
@@ -113,16 +114,69 @@ export function AuthScreen({
       }}
     >
       <Box>
-        <MelonMark size={72} />
-        <Typography variant="h1" sx={{ mt: 2, fontSize: { xs: '2.25rem', md: '3.25rem' } }}>
+        <Box sx={{ display: 'inline-block', ...riseIn(0) }}>
+          <Box
+            sx={{
+              display: 'inline-block',
+              filter: 'drop-shadow(0 10px 30px var(--mui-palette-melon-aurora1))',
+              animation: `${float} 6s ease-in-out infinite`,
+              [reducedMotion]: { animation: 'none' },
+            }}
+          >
+            <MelonMark size={72} />
+          </Box>
+        </Box>
+        <Typography
+          variant="h1"
+          sx={(t) => ({
+            mt: 2,
+            fontSize: { xs: '2.75rem', md: '4.25rem' },
+            letterSpacing: '-0.035em',
+            backgroundImage: `linear-gradient(100deg, ${t.vars?.palette.text.primary} 0%, ${t.vars?.palette.primary.main} 30%, ${t.vars?.palette.secondary.main} 50%, ${t.vars?.palette.text.primary} 70%, ${t.vars?.palette.text.primary} 100%)`,
+            backgroundSize: '200% 100%',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            color: 'transparent',
+            ...riseIn(90),
+            ...{ animation: `${shimmer} 9s linear infinite, ${riseIn(90).animation}` },
+          })}
+        >
           MelonApp
         </Typography>
-        <Typography variant="h3" component="p" color="text.secondary" sx={{ mt: 1.5, maxWidth: '30ch', fontFamily: 'inherit', fontWeight: 400, fontSize: '1.25rem', lineHeight: 1.5 }}>
+        <Typography variant="h3" component="p" color="text.secondary" sx={{ mt: 1.5, maxWidth: '30ch', fontFamily: 'inherit', fontWeight: 400, fontSize: '1.25rem', lineHeight: 1.5, ...riseIn(180) }}>
           Deine persönliche App für Passwörter und mehr. Verschlüsselt wird auf diesem Gerät, der Server sieht nichts davon.
         </Typography>
       </Box>
 
-      <Paper variant="outlined" sx={{ p: { xs: 2.5, sm: 3.5 }, borderRadius: '18px' }}>
+      <Box
+        sx={(t) => ({
+          position: 'relative',
+          borderRadius: '20px',
+          p: '1px',
+          overflow: 'hidden',
+          isolation: 'isolate',
+          boxShadow: `0 40px 120px -40px var(--mui-palette-melon-aurora1)`,
+          ...riseIn(260),
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            inset: '-60%',
+            zIndex: -1,
+            background: `conic-gradient(from 0deg, transparent 0deg, ${t.vars?.palette.primary.main} 60deg, ${t.vars?.palette.secondary.main} 120deg, transparent 180deg, transparent 360deg)`,
+            animation: `${spin} 7s linear infinite`,
+            [reducedMotion]: { animation: 'none' },
+          },
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            inset: 0,
+            zIndex: -1,
+            borderRadius: 'inherit',
+            border: `1px solid ${t.vars?.palette.divider}`,
+          },
+        })}
+      >
+      <Paper sx={{ p: { xs: 2.5, sm: 3.5 }, borderRadius: '19px', bgcolor: 'background.paper' }}>
         <Stack component="form" spacing={2.5} onSubmit={submit} noValidate>
           {mode === 'recover' ? (
             <Stack spacing={1}>
@@ -230,6 +284,7 @@ export function AuthScreen({
           )}
         </Stack>
       </Paper>
+      </Box>
     </Box>
   );
 }
