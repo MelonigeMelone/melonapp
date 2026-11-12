@@ -176,6 +176,19 @@ Im Passwortmanager unter „Importieren“ (`modules/passwords/import/`). Unters
   standardmäßig übersprungen.
 - Danach erinnert die App daran, die Export-Datei zu löschen, weil sie unverschlüsselt ist.
 
+## Papierkorb
+
+„In den Papierkorb“ setzt im verschlüsselten Eintrag `trashedAt`, „Wiederherstellen“ entfernt
+es ([ADR 0021](/melonapp/entscheidungen/0021-papierkorb-im-eintrag/), `vault/trash.ts`).
+
+- Nach dem Löschen bietet eine Meldung acht Sekunden lang „Rückgängig“ an.
+- Der Eintrag „Papierkorb“ in der Seitenleiste zeigt alle gelöschten Einträge aller Bereiche.
+  Im Eintrag steht, wann er endgültig verschwindet. „Bearbeiten“ gibt es dort nicht, nur
+  „Wiederherstellen“ und „Endgültig löschen“, dazu „Papierkorb leeren“.
+- Nach 30 Tagen löscht jede App mit Schreibrecht den Eintrag beim Sync endgültig.
+- Papierkorb-Einträge tauchen nirgends sonst auf: nicht in Liste, Suche, Sicherheits-Check,
+  Export, Erweiterung oder iOS AutoFill.
+
 ## Export
 
 Im Passwortmanager unter „Exportieren“ (`modules/passwords/ExportDialog.tsx`,

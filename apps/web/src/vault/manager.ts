@@ -3,6 +3,7 @@ import type { CryptoMethods } from '../crypto/protocol';
 import { newId, type Item, type VaultItem } from './item';
 import { storedLog, type SeenLog } from './seen';
 import { isConflict, VaultStore } from './store';
+import { expired, fromTrash, isTrashed, toTrash } from './trash';
 
 type Call = <M extends keyof CryptoMethods>(
   method: M,
@@ -26,6 +27,7 @@ export interface VaultView {
 export interface Snapshot {
   vaults: VaultView[];
   items: VaultItem[];
+  trash: VaultItem[];
 }
 
 export interface FoundUser {
@@ -56,7 +58,7 @@ function parseName(json: string): string {
 export class VaultsManager {
   private vaults = new Map<string, Entry>();
   private listeners = new Set<() => void>();
-  private snapshot: Snapshot = { vaults: [], items: [] };
+  private snapshot: Snapshot = { vaults: [], items: [], trash: [] };
   private running: Promise<void> | null = null;
 
   constructor(
@@ -64,6 +66,7 @@ export class VaultsManager {
     private readonly api: Api,
     private readonly crypto: Call,
     private readonly seen: SeenLog = storedLog(userId),
+    private readonly now: () => Date = () => new Date(),
   ) {}
 
   subscribe = (listener: () => void) => {
@@ -85,15 +88,19 @@ export class VaultsManager {
       waitingForKey: remote.encrypted_vault_key === null,
       canWrite: remote.encrypted_vault_key !== null && remote.role !== 'viewer',
       isOwner: remote.role === 'owner',
-      itemCount: store?.list().length ?? 0,
+      itemCount: store?.list().filter((v) => !isTrashed(v.item)).length ?? 0,
       unreadable: store?.unreadableCount ?? 0,
       rolledBack: store?.rolledBackCount ?? 0,
     }));
     views.sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name, 'de'));
-    const items = [...this.vaults.values()]
+    const all = [...this.vaults.values()]
       .flatMap((e) => e.store?.list() ?? [])
       .sort((a, b) => a.item.title.localeCompare(b.item.title, 'de', { sensitivity: 'base' }));
-    this.snapshot = { vaults: views, items };
+    const items = all.filter((v) => !isTrashed(v.item));
+    const trash = all
+      .filter((v) => isTrashed(v.item))
+      .sort((a, b) => (b.item.trashedAt ?? '').localeCompare(a.item.trashedAt ?? ''));
+    this.snapshot = { vaults: views, items, trash };
     for (const l of this.listeners) l();
   };
 
@@ -140,6 +147,7 @@ export class VaultsManager {
       if (rotated) entry.store?.reset();
       entry.store ??= this.makeStore(remote.id);
       await entry.store.sync();
+      if (remote.role !== 'viewer') await this.purge(entry.store);
       if (remote.role === 'owner' && !remote.personal) {
         try {
           await this.ownerDuties(entry);
@@ -169,6 +177,33 @@ export class VaultsManager {
       undefined,
       this.seen,
     );
+  }
+
+  private async purge(store: VaultStore) {
+    const isExpired = (item: Item) => expired([{ vaultId: store.vaultId, id: '', revision: 0, item }], this.now()).length > 0;
+    for (const v of expired(store.list(), this.now())) {
+      await store.remove(v.id, isExpired).catch(() => undefined);
+    }
+  }
+
+  async trashItem(vaultId: string, id: string) {
+    const store = this.store(vaultId);
+    const current = store.get(id);
+    if (!current) throw new ApiError(404, 'item_not_found');
+    await store.save(id, toTrash(current.item, this.now()));
+  }
+
+  async restoreItem(vaultId: string, id: string) {
+    const store = this.store(vaultId);
+    const current = store.get(id);
+    if (!current) throw new ApiError(404, 'item_not_found');
+    await store.save(id, fromTrash(current.item));
+  }
+
+  async emptyTrash() {
+    for (const v of this.snapshot.trash) {
+      if (this.vault(v.vaultId)?.canWrite) await this.removeItem(v.vaultId, v.id, isTrashed);
+    }
   }
 
   private async ownerDuties(entry: Entry) {
@@ -240,8 +275,8 @@ export class VaultsManager {
     return saved;
   }
 
-  async removeItem(vaultId: string, id: string) {
-    await this.store(vaultId).remove(id);
+  async removeItem(vaultId: string, id: string, still?: (item: Item) => boolean) {
+    await this.store(vaultId).remove(id, still);
     this.emit();
   }
 

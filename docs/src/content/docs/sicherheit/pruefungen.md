@@ -26,6 +26,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 |---|---|
 | Bestehende Tresore bleiben nach Krypto-Updates lesbar (feste Daten aus älteren Versionen) | `compat::*` in `melon-crypto`, `auth::tests::stored_auth_hashes_still_verify`, `auth::tests::stored_session_tokens_and_fake_salts_stay_the_same` |
 | Manipulierter Chiffretext wird erkannt | `cipher::tests::tampering_is_detected` |
+| Papierkorb: Rückgängig, Wiederherstellen, endgültig Löschen; gelöschte Einträge nicht bearbeitbar, nach 30 Tagen weg | `trash.test.ts`, E2E-Schritt „trash: undo, restore and delete for good“ |
 | Export: nur das richtige Export-Passwort öffnet die Datei, kurze Passwörter, geschwächte KDF, fremdes Salt und neue Versionen werden abgelehnt | `export::tests` in `melon-crypto` |
 | Export braucht das Master-Passwort, auch in der nativen Sitzung | `melon-native`: `export_needs_the_master_password_and_reopens_with_the_export_password`, E2E-Schritt „export encrypted and as CSV …“ |
 | Export-Datei ist wirklich verschlüsselt, CSV nur nach Bestätigung, Wieder-Import mit falschem Export-Passwort scheitert | E2E-Schritt „export encrypted and as CSV, import the encrypted file again“ |

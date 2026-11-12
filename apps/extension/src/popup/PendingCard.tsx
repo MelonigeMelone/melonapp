@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { ApiError } from '@web/api';
 import { describeError } from '@web/session';
 import { withHistory } from '@web/vault/item';
+import { fromTrash } from '@web/vault/trash';
 import { hostOf } from '../shared/match';
 import type { PendingSave } from '../shared/messages';
 import { dismissPending, existingFor, itemFromPending, refresh, type Unlocked } from './state';
@@ -40,7 +41,8 @@ export function PendingCard({
       if (existing) {
         const current = unlocked.manager.item(existing.vaultId, existing.id);
         if (!current) throw new ApiError(404, 'vault_not_found');
-        const next = { ...current.item, fields: current.item.fields.map((f) => (f.id === 'password' ? { ...f, value: pending.password } : f)) };
+        const base = fromTrash(current.item);
+        const next = { ...base, fields: base.fields.map((f) => (f.id === 'password' ? { ...f, value: pending.password } : f)) };
         await unlocked.manager.saveItem(existing.vaultId, existing.id, withHistory(current.item, next));
       } else {
         await unlocked.manager.saveItem(space, null, itemFromPending(pending));
