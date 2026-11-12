@@ -15,6 +15,7 @@ import { count, entries } from '../layout';
 import { MODULES } from '../modules/registry';
 import type { ShellContext } from '../Shell';
 import { ROLE_LABELS } from './SpaceDialog';
+import { reducedMotion } from '../motion';
 
 
 export function HomeScreen({ ctx }: { ctx: ShellContext }) {
@@ -53,7 +54,20 @@ export function HomeScreen({ ctx }: { ctx: ShellContext }) {
               const own = items.filter((i) => m.types.includes(i.item.type));
               const spaces = new Set(own.map((i) => i.vaultId)).size;
               return (
-                <Paper key={m.id} variant="outlined" sx={{ borderRadius: '18px', overflow: 'hidden' }}>
+                <Paper
+                  key={m.id}
+                  variant="outlined"
+                  sx={(t) => ({
+                    borderRadius: '18px',
+                    overflow: 'hidden',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      borderColor: t.vars?.palette.primary.main,
+                      boxShadow: `0 24px 60px -28px ${t.vars?.palette.melon.aurora1}`,
+                    },
+                    [reducedMotion]: { '&:hover': { transform: 'none' } },
+                  })}
+                >
                   <ButtonBase
                     onClick={() => navigate(m.path)}
                     aria-label={`${m.name} öffnen`}
@@ -67,8 +81,9 @@ export function HomeScreen({ ctx }: { ctx: ShellContext }) {
                         borderRadius: '16px',
                         display: 'grid',
                         placeItems: 'center',
-                        bgcolor: 'primary.main',
+                        backgroundImage: (t) => `linear-gradient(135deg, ${t.vars?.palette.primary.main}, ${t.vars?.palette.secondary.main})`,
                         color: 'primary.contrastText',
+                        boxShadow: (t) => `0 10px 30px -12px ${t.vars?.palette.primary.main}`,
                       }}
                     >
                       <Icon />

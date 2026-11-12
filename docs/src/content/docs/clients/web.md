@@ -20,8 +20,9 @@ apps/web/src
 ├── crypto/        Web Worker mit melon-crypto (WASM) + kleines RPC
 ├── vault/         Datenmodell (item.ts), Sync je Tresor (store.ts), alle Tresore (manager.ts)
 ├── screens/       Anmelden, Startbildschirm, Konto, Bereich-Dialog (Mitglieder, Einladungen)
-├── components/    Generator, Passwortanzeige, Logo
-├── theme.ts       MUI-Theme: Wassermelonen-Farben, Schriften, Formen, Hell/Dunkel
+├── components/    Generator, Passwortanzeige, Logo, Aurora-Hintergrund
+├── theme.ts       MUI-Theme: Aurora-Farben, Schriften, Formen, Hell/Dunkel
+├── motion.ts      gemeinsame Animationen (Einblenden, Aurora, Schimmer)
 ├── api.ts         HTTP-Client für die Server-API
 ├── session.ts     Anmelden, Registrieren, Sperren, Fehlermeldungen
 ├── clipboard.ts   Kopieren mit automatischem Leeren
@@ -231,12 +232,19 @@ ihre Farben über Theme-Pfade wie `melon.digit` oder `primary.main`, nie über f
 
 | Entscheidung | Grund |
 |---|---|
-| Farben einer Wassermelone: Honigmelonen-Weiß `#F2F7F1`, Schalengrün `#2E6A43`, Fruchtrot `#E2365F` als einziger Akzent | kommt direkt aus dem Namen, statt einer beliebigen Standardpalette |
+| Kühle Aurora-Palette: Violett `primary` und Eisblau `secondary`, kein Rot und kein Grün als Markenfarbe ([ADR 0018](/melonapp/entscheidungen/0018-aurora-design/)) | ruhig, modern und in beiden Modi gut lesbar |
+| Dunkelmodus fast schwarz (`#05060A`, Flächen `#0D0F17`), Hellmodus kühles Weiß (`#F4F5FA`) | echter Dunkelmodus statt eingefärbtem Grau |
+| Hintergrund `Aurora`: drei weichgezeichnete Farbflächen (`melon.aurora1–3`), die langsam wandern, darüber ein feines Punktraster | Tiefe und Bewegung, ohne vom Inhalt abzulenken |
+| Glas-Flächen: AppBar, untere Leiste und umrandete Karten halbtransparent mit `backdrop-filter` | der Hintergrund scheint durch, die Ebenen bleiben klar |
+| Haupt-Button und Modul-Symbole mit Verlauf Violett → Eisblau und farbigem Schein | die eine Aktion pro Ansicht fällt sofort auf |
+| Anmeldeseite: Schriftzug mit wanderndem Farbverlauf, Logo schwebt, Karte mit umlaufendem Lichtrand | der erste Eindruck |
+| Ansichtswechsel blenden weich ein (`riseIn` aus `motion.ts`) | Orientierung beim Navigieren |
+| Bei `prefers-reduced-motion` stehen Aurora, Schimmer und Lichtrand still, Einblenden wird zu kurzem Überblenden | Barrierefreiheit |
 | *Atkinson Hyperlegible* für Text, *Atkinson Hyperlegible Mono* für Passwörter | Diese Schriften wurden für Lesbarkeit entworfen und unterscheiden `I l 1 O 0 o` klar. Passwörter abtippen ist der Kernfall. |
 | *Bricolage Grotesque* für Überschriften | Charakter, ohne die Lesbarkeit zu stören |
-| Passwortanzeige: groß, Ziffern blau, Sonderzeichen rot, Großbuchstaben fett | die eine auffällige Stelle. Man sieht sofort, welches Zeichen gemeint ist. |
+| Passwortanzeige: groß, Ziffern blau, Sonderzeichen violett, Großbuchstaben fett | die eine auffällige Stelle. Man sieht sofort, welches Zeichen gemeint ist. |
 | Dunkelmodus automatisch nach Systemeinstellung | `colorSchemes` + CSS-Variablen, ohne Aufflackern |
-| Buttons als Pillen, Eingabefelder mit 10 px Radius, Dialoge mit 18 px | klare Hierarchie: Aktionen rund, Felder ruhig |
+| Buttons als Pillen, Eingabefelder mit 10 px Radius, Dialoge mit 20 px und weichgezeichnetem Hintergrund | klare Hierarchie: Aktionen rund, Felder ruhig |
 | Symbol-Buttons (Kopieren, Anzeigen, Sperren) mit Tooltip und `aria-label` | wenig Platz, trotzdem verständlich und per Screenreader bedienbar |
 | Mobil: Liste und Detail als getrennte Ansichten | kleine Bildschirme |
 

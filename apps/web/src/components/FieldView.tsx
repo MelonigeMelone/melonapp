@@ -59,7 +59,7 @@ export function FieldView({ field, onCopy }: { field: Field; onCopy: (value: str
           className="concealed-field"
           sx={{
             borderRadius: '18px',
-            boxShadow: (t) => `inset 0 -4px 0 ${t.vars?.palette.melon.rindLight}`,
+            boxShadow: (t) => `inset 0 -4px 0 ${t.vars?.palette.melon.edge}`,
             display: 'flex',
             alignItems: 'center',
             gap: 1,

@@ -8,14 +8,18 @@ const pkg = JSON.parse(readFileSync(`${root}../web/package.json`, 'utf8'));
 const version = pkg.version ?? '0.1.0';
 
 const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#F2F7F1"/>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9686FF"/><stop offset="1" stop-color="#5CC8FF"/></linearGradient>
+    <radialGradient id="glow" cx="0.3" cy="0.2" r="0.9"><stop offset="0" stop-color="#2A1F6B"/><stop offset="1" stop-color="#05060A"/></radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#glow)"/>
   <g transform="translate(0 7)">
-    <path d="M2 4a14 14 0 0 0 28 0Z" fill="#2E6A43"/>
-    <path d="M5 4a11 11 0 0 0 22 0Z" fill="#A7D3A0"/>
-    <path d="M7 4a9 9 0 0 0 18 0Z" fill="#E2365F"/>
-    <ellipse cx="12" cy="7.5" rx="0.9" ry="1.4" fill="#1C241F"/>
-    <ellipse cx="16" cy="10" rx="0.9" ry="1.4" fill="#1C241F"/>
-    <ellipse cx="20" cy="7.5" rx="0.9" ry="1.4" fill="#1C241F"/>
+    <path d="M2 4a14 14 0 0 0 28 0Z" fill="url(#g)"/>
+    <path d="M5 4a11 11 0 0 0 22 0Z" fill="#05060A" opacity="0.9"/>
+    <path d="M7 4a9 9 0 0 0 18 0Z" fill="url(#g)" opacity="0.55"/>
+    <ellipse cx="12" cy="7.5" rx="0.9" ry="1.4" fill="#C4A8FF"/>
+    <ellipse cx="16" cy="10" rx="0.9" ry="1.4" fill="#C4A8FF"/>
+    <ellipse cx="20" cy="7.5" rx="0.9" ry="1.4" fill="#C4A8FF"/>
   </g>
 </svg>`;
 

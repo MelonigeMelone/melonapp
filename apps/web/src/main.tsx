@@ -7,6 +7,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { Aurora } from './components/Aurora';
 import { theme } from './theme';
 
 const root = document.getElementById('root');
@@ -16,6 +17,7 @@ createRoot(root).render(
   <StrictMode>
     <ThemeProvider theme={theme}>
       <CssBaseline enableColorScheme />
+      <Aurora />
       <App />
     </ThemeProvider>
   </StrictMode>,

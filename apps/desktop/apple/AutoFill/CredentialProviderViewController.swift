@@ -15,6 +15,19 @@ private enum UnlockedCredentials {
     case assertion(ASPasskeyAssertionCredential)
 }
 
+enum MelonTheme {
+    static let background = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0x05 / 255, green: 0x06 / 255, blue: 0x0A / 255, alpha: 1)
+            : UIColor(red: 0xF4 / 255, green: 0xF5 / 255, blue: 0xFA / 255, alpha: 1)
+    }
+    static let accent = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0x96 / 255, green: 0x86 / 255, blue: 0xFF / 255, alpha: 1)
+            : UIColor(red: 0x5B / 255, green: 0x45 / 255, blue: 0xF0 / 255, alpha: 1)
+    }
+}
+
 final class CredentialProviderViewController: ASCredentialProviderViewController {
     private let cancellation = CancellationFlag()
     private var hosts: [String] = []
@@ -26,7 +39,8 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = MelonTheme.background
+        view.tintColor = MelonTheme.accent
         stack.axis = .vertical
         stack.spacing = 16
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -50,9 +64,12 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
     }
 
-    private func button(_ title: String, action: @escaping () -> Void) {
+    private func button(_ title: String, primary: Bool = true, action: @escaping () -> Void) {
         let button = UIButton(type: .system)
-        button.configuration = .filled()
+        var configuration: UIButton.Configuration = primary ? .filled() : .tinted()
+        configuration.cornerStyle = .capsule
+        configuration.buttonSize = .large
+        button.configuration = configuration
         button.setTitle(title, for: .normal)
         button.addAction(UIAction { _ in action() }, for: .touchUpInside)
         stack.addArrangedSubview(button)
@@ -62,7 +79,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         guard isViewLoaded else { return }
         clear()
         button(registration ? "Passkey auf diesem Gerät erstellen" : "Mit Face ID entsperren") { [weak self] in self?.unlock() }
-        button("Abbrechen") { [weak self] in self?.cancel() }
+        button("Abbrechen", primary: false) { [weak self] in self?.cancel() }
     }
 
     @objc private func cancel() {
@@ -76,10 +93,11 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         passwords.removeAll()
         clear()
         let label = UILabel()
+        label.textColor = .secondaryLabel
         label.numberOfLines = 0
         label.text = "Entsperren nicht möglich. Öffne MelonApp und aktualisiere den AutoFill-Cache."
         stack.addArrangedSubview(label)
-        button("Abbrechen") { [weak self] in self?.cancel() }
+        button("Abbrechen", primary: false) { [weak self] in self?.cancel() }
     }
 
     private static func hosts(for identifiers: [ASCredentialServiceIdentifier]) -> [String] {
@@ -134,9 +152,10 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         let hosts = hosts
         clear()
         let label = UILabel()
+        label.textColor = .secondaryLabel
         label.text = "Zugangsdaten werden entsperrt …"
         stack.addArrangedSubview(label)
-        button("Abbrechen") { [weak self] in self?.cancel() }
+        button("Abbrechen", primary: false) { [weak self] in self?.cancel() }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             do {
@@ -212,10 +231,11 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         }
         if stack.arrangedSubviews.isEmpty {
             let label = UILabel()
+        label.textColor = .secondaryLabel
             label.text = "Keine passenden Zugangsdaten."
             stack.addArrangedSubview(label)
         }
-        button("Abbrechen") { [weak self] in self?.cancel() }
+        button("Abbrechen", primary: false) { [weak self] in self?.cancel() }
     }
 
     private func register(_ request: ASPasskeyCredentialRequest, vault: CredentialVault) throws -> ASPasskeyRegistrationCredential {

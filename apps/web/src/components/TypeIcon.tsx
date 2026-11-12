@@ -23,7 +23,7 @@ export function ItemAvatar({ item }: { item: Item }) {
   }
   const Icon = TYPE_ICONS[item.type];
   return (
-    <Avatar aria-hidden="true" sx={{ bgcolor: 'melon.sunk', color: 'secondary.main' }}>
+    <Avatar aria-hidden="true" sx={{ backgroundImage: 'none', bgcolor: 'melon.sunk', color: 'primary.main', border: 1, borderColor: 'divider' }}>
       <Icon />
     </Avatar>
   );
