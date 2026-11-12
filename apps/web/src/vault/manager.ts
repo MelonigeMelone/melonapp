@@ -1,6 +1,7 @@
 import { ApiError, type Api, type InviteInfo, type RemoteMember, type RemoteVault, type Role } from '../api';
 import type { CryptoMethods } from '../crypto/protocol';
 import { newId, type Item, type VaultItem } from './item';
+import { storedLog, type SeenLog } from './seen';
 import { isConflict, VaultStore } from './store';
 
 type Call = <M extends keyof CryptoMethods>(
@@ -19,6 +20,7 @@ export interface VaultView {
   isOwner: boolean;
   itemCount: number;
   unreadable: number;
+  rolledBack: number;
 }
 
 export interface Snapshot {
@@ -61,6 +63,7 @@ export class VaultsManager {
     readonly userId: string,
     private readonly api: Api,
     private readonly crypto: Call,
+    private readonly seen: SeenLog = storedLog(userId),
   ) {}
 
   subscribe = (listener: () => void) => {
@@ -84,6 +87,7 @@ export class VaultsManager {
       isOwner: remote.role === 'owner',
       itemCount: store?.list().length ?? 0,
       unreadable: store?.unreadableCount ?? 0,
+      rolledBack: store?.rolledBackCount ?? 0,
     }));
     views.sort((a, b) => Number(b.personal) - Number(a.personal) || a.name.localeCompare(b.name, 'de'));
     const items = [...this.vaults.values()]
@@ -154,6 +158,8 @@ export class VaultsManager {
       },
       () => this.vaults.get(vaultId)?.remote.key_version ?? 1,
       this.emit,
+      undefined,
+      this.seen,
     );
   }
 

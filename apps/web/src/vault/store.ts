@@ -1,6 +1,7 @@
 import { ApiError, type ItemPage, type PutBody } from '../api';
 import type { Decrypted } from '../crypto/protocol';
 import { newId, parseItem, resolveConflict, withHistory, type Item, type VaultItem } from './item';
+import { memoryLog, type SeenLog } from './seen';
 
 export interface ItemCrypto {
   encrypt(itemId: string, plaintext: string): Promise<string>;
@@ -19,6 +20,7 @@ export class VaultStore {
   private items = new Map<string, VaultItem>();
   private tombstones = new Map<string, number>();
   private unreadable = new Set<string>();
+  private rolledBack = new Set<string>();
   private since = 0;
   private running: Promise<void> | null = null;
 
@@ -29,10 +31,19 @@ export class VaultStore {
     private readonly keyVersion: () => number,
     private readonly onChange: () => void = () => undefined,
     private readonly makeId: () => string = newId,
+    private readonly seen: SeenLog = memoryLog(),
   ) {}
 
   get unreadableCount() {
     return this.unreadable.size;
+  }
+
+  get rolledBackCount() {
+    return this.rolledBack.size;
+  }
+
+  private key(id: string) {
+    return `${this.vaultId}/${id}`;
   }
 
   list(): VaultItem[] {
@@ -51,6 +62,7 @@ export class VaultStore {
     this.items.clear();
     this.tombstones.clear();
     this.unreadable.clear();
+    this.rolledBack.clear();
     this.since = 0;
   }
 
@@ -73,7 +85,10 @@ export class VaultStore {
       for (const r of page.items) {
         this.unreadable.delete(r.id);
         if (r.deleted) {
+          const last = this.items.get(r.id)?.item.seq;
+          if (last !== undefined) this.seen.raise(this.key(r.id), last + 1);
           this.items.delete(r.id);
+          this.rolledBack.delete(r.id);
           this.tombstones.set(r.id, r.revision);
           continue;
         }
@@ -82,8 +97,15 @@ export class VaultStore {
           this.unreadable.add(r.id);
           continue;
         }
+        const item = parseItem(d.plaintext);
+        if (item.seq < this.seen.get(this.key(r.id))) {
+          this.rolledBack.add(r.id);
+          continue;
+        }
+        this.rolledBack.delete(r.id);
+        this.seen.raise(this.key(r.id), item.seq);
         this.tombstones.delete(r.id);
-        this.items.set(r.id, { vaultId: this.vaultId, id: r.id, revision: r.revision, item: parseItem(d.plaintext) });
+        this.items.set(r.id, { vaultId: this.vaultId, id: r.id, revision: r.revision, item });
       }
       this.since = page.latest_revision;
       more = page.has_more;
@@ -95,7 +117,8 @@ export class VaultStore {
     return this.items.get(id)?.revision ?? this.tombstones.get(id) ?? null;
   }
 
-  private async write(id: string, item: Item) {
+  private async write(id: string, edited: Item) {
+    const item = { ...edited, seq: Math.max(edited.seq, this.seen.get(this.key(id)) + 1) };
     const data = await this.crypto.encrypt(id, JSON.stringify(item));
     const { revision } = await this.remote.put(id, {
       data,
@@ -103,6 +126,8 @@ export class VaultStore {
       base_revision: this.baseRevision(id),
     });
     this.items.set(id, { vaultId: this.vaultId, id, revision, item });
+    this.seen.raise(this.key(id), item.seq);
+    this.rolledBack.delete(id);
     this.tombstones.delete(id);
     this.onChange();
   }
@@ -125,6 +150,7 @@ export class VaultStore {
       const current = this.items.get(id);
       if (!current) return;
       const { revision } = await this.remote.remove(id, current.revision);
+      this.seen.raise(this.key(id), current.item.seq + 1);
       this.items.delete(id);
       this.tombstones.set(id, revision);
       this.onChange();

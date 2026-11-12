@@ -50,6 +50,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
   const { session, snapshot, loaded, syncError, openSpace, createSpace } = ctx;
   const manager = session.vaults;
   const { vaults } = snapshot;
+  const rolledBack = vaults.reduce((n, v) => n + v.rolledBack, 0);
   const items = useMemo(() => snapshot.items.filter((i) => module.types.includes(i.item.type)), [snapshot.items, module.types]);
   const [scope, setScope] = useState<string>(ALL);
   const [query, setQuery] = useState('');
@@ -248,6 +249,13 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
       {(actionError ?? syncError) && <Alert severity="warning">{actionError ?? syncError}</Alert>}
       {vaults.some((v) => v.unreadable > 0) && (
         <Alert severity="warning">Einige Einträge ließen sich nicht entschlüsseln und werden ausgeblendet.</Alert>
+      )}
+      {rolledBack > 0 && (
+        <Alert severity="error" className="rollback-warning">
+          Der Server hat bei {rolledBack === 1 ? 'einem Eintrag' : `${rolledBack} Einträgen`} einen älteren Stand geliefert, als
+          dieses Gerät schon kannte. MelonApp zeigt weiter den neueren Stand, solange er noch geladen ist. Das kann auf einen manipulierten
+          Server hindeuten: Ändere vorerst nichts an diesen Einträgen und sprich mit dem Betreiber.
+        </Alert>
       )}
       {scopeVault?.waitingForKey && (
         <Alert severity="info">

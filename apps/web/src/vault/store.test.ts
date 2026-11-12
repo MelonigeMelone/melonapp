@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, type ItemPage, type PutBody, type RemoteItem } from '../api';
 import { emptyItem, fieldValue, type Item } from './item';
+import { memoryLog, type SeenLog } from './seen';
 import { VaultStore, type ItemCrypto, type ItemRemote } from './store';
 
 class FakeServer {
@@ -49,9 +50,14 @@ function login(title: string, password: string): Item {
   return item;
 }
 
-function device(server: FakeServer, ids: string[] = []) {
+function device(server: FakeServer, ids: string[] = [], seen: SeenLog = memoryLog()) {
   let n = 0;
-  return new VaultStore('vault', fakeCrypto, server.port(), () => 1, undefined, () => ids[n++] ?? `id-${Math.random()}`);
+  return new VaultStore('vault', fakeCrypto, server.port(), () => 1, undefined, () => ids[n++] ?? `id-${Math.random()}`, seen);
+}
+
+function replay(server: FakeServer, id: string, data: string) {
+  const top = Math.max(...[...server.rows.values()].map((r) => r.revision)) + 1;
+  server.rows.set(id, { id, data, key_version: 1, revision: top, deleted: false });
 }
 
 describe('VaultStore', () => {
@@ -100,6 +106,60 @@ describe('VaultStore', () => {
     await a.save(null, login('A', ''));
     server.keyVersion = 2;
     await expect(a.save('k', login('B', ''))).rejects.toMatchObject({ code: 'key_rotated' });
+  });
+
+  it('detects an old version replayed under a new revision and keeps the newer one', async () => {
+    const server = new FakeServer();
+    const a = device(server, ['r']);
+    const id = await a.save(null, login('Bank', 'old'));
+    const old = server.rows.get(id)!.data!;
+    await a.save(id, login('Bank', 'new'));
+    replay(server, id, old);
+    await a.sync();
+    expect(a.rolledBackCount).toBe(1);
+    expect(fieldValue(a.get(id)!.item, 'password')).toBe('new');
+  });
+
+  it('remembers what it has seen across sessions', async () => {
+    const server = new FakeServer();
+    const seen = memoryLog();
+    const a = device(server, ['s'], seen);
+    const id = await a.save(null, login('Mail', 'old'));
+    const old = server.rows.get(id)!.data!;
+    await a.save(id, login('Mail', 'new'));
+    replay(server, id, old);
+    const later = device(server, [], seen);
+    await later.sync();
+    expect(later.rolledBackCount).toBe(1);
+    expect(later.get(id)).toBeUndefined();
+  });
+
+  it('detects a deleted item brought back from an old copy', async () => {
+    const server = new FakeServer();
+    const a = device(server, ['d']);
+    const id = await a.save(null, login('Alt', 'pw'));
+    const old = server.rows.get(id)!.data!;
+    await a.remove(id);
+    replay(server, id, old);
+    await a.sync();
+    expect(a.rolledBackCount).toBe(1);
+    expect(a.get(id)).toBeUndefined();
+  });
+
+  it('accepts edits from other devices and items written before the counter existed', async () => {
+    const server = new FakeServer();
+    server.rows.set('legacy', { id: 'legacy', data: 'legacy|{"title":"Alt"}', key_version: 1, revision: 1, deleted: false });
+    const a = device(server, ['n']);
+    const b = device(server);
+    await a.sync();
+    expect(a.get('legacy')?.item.seq).toBe(0);
+    await a.save('legacy', { ...a.get('legacy')!.item, title: 'Neu' });
+    await b.sync();
+    await b.save('legacy', { ...b.get('legacy')!.item, title: 'Von B' });
+    await a.sync();
+    expect(a.get('legacy')?.item.title).toBe('Von B');
+    expect(a.get('legacy')?.item.seq).toBe(2);
+    expect(a.rolledBackCount + b.rolledBackCount).toBe(0);
   });
 
   it('skips items it cannot decrypt and starts over after reset', async () => {

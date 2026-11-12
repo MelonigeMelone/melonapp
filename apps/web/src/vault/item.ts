@@ -28,6 +28,7 @@ export interface Item {
   sections: Section[];
   notes: string;
   history: HistoryEntry[];
+  seq: number;
 }
 
 export interface VaultItem {
@@ -122,6 +123,7 @@ export function emptyItem(type: ItemType): Item {
     sections: [],
     notes: '',
     history: [],
+    seq: 0,
   };
 }
 
@@ -151,6 +153,7 @@ export function parseItem(json: string): Item {
       const ho = obj(h);
       return { fieldId: str(ho.fieldId), label: str(ho.label), value: str(ho.value), changedAt: str(ho.changedAt) };
     }),
+    seq: Number.isSafeInteger(o.seq) && (o.seq as number) > 0 ? (o.seq as number) : 0,
   };
 }
 
@@ -185,7 +188,8 @@ export function withHistory(previous: Item | undefined, next: Item, now = new Da
       changed.push({ fieldId: old.id, label: old.label, value: old.value, changedAt: now.toISOString() });
     }
   }
-  return { ...next, history: dedupeHistory([...changed, ...next.history], next) };
+  const seq = Math.max(previous?.seq ?? 0, next.seq ?? 0) + 1;
+  return { ...next, history: dedupeHistory([...changed, ...next.history], next), seq };
 }
 
 export function resolveConflict(remote: Item, local: Item, now = new Date()): Item {

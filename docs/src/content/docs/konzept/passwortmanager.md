@@ -50,7 +50,8 @@ Ein Login-Eintrag. Das folgende JSON liegt **verschlüsselt** im Feld `data` (si
     { "id": "…", "title": "", "fields": [{ "id": "…", "label": "Recovery-Code", "kind": "concealed", "value": "…" }] }
   ],
   "notes": "",
-  "history": []
+  "history": [],
+  "seq": 3
 }
 ```
 
