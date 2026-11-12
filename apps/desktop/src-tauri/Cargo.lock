@@ -2309,7 +2309,7 @@ name = "melon-crypto"
 version = "0.1.0"
 dependencies = [
  "argon2",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chacha20poly1305",
  "ciborium",
  "data-encoding",
@@ -2350,7 +2350,7 @@ dependencies = [
 name = "melon-native"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "melon-crypto",
  "serde",
  "serde_json",
