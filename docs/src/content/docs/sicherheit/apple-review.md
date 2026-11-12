@@ -61,23 +61,43 @@ Der vollständige Tauri-Graph enthält außerdem das ungewartete Linux-GTK-Build
 aus; dafür gibt es keine Advisory-Ausnahme. Windows/Linux-Desktop-Builds sind hier
 nicht abgenommen.
 
+## Hardware-Abnahme
+
+Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
+`de.melonigemelone.app` / `.autofill`, App Group `group.de.melonigemelone.app`, Server
+`https://app.melonigemelone.de`, Testkonto.
+
+- **macOS** ([#24](https://github.com/MelonigeMelone/melonapp/issues/24), [#25](https://github.com/MelonigeMelone/melonapp/issues/25)): signierter Build mit Provisioning-Profil startet. Touch-ID-Erfolg und
+  -Abbruch, Sperre bei Fokusverlust, `⌘⇧M` (holt nur nach vorn), falsches Passwort,
+  Leeren der Zwischenablage und fünf Minuten Inaktivität bestanden.
+- **iPhone 13, iOS 26.6.1** ([#26](https://github.com/MelonigeMelone/melonapp/issues/26)): Installation, Face ID aktivieren und entsperren,
+  Hintergrundwechsel, Face-ID-Abbruch, erneutes Entsperren, falsches Passwort, fünf Minuten
+  Inaktivität bestanden, nach Behebung des Fokusfehlers (Face-ID-Dialog sperrte die
+  Sitzung vor der Wiederherstellung).
+- **AutoFill in Safari** ([#27](https://github.com/MelonigeMelone/melonapp/issues/27)): exakter Host wird gefunden und ausgefüllt, andere Subdomain und
+  ähnliche Domain liefern nichts, Face-ID-Abbruch lehnt ab. Vorher behoben: Absturz der
+  Extension auf dem Gerät (dynamisch gelinkte `libmelon_ffi.dylib`) und Abmeldung durch
+  einen Face-ID-Dialog beim Aktualisieren des AutoFill-Schlüssels.
+- **Passkeys** ([#28](https://github.com/MelonigeMelone/melonapp/issues/28)): Registrierung und Anmeldung gegen webauthn.io, Abbruch,
+  Hintergrundwechsel, erneute Anmeldung und Ablehnung bei anderem RP (webauthn.me)
+  bestanden, nachdem BE/BS gesetzt wurden ([ADR 0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/)).
+- **Design** ([#58](https://github.com/MelonigeMelone/melonapp/issues/58)): Extension hell/dunkel und App-Icon im Simulator geprüft;
+  Kontrast des gefüllten Buttons im Dunkelmodus korrigiert.
+
 ## Offene Abnahmen
 
-- Echter Touch-ID-/Face-ID-Erfolg, Abbruch, neue biometrische Registrierung und gesperrtes
-  Gerät: auf Hardware prüfen; Simulator und Rust-Tests beweisen dies nicht ([#25](https://github.com/MelonigeMelone/melonapp/issues/25), [#26](https://github.com/MelonigeMelone/melonapp/issues/26)).
-- macOS benötigt für die Data-Protection-Keychain-Entitlements ein passendes
-  Provisioning-Profil. Ein signiertes, aber unprovisioniertes Bundle kann vom System
-  beendet werden, obwohl `codesign --verify` erfolgreich ist ([#24](https://github.com/MelonigeMelone/melonapp/issues/24)).
-- iOS-Signierung wurde versucht und scheiterte an der gespeicherten Xcode-Anmeldung
-  sowie fehlender App-Group-Berechtigung im vorhandenen Profil ([#23](https://github.com/MelonigeMelone/melonapp/issues/23)).
-- AutoFill und Passkeys sind gebaut, aber nicht gegen Safari/eine echte Relying Party
-  vollständig auf Hardware abgenommen ([#27](https://github.com/MelonigeMelone/melonapp/issues/27), [#28](https://github.com/MelonigeMelone/melonapp/issues/28)). Passkeys haben
-  noch keinen Server-Sync, Export oder Wiederherstellungsablauf ([#32](https://github.com/MelonigeMelone/melonapp/issues/32)).
+- Neue biometrische Registrierung auf dem Mac (Fingerabdruck hinzufügen → Touch ID muss
+  scheitern, „Neu einrichten“ behebt es) ist noch nicht auf Hardware geprüft ([#25](https://github.com/MelonigeMelone/melonapp/issues/25)).
+- Ablauf des 24-Stunden-AutoFill-Snapshots wurde auf dem Gerät nicht geprüft, nur im
+  Swift-Test (`scripts/test-apple-swift.sh`).
 - Passwort-Snapshots sind bewusst angelegte Offline-Kopien: Widerruf wirkt dort nicht
   sofort. Die 24-Stunden-Frist hängt von der Gerätezeit ab und ist kein kryptografischer
   Schutz vor Zurücksetzen der Systemzeit oder Wiedereinspielen alter gültiger Dateien.
-- Native Zwischenablage und globale Hotkey-Aktivierung benötigen noch interaktive
-  Abnahme; die Umgebung erlaubt keine macOS-Accessibility-Automatisierung ([#25](https://github.com/MelonigeMelone/melonapp/issues/25)).
+- Passkeys melden BS=1, sind aber gerätelokal ohne Sync, Export oder Wiederherstellung
+  ([#32](https://github.com/MelonigeMelone/melonapp/issues/32)). Konten nie nur an einen MelonApp-Passkey binden.
+- Notarisierung und TestFlight ([#30](https://github.com/MelonigeMelone/melonapp/issues/30)) sowie die Safari-Web-Erweiterung
+  ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) stehen aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
+  biometrische Aussagen gelten nur für die Hardware-Abnahme oben.
 
 ## Statusanzeige der Biometrie-Einstellungen
 
@@ -88,7 +108,5 @@ allein aufgrund eines abgeschlossenen UI-Aufrufs. Manipulierte oder kontextfremd
 Snapshots werden nicht als eingerichtet angezeigt. Die Anzeige behauptet ausdrücklich
 keine aktuelle Hardware-, Keychain- oder Server-Verfügbarkeit.
 
-Die automatischen Angriffs- und UI-Tests stehen in `sicherheit/pruefungen.md`. Der separate
-vorgeschriebene `/security-review` für diese Ergänzung wurde in der aktuellen Codex-
-Umgebung nicht ausgeführt und bleibt vor dem Merge des zugehörigen PR erforderlich;
-der frühere Review für #29 deckt diese neue Änderung nicht ab.
+Die automatischen Angriffs- und UI-Tests stehen in `sicherheit/pruefungen.md`. Der
+`/security-review` für diese Ergänzung (PR #83) fand keine Befunde.
