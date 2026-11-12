@@ -22,7 +22,7 @@ jobs:
         with:
           targets: aarch64-apple-ios-sim
           components: rustfmt, clippy
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
