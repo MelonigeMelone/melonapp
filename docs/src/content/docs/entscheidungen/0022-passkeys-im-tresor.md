@@ -29,13 +29,17 @@ Passkey nur lokal erzeugen und muss ihn der App übergeben.
   Schreibvorgänge, wenn App und Extension gleichzeitig laufen.
 - **Übernahme nach dem Entsperren:** Die App liest den Briefkasten (und die alte gerätelokale
   `{scope}.passkeys.enc`), legt fehlende Passkeys im persönlichen Bereich an und löscht eine
-  Datei erst, wenn alle Passkeys darin gespeichert sind. Passkeys, die schon im Tresor oder im
-  Papierkorb liegen, werden nicht erneut angelegt; Löschen im Tresor bleibt also wirksam.
+  Datei erst, wenn alle Passkeys darin gespeichert sind. Als schon vorhanden gilt nur ein Passkey
+  mit gleicher RP-ID, Credential-ID **und** gleichem Schlüssel im persönlichen Bereich (auch im
+  Papierkorb); Löschen dort bleibt also wirksam. Ein Eintrag mit derselben Credential-ID in einem
+  geteilten Bereich kann einen neuen Passkey so nicht verdrängen und seine Datei nicht löschen
+  lassen. Eine alte Gerätedatei, in der sich nicht jeder Passkey öffnen ließ, bleibt liegen.
 - **Rückweg zur Extension:** Beim Veröffentlichen von AutoFill schreibt die App alle Passkeys
   aus dem Tresor (ohne Papierkorb) als `{scope}.synced.enc`. Jeder private Schlüssel wird
   dafür in Rust mit dem Kontoschlüssel neu verpackt (AAD mit RP-ID und Credential-ID) und die
-  Liste zusätzlich als Cache verschlüsselt. Die Extension liest vereinte Liste aus synced,
-  Briefkasten und Altdatei, ohne Doppelte.
+  Liste zusätzlich als Cache verschlüsselt. Passkeys aus dem persönlichen Bereich kommen zuerst.
+  Die Extension vereint Briefkasten, Altdatei und synced in dieser Reihenfolge; bei gleicher
+  Credential-ID gewinnt der erste, also immer der auf diesem Gerät erzeugte.
 - **Automatisch:** Nach jedem Entsperren auf iOS übernimmt die App den Briefkasten und
   veröffentlicht AutoFill neu, wenn es für dieses Konto schon aktiv ist.
 - **CSV-Export lässt Passkeys weg.** Ein privater Schlüssel gehört nicht in eine Klartextdatei.

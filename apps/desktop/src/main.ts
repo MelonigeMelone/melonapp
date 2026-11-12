@@ -18,7 +18,8 @@ const platform = {
       password: v.item.fields.find((f) => f.id === 'password')?.value ?? '',
       urls: [...v.item.fields, ...v.item.sections.flatMap((section) => section.fields)].filter((f) => f.kind === 'url').map((f) => /^[a-z][a-z0-9+.-]*:/i.test(f.value) ? f.value : `https://${f.value}`),
     }));
-    const passkeys = vaultPasskeys(session.vaults.getSnapshot().items);
+    const snapshot = session.vaults.getSnapshot();
+    const passkeys = vaultPasskeys(snapshot.items, snapshot.vaults);
     await invoke('autofill_publish', { userId: session.userId, entries, passkeys });
   },
   async syncPasskeys(session: Session) {

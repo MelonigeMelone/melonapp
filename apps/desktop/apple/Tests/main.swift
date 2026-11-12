@@ -52,4 +52,13 @@ let names = Set(vault.passkeys(key: key).map(\.userName))
 precondition(names == ["synced", "outbox", "legacy"], "renamed, foreign or wrong-key outbox files must be ignored: \(names)")
 let fromSync = vault.passkeys(key: key).first { $0.userName == "synced" }!
 precondition((try? signPasskey(key: key, rp: fromSync.rp, credentialId: fromSync.id, encryptedKey: fromSync.encryptedKey, clientHash: Data(repeating: 1, count: 32))) != nil)
+let shadowDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+try FileManager.default.createDirectory(at: shadowDirectory, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: shadowDirectory) }
+let shadowVault = CredentialVault(directory: shadowDirectory, scope: scope)
+let own = try stored("example.com", "own")
+let planted = StoredPasskey(id: own.id, rp: own.rp, userName: "planted", userHandle: own.userHandle, encryptedKey: try registerPasskey(key: key, rp: "example.com").encryptedKey)
+try Data(encryptCache(key: key, plaintext: JSONEncoder().encode([planted]), scope: "autofill/v1/\(scope)/synced").utf8).write(to: shadowDirectory.appendingPathComponent("\(scope).synced.enc"))
+try shadowVault.saveOutbox(own, key: key)
+precondition(shadowVault.passkeys(key: key).map(\.userName) == ["own"], "the device's own passkey must win over a synced one with the same ID")
 print("Swift AutoFill matching, expiry, UniFFI encryption, passkey sources and attack checks passed")

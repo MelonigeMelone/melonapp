@@ -28,6 +28,7 @@ pub struct Pending {
     pub credential_id: String,
     pub user_handle: String,
     pub private_key: String,
+    pub partial: bool,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +93,7 @@ fn open_stored(session: &mut Session, file: &str, stored: &Stored) -> Option<Pen
         credential_id: URL_SAFE_NO_PAD.encode(&id),
         user_handle: URL_SAFE_NO_PAD.encode(&handle),
         private_key: URL_SAFE_NO_PAD.encode(&*private),
+        partial: false,
     })
 }
 
@@ -127,12 +129,14 @@ fn read_file(
                 .cache_open(&format!("autofill/v1/{scope}/passkeys"), &ciphertext)
                 .ok()?;
             let stored: Vec<Stored> = serde_json::from_slice(&plaintext).ok()?;
-            Some(
-                stored
-                    .iter()
-                    .filter_map(|s| open_stored(session, name, s))
-                    .collect(),
-            )
+            let mut opened: Vec<Pending> = stored
+                .iter()
+                .filter_map(|s| open_stored(session, name, s))
+                .collect();
+            if opened.len() != stored.len() {
+                opened.iter_mut().for_each(|p| p.partial = true);
+            }
+            Some(opened)
         }
     }
 }
@@ -364,6 +368,38 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].file, format!("{SCOPE}.passkeys.enc"));
         assert_eq!(found[0].user_name, "bob");
+        assert!(!found[0].partial);
+    }
+
+    #[test]
+    fn partly_unreadable_legacy_file_is_marked_partial() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut session = account();
+        let created = create_passkey(&device_key(&mut session), "example.com").unwrap();
+        let good = Stored {
+            id: STANDARD.encode(&created.credential_id),
+            rp: "example.com".into(),
+            user_name: "bob".into(),
+            user_handle: STANDARD.encode(b"h"),
+            encrypted_key: created.encrypted_key,
+        };
+        let broken = Stored {
+            id: STANDARD.encode([9; 32]),
+            rp: "example.com".into(),
+            user_name: "lost".into(),
+            user_handle: STANDARD.encode(b"h"),
+            encrypted_key: good.encrypted_key.clone(),
+        };
+        let sealed = session
+            .cache_seal(
+                &format!("autofill/v1/{SCOPE}/passkeys"),
+                &serde_json::to_vec(&vec![good, broken]).unwrap(),
+            )
+            .unwrap();
+        fs::write(dir.path().join(format!("{SCOPE}.passkeys.enc")), sealed).unwrap();
+        let found = pending(&mut session, dir.path(), SCOPE).unwrap();
+        assert_eq!(found.len(), 1);
+        assert!(found[0].partial);
     }
 
     #[test]

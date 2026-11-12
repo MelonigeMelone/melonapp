@@ -110,7 +110,7 @@ final class CredentialVault {
     }
 
     func passkeys(key: Data) -> [StoredPasskey] {
-        var result = decode([StoredPasskey].self, "\(scope).synced.enc", scope: "autofill/v1/\(scope)/synced", key: key, limit: 48 * 1024 * 1024) ?? []
+        var result: [StoredPasskey] = []
         let prefix = "\(scope).outbox."
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).sorted()
         for name in names where name.hasPrefix(prefix) && name.hasSuffix(".enc") {
@@ -120,6 +120,7 @@ final class CredentialVault {
             result.append(passkey)
         }
         result += decode([StoredPasskey].self, "\(scope).passkeys.enc", scope: "autofill/v1/\(scope)/passkeys", key: key, limit: 8 * 1024 * 1024) ?? []
+        result += decode([StoredPasskey].self, "\(scope).synced.enc", scope: "autofill/v1/\(scope)/synced", key: key, limit: 48 * 1024 * 1024) ?? []
         var seen = Set<Data>()
         return result.filter { seen.insert($0.id).inserted }
     }

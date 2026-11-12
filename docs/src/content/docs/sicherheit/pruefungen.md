@@ -114,7 +114,9 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | Briefkasten: fremder Scope, fremdes Konto, umbenannte oder manipulierte Datei wird ignoriert | `passkeys::tests::foreign_renamed_or_tampered_outbox_files_are_ignored` (Desktop) |
 | Briefkasten: Bestätigen löscht nur Briefkasten-Dateien dieses Scopes, keine Pfade | `passkeys::tests::acknowledge_only_deletes_this_scopes_outbox_files` (Desktop) |
 | Briefkasten und Veröffentlichen verweigern bei gesperrter Sitzung | `passkeys::tests::locked_session_reads_and_publishes_nothing` (Desktop) |
-| Übernahme in den Tresor: keine Doppelten, Papierkorb respektiert, Datei bleibt bei Fehler | `vault/passkeys.test.ts` |
+| Übernahme in den Tresor: keine Doppelten, Papierkorb respektiert, Datei bleibt bei Fehler; gleiche Credential-ID in geteiltem Bereich verdrängt keinen neuen Passkey | `vault/passkeys.test.ts` |
+| Teilweise unlesbare Gerätedatei wird nicht gelöscht | `passkeys::tests::partly_unreadable_legacy_file_is_marked_partial` (Desktop) |
+| Extension: eigener Passkey gewinnt gegen gleichnamige ID aus dem Tresor | `apps/desktop/apple/Tests/main.swift` |
 | CSV-Export enthält keine Passkeys, verschlüsselter Export behält sie vollständig | `export/formats.test.ts` |
 | Swift: exakte HTTPS-Hosts, keine Eltern-/Subdomains, Cache-Ablauf und Aufrufe über echte UniFFI-Bindings | `bash scripts/test-apple-swift.sh` |
 

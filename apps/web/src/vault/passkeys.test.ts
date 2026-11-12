@@ -40,11 +40,34 @@ describe('importPasskeys', () => {
     expect(passkeyOf(vaults.saved[0]!.item)?.credentialId).toBe('AAA');
   });
 
-  it('does not duplicate passkeys already in the vault or deliberately trashed', async () => {
-    const vaults = fake({ items: [stored('shared', 'AAA')], trash: [stored('personal', 'BBB')] });
+  it('does not duplicate passkeys already in the personal vault or deliberately trashed there', async () => {
+    const vaults = fake({ items: [stored('personal', 'AAA')], trash: [stored('personal', 'BBB')] });
     const done = await importPasskeys(vaults, [pending('a.enc', 'AAA'), pending('b.enc', 'BBB'), pending('c.enc', 'CCC'), pending('d.enc', 'CCC')]);
     expect(done).toEqual(['a.enc', 'b.enc', 'c.enc', 'd.enc']);
     expect(vaults.saved.map((s) => passkeyOf(s.item)?.credentialId)).toEqual(['CCC']);
+  });
+
+  it('does not let a shared-vault item with the same credential ID swallow a new passkey', async () => {
+    const planted = stored('shared', 'AAA');
+    planted.item.fields = planted.item.fields.map((f) => (f.id === 'privateKey' ? { ...f, value: 'YXR0YWNrZXI' } : f));
+    const vaults = fake({ items: [planted], trash: [stored('shared', 'BBB')] });
+    const done = await importPasskeys(vaults, [pending('a.enc', 'AAA'), pending('b.enc', 'BBB')]);
+    expect(done).toEqual(['a.enc', 'b.enc']);
+    expect(vaults.saved.map((s) => [s.vaultId, passkeyOf(s.item)?.credentialId])).toEqual([['personal', 'AAA'], ['personal', 'BBB']]);
+  });
+
+  it('imports again when the personal vault holds the same ID with a different key', async () => {
+    const other = stored('personal', 'AAA');
+    other.item.fields = other.item.fields.map((f) => (f.id === 'privateKey' ? { ...f, value: 'b3RoZXI' } : f));
+    const vaults = fake({ items: [other] });
+    expect(await importPasskeys(vaults, [pending('a.enc', 'AAA')])).toEqual(['a.enc']);
+    expect(vaults.saved).toHaveLength(1);
+  });
+
+  it('keeps a partially readable device file', async () => {
+    const vaults = fake({});
+    expect(await importPasskeys(vaults, [{ ...pending('legacy.enc', 'AAA'), partial: true }])).toEqual([]);
+    expect(vaults.saved).toHaveLength(1);
   });
 
   it('keeps a file when any passkey in it could not be saved', async () => {
@@ -66,9 +89,10 @@ describe('importPasskeys', () => {
 });
 
 describe('vaultPasskeys', () => {
-  it('publishes valid passkeys from all vaults but nothing from the trash', () => {
+  it('publishes valid passkeys from all vaults, personal ones first', () => {
     const broken = stored('personal', 'BROKEN');
     broken.item.fields = broken.item.fields.map((f) => (f.id === 'privateKey' ? { ...f, value: '' } : f));
-    expect(vaultPasskeys([stored('shared', 'AAA'), stored('personal', 'BBB'), broken]).map((p) => p.credentialId)).toEqual(['AAA', 'BBB']);
+    const vaults = [view('shared', false), view('personal', true)];
+    expect(vaultPasskeys([stored('shared', 'AAA'), stored('personal', 'BBB'), broken], vaults).map((p) => p.credentialId)).toEqual(['BBB', 'AAA']);
   });
 });
