@@ -109,6 +109,15 @@ Revision ausliefern. Deshalb steckt im verschlüsselten Eintrag ein eigener Zäh
 - Liefert der Server einen kleineren `seq`, verwirft die App diese Version, zeigt weiter die
   neuere (falls noch geladen) und warnt rot: „Der Server hat bei … einen älteren Stand
   geliefert …“.
+- Der verworfene Stand bleibt intern mit seiner aktuellen Server-Revision bekannt. Speichern
+  überschreibt ihn also mit dem neueren Stand, und ein Schlüsselwechsel schickt die vollständige,
+  vom Server verlangte Liste aller Einträge. Mehrere Tabs mischen ihre Merkwerte (immer der
+  höhere gewinnt).
+- **Alle Apps aktuell halten:** Ältere Versionen von Erweiterung oder Desktop-App kennen `seq`
+  nicht und speichern ohne Zähler. Neuere Geräte melden solche Änderungen dann als Rückschritt.
+- Wird ein Server-Backup bewusst zurückgespielt, melden bestehende Geräte alle seitdem
+  geänderten Einträge als Rückschritt. Dann im Browser die Website-Daten für MelonApp löschen
+  (setzt `melon.seen.*` zurück).
 
 Grenzen: Ein Gerät, das einen Eintrag noch nie gesehen hat (neues Gerät, gelöschter
 Browser-Speicher), kann keinen Rückschritt erkennen. Ein Server, der Änderungen ganz

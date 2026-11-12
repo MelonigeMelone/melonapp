@@ -25,6 +25,16 @@ describe('storedLog', () => {
     expect(storedLog('u2', store).get('v/i')).toBe(0);
   });
 
+  it('does not lose marks written by another tab', () => {
+    const store = storage();
+    const tabA = storedLog('u', store);
+    const tabB = storedLog('u', store);
+    tabB.raise('x', 7);
+    tabA.raise('y', 2);
+    const later = storedLog('u', store);
+    expect([later.get('x'), later.get('y')]).toEqual([7, 2]);
+  });
+
   it('ignores damaged or invalid stored values', () => {
     expect(storedLog('u', storage({ 'melon.seen.u': 'not json' })).get('x')).toBe(0);
     const odd = storedLog('u', storage({ 'melon.seen.u': '{"a":-1,"b":"7","c":4}' }));

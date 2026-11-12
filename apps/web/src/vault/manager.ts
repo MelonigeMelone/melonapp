@@ -114,6 +114,7 @@ export class VaultsManager {
 
   private async pull() {
     const { vaults } = await this.api.listVaults();
+    let failure: unknown;
     const seen = new Set(vaults.map((v) => v.id));
     for (const id of this.vaults.keys()) if (!seen.has(id)) this.vaults.delete(id);
 
@@ -139,9 +140,16 @@ export class VaultsManager {
       if (rotated) entry.store?.reset();
       entry.store ??= this.makeStore(remote.id);
       await entry.store.sync();
-      if (remote.role === 'owner' && !remote.personal) await this.ownerDuties(entry);
+      if (remote.role === 'owner' && !remote.personal) {
+        try {
+          await this.ownerDuties(entry);
+        } catch (e) {
+          failure ??= e;
+        }
+      }
     }
     this.emit();
+    if (failure !== undefined) throw failure;
   }
 
   private makeStore(vaultId: string): VaultStore {
@@ -182,12 +190,13 @@ export class VaultsManager {
     if (!entry?.store) throw new Error('vault_key_missing');
     await entry.store.sync();
     const keep = entry.remote.members.filter((m) => m.has_key && !removeUserIds.includes(m.user_id));
-    const revisions = new Map(entry.store.list().map((v) => [v.id, v.revision]));
+    const current = entry.store.rotationItems();
+    const revisions = new Map(current.map((v) => [v.id, v.revision]));
     const rotated = await this.crypto('rotate', {
       vaultId,
       meta: JSON.stringify({ name: entry.name }),
       members: keep.map((m) => ({ userId: m.user_id, publicKey: m.public_key })),
-      items: entry.store.plaintexts(),
+      items: current.map(({ id, plaintext }) => ({ id, plaintext })),
     });
     try {
       await this.api.rotate(vaultId, {

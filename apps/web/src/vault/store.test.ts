@@ -7,7 +7,7 @@ import { VaultStore, type ItemCrypto, type ItemRemote } from './store';
 class FakeServer {
   rows = new Map<string, RemoteItem>();
   keyVersion = 1;
-  private seq = 0;
+  seq = 0;
 
   port(): ItemRemote {
     return {
@@ -56,7 +56,7 @@ function device(server: FakeServer, ids: string[] = [], seen: SeenLog = memoryLo
 }
 
 function replay(server: FakeServer, id: string, data: string) {
-  const top = Math.max(...[...server.rows.values()].map((r) => r.revision)) + 1;
+  const top = ++server.seq;
   server.rows.set(id, { id, data, key_version: 1, revision: top, deleted: false });
 }
 
@@ -118,6 +118,24 @@ describe('VaultStore', () => {
     await a.sync();
     expect(a.rolledBackCount).toBe(1);
     expect(fieldValue(a.get(id)!.item, 'password')).toBe('new');
+  });
+
+  it('stays editable after a rollback and offers the current server state for key rotation', async () => {
+    const server = new FakeServer();
+    const seen = memoryLog();
+    const a = device(server, ['e'], seen);
+    const id = await a.save(null, login('Shop', 'old'));
+    const old = server.rows.get(id)!.data!;
+    await a.save(id, login('Shop', 'new'));
+    replay(server, id, old);
+    const later = device(server, [], seen);
+    await later.sync();
+    expect(later.rotationItems()).toEqual([{ id, plaintext: expect.stringContaining('"seq":1'), revision: server.rows.get(id)!.revision }]);
+    await a.sync();
+    await a.save(id, login('Shop', 'newest'));
+    await later.sync();
+    expect(later.rolledBackCount).toBe(0);
+    expect(fieldValue(later.get(id)!.item, 'password')).toBe('newest');
   });
 
   it('remembers what it has seen across sessions', async () => {
