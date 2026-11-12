@@ -419,6 +419,35 @@ await step('alice reads the re-encrypted vault after unlocking again', async () 
   if ((await pw.locator('.concealed-value .pw').innerText()) !== 'wlan-geheim-12345') throw new Error('rotated entry unreadable');
 });
 
+await step('devices: see the other device and sign it out', async () => {
+  const other = await newPage();
+  await other.goto(BASE);
+  await other.getByLabel('E-Mail').fill(alice.email);
+  await other.getByLabel('Master-Passwort', { exact: true }).fill(alice.master);
+  await other.getByRole('button', { name: 'Entsperren' }).click();
+  await other.getByRole('button', { name: 'Konto' }).waitFor({ timeout: 30000 });
+
+  await a.getByRole('button', { name: 'Konto' }).click();
+  const devices = a.locator('section[aria-labelledby="account-devices"]');
+  await devices.getByText('Dieses Gerät', { exact: false }).waitFor();
+  const others = devices.locator('.account-row').filter({ hasNotText: 'Dieses Gerät' });
+  await others.first().waitFor();
+  if (!(await others.first().innerText()).includes('Chrome auf Linux')) throw new Error('device name missing');
+  await shot(a, '7b-devices');
+
+  expect401 = true;
+  const many = await others.count();
+  if (many > 1) await devices.getByRole('button', { name: 'Alle anderen Geräte abmelden' }).click();
+  else await others.first().getByRole('button', { name: 'Abmelden' }).click();
+  await a.getByText(many > 1 ? 'Alle anderen Geräte abgemeldet.' : 'abgemeldet.', { exact: false }).waitFor();
+  await others.first().waitFor({ state: 'detached' });
+
+  await other.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await other.getByText('Deine Sitzung ist abgelaufen', { exact: false }).waitFor({ timeout: 15000 });
+  expect401 = false;
+  await other.context().close();
+});
+
 await step('security code and master password change', async () => {
   await a.getByRole('button', { name: 'Konto' }).click();
   await a.getByRole('heading', { name: 'Konto', level: 1 }).waitFor();
