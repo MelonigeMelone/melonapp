@@ -14,9 +14,17 @@ use crate::{
 
 const MAX_DEVICE_LEN: usize = 64;
 
+fn hidden(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{061C}' | '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}' | '\u{2060}'..='\u{2069}' | '\u{FEFF}'
+        )
+}
+
 pub(crate) fn device_label(raw: &str) -> String {
     raw.chars()
-        .filter(|c| !c.is_control())
+        .filter(|c| !hidden(*c))
         .collect::<String>()
         .trim()
         .chars()
@@ -105,5 +113,9 @@ mod tests {
         );
         assert_eq!(device_label("a\u{0}b\u{1b}[31mc"), "ab[31mc");
         assert_eq!(device_label(&"x".repeat(500)).len(), MAX_DEVICE_LEN);
+        assert_eq!(
+            device_label("Chrome\u{202E}swodniW\u{200B} auf\u{2066} Mac"),
+            "ChromeswodniW auf Mac"
+        );
     }
 }
