@@ -42,6 +42,11 @@ Master-Passwort.
   „Neuen Login speichern?“ bzw. „Passwort aktualisieren?“ mit **Speichern**, **Nicht jetzt** und
   **Nie für diese Seite**. Das klappt auch auf Seiten, die nicht neu laden (z. B. Web-Apps). Zusätzlich
   zeigt das Symbol in der Leiste eine rote **1**, im Popup lässt sich der Login ebenfalls speichern.
+- **Ausgeschlossene Seiten:** „Nie für diese Seite“ merkt sich die Website (Host ohne `www.`) in
+  `storage.local`, auch über Neustarts hinweg. Ausfüllen funktioniert dort weiter, nur die Karte
+  kommt nicht mehr. Rückgängig machen: im Popup auf so einer Seite **Wieder fragen**, oder unter
+  **Einstellungen** (Popup unten, bzw. Rechtsklick auf das Symbol → Optionen) die Liste aller
+  ausgeschlossenen Seiten, jede mit **Wieder fragen**. Die Einstellungsseite geht auch gesperrt.
 - **Gesperrt?** Dann sagt die Karte nur, dass man über das Symbol in der Leiste entsperren soll. Nach
   dem Master-Passwort fragt sie nie.
 - **2FA-Codes:** In Feldern für Einmalcodes (`autocomplete="one-time-code"` oder Namen wie „otp“,
@@ -63,11 +68,12 @@ apps/extension/src
 ├── content.ts      Formular-Erkennung, Symbol und Menü im Shadow DOM, Ausfüllen, Absenden erkennen,
 │                   Speicher-Karte einblenden
 ├── save/           Speicher-Karte (eigene Erweiterungsseite, als iframe in der Website)
+├── options/        Einstellungsseite (ausgeschlossene Seiten)
 ├── content/form.ts Erkennung von Benutzername/Passwort, sichtbare Felder, Ausfüllen
-└── shared/         Nachrichten, URL-Abgleich, Passwort-Generator
+└── shared/         Nachrichten, URL-Abgleich, Passwort-Generator, Liste ausgeschlossener Seiten
 ```
 
-Der Build erzeugt drei Teile: Popup (Vite), `background.js` und `content.js` (je ein IIFE-Bündel),
+Der Build erzeugt drei Teile: Popup, Speicher-Karte und Einstellungsseite (Vite), `background.js` und `content.js` (je ein IIFE-Bündel),
 dazu `scripts/package.mjs` mit den Manifesten für Chromium und Firefox und PNG-Symbolen aus dem
 Melonen-SVG.
 
@@ -120,5 +126,6 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
   synthetische Klicks öffnen nichts, und durch ein darübergelegtes Element oder eine unsichtbar
   gemachte Seite wird nicht ausgefüllt (der echte Klick danach schon). Die Tests finden Symbol und
   Menü über den Accessibility-Baum (CDP) und klicken per Koordinaten. Nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
-  Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, Sperren
+  Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, die
+  Einstellungsseite listet die Seite und „Wieder fragen“ bringt die Karte zurück, Sperren
   beendet das Ausfüllen.

@@ -27,7 +27,6 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Desktop-App: CSP erlaubt `style-src 'unsafe-inline'` | Tauris CSP ist fest, ein Nonce je Aufruf geht nicht. Die App lädt nur eingebauten Code. Mit Pigment CSS entfällt es ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)). |
 | Erweiterung hält Logins und Bereichs-Schlüssel in `storage.session` | bewusst, siehe [ADR 0013](/melonapp/entscheidungen/0013-browser-erweiterung/). Später für Chromium: Offscreen-Dokument. |
 | Erweiterung leert die Zwischenablage nicht automatisch | Ausfüllen statt Kopieren nutzen |
-| „Nie für diese Seite“ lässt sich noch nicht rückgängig machen | Einstellungsseite der Erweiterung, später → [#44](https://github.com/MelonigeMelone/melonapp/issues/44) |
 | Erweiterung nicht in Chrome Web Store / Mozilla Add-ons | Veröffentlichen mit Signatur, später → [#45](https://github.com/MelonigeMelone/melonapp/issues/45) |
 | 2FA-Schlüssel liegen im selben Tresor wie die Passwörter | bewusst, siehe [ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/). Wichtige Konten bei Bedarf mit separater Authenticator-App. |
 | Datenleck-Abgleich nutzt einen fremden Dienst (Have I Been Pwned) | nur auf Knopfdruck, k-Anonymität. Später optional: eigene Kopie der Hash-Liste auf dem Server. |

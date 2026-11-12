@@ -5,7 +5,6 @@ import {
   AUTO_LOCK_MINUTES,
   FLOW_MAX_AGE_MS,
   FLOWS_KEY,
-  NEVER_KEY,
   PENDING_KEY,
   PROMPT_MAX_AGE_MS,
   SESSION_KEY,
@@ -17,6 +16,7 @@ import {
   type Snapshot,
   type TabMessage,
 } from './shared/messages';
+import { addNever, neverHosts } from './shared/never';
 
 async function snapshot(): Promise<Snapshot | null> {
   const s = (await chrome.storage.session.get(SESSION_KEY))[SESSION_KEY] as Snapshot | undefined;
@@ -35,10 +35,6 @@ async function touch(s: Snapshot) {
 async function setBadge(pending: boolean) {
   await chrome.action.setBadgeText({ text: pending ? '1' : '' });
   if (pending) await chrome.action.setBadgeBackgroundColor({ color: '#5B45F0' });
-}
-
-async function neverHosts(): Promise<string[]> {
-  return ((await chrome.storage.local.get(NEVER_KEY))[NEVER_KEY] as string[] | undefined) ?? [];
 }
 
 async function pending(): Promise<PendingSave | null> {
@@ -77,7 +73,7 @@ async function handleFrame(msg: FrameRequest, sender: chrome.runtime.MessageSend
     case 'neverSave': {
       const p = await pending();
       const host = p ? hostOf(p.url) : null;
-      if (host) await chrome.storage.local.set({ [NEVER_KEY]: [...new Set([...(await neverHosts()), host])] });
+      if (host) await addNever(host);
       await chrome.storage.session.remove(PENDING_KEY);
       return send({ type: 'closeSave' });
     }
