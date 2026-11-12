@@ -26,5 +26,8 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0012](/melonapp/entscheidungen/0012-app-shell-und-bereiche/) | App-Rahmen, Module und Bereiche | angenommen |
 | [0013](/melonapp/entscheidungen/0013-browser-erweiterung/) | Browser-Erweiterung | angenommen |
 | [0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/) | 2FA-Codes und Sicherheits-Check | angenommen |
+| [0015](/melonapp/entscheidungen/0015-native-apple-clients/) | Native Apple-Clients und Schlüsselisolation | angenommen |
+| [0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/) | iOS AutoFill, UniFFI und lokale Passkeys | angenommen |
+| [0017](/melonapp/entscheidungen/0017-issues-fuer-offene-arbeit/) | GitHub Issues für offene Arbeit | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.
