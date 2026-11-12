@@ -1,0 +1,39 @@
+[package]
+name = "melon-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+melon-crypto = { path = "../crates/melon-crypto" }
+melon-native = { path = "../crates/melon-native" }
+serde_json = "1"
+base64 = "0.23"
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "formats"
+path = "fuzz_targets/formats.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "passkey"
+path = "fuzz_targets/passkey.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "native_session"
+path = "fuzz_targets/native_session.rs"
+test = false
+doc = false
+bench = false

@@ -22,7 +22,6 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Geprüfte Sicherheitscodes werden nicht gespeichert | später: „verifiziert“-Markierung pro Mitglied → [#42](https://github.com/MelonigeMelone/melonapp/issues/42) |
 | Mitgliederliste zeigt allen Mitgliedern die E-Mails | gewollt für Familie/Freunde |
 | Kein Wechsel des eigenen Schlüsselpaars | nach M4 → [#43](https://github.com/MelonigeMelone/melonapp/issues/43) |
-| Parser nicht gefuzzt | `cargo-fuzz` für `EncString::parse` und JSON-Eingaben → [#36](https://github.com/MelonigeMelone/melonapp/issues/36) |
 | Kein externes Krypto-Review | vor dem Umzug der echten Passwörter → [#37](https://github.com/MelonigeMelone/melonapp/issues/37) |
 | Entschlüsselte Einträge liegen im Haupt-Thread der Web-App | gewollt, siehe [ADR 0007](/melonapp/entscheidungen/0007-schluessel-im-worker/). Schutz durch CSP und Auto-Lock. |
 | Desktop-App: CSP erlaubt `style-src 'unsafe-inline'` | Tauris CSP ist fest, ein Nonce je Aufruf geht nicht. Die App lädt nur eingebauten Code. Mit Pigment CSS entfällt es ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)). |
