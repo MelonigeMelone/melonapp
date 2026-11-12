@@ -44,7 +44,7 @@ final class CredentialVault {
     let scope: String
 
     init() throws {
-        guard let directory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.de.melonapp.shared") else { throw VaultError.unavailable }
+        guard let directory = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.de.melonigemelone.app") else { throw VaultError.unavailable }
         let scope = try String(contentsOf: directory.appendingPathComponent("active.txt"), encoding: .utf8)
         guard scope.count == 64, scope.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) else { throw VaultError.invalid }
         self.directory = directory
@@ -59,7 +59,7 @@ final class CredentialVault {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "de.melonapp.autofill.v1",
             kSecAttrAccount as String: scope,
-            kSecAttrAccessGroup as String: "group.de.melonapp.shared",
+            kSecAttrAccessGroup as String: "group.de.melonigemelone.app",
             kSecAttrSynchronizable as String: false,
             kSecUseDataProtectionKeychain as String: true,
             kSecUseAuthenticationContext as String: context,

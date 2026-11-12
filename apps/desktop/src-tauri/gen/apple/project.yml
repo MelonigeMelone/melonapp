@@ -1,6 +1,6 @@
 name: melon-desktop
 options:
-  bundleIdPrefix: de.melonapp.app
+  bundleIdPrefix: de.melonigemelone.app
   deploymentTarget:
     iOS: 17.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: MelonApp
-      PRODUCT_BUNDLE_IDENTIFIER: de.melonapp.app
+      PRODUCT_BUNDLE_IDENTIFIER: de.melonigemelone.app
 targetTemplates:
   app:
     type: application
@@ -58,7 +58,8 @@ targets:
     entitlements:
       path: melon-desktop_iOS/melon-desktop_iOS.entitlements
       properties:
-        com.apple.security.application-groups: [group.de.melonapp.shared]
+        com.apple.security.application-groups: [group.de.melonigemelone.app]
+        com.apple.developer.authentication-services.autofill-credential-provider: true
     scheme:
       environmentVariables:
         RUST_BACKTRACE: full
@@ -118,13 +119,13 @@ targets:
     entitlements:
       path: MelonAutoFill/MelonAutoFill.entitlements
       properties:
-        com.apple.security.application-groups: [group.de.melonapp.shared]
+        com.apple.security.application-groups: [group.de.melonigemelone.app]
         com.apple.developer.authentication-services.autofill-credential-provider: true
     settings:
       base:
         ARCHS: [arm64]
         VALID_ARCHS: arm64
-        PRODUCT_BUNDLE_IDENTIFIER: de.melonapp.app.autofill
+        PRODUCT_BUNDLE_IDENTIFIER: de.melonigemelone.app.autofill
         PRODUCT_NAME: MelonAutoFill
         SWIFT_VERSION: "5.0"
         SWIFT_INCLUDE_PATHS: $(SRCROOT)/../../../apple/Bindings

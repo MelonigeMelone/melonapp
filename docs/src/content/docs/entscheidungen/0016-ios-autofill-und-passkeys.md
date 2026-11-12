@@ -14,7 +14,7 @@ Schlüsselgrenze und Prüfungen unnötig vergrößern.
 ## Entscheidung
 
 `melon-ffi` stellt `melon-crypto` über UniFFI bereit. Die Extension entschlüsselt den
-Cache erst nach Keychain-Authentifizierung. Die App Group `group.de.melonapp.shared`
+Cache erst nach Keychain-Authentifizierung. Die App Group `group.de.melonigemelone.app`
 ist zugleich Keychain-Zugriffsgruppe; Apple unterstützt diese Verwendung ohne einen
 zusätzlichen Team-Präfix für die Gruppe. Daten werden nicht über JavaScript geteilt.
 Handgeschriebener Rust-Code bleibt ohne `unsafe`; UniFFI erzeugt die FFI-Grenze.

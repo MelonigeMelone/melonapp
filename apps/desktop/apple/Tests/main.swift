@@ -14,6 +14,8 @@ let encrypted = try encryptCache(key: key, plaintext: Data("secret".utf8), scope
 let decrypted = try decryptCache(key: key, ciphertext: encrypted, scope: "test")
 precondition(decrypted == Data("secret".utf8))
 precondition((try? decryptCache(key: Data(repeating: 8, count: 32), ciphertext: encrypted, scope: "test")) == nil)
+precondition((try? decryptCache(key: key, ciphertext: encrypted, scope: "other-app-group")) == nil)
+precondition((try? decryptCache(key: key, ciphertext: String(encrypted.dropLast()), scope: "test")) == nil)
 let registration = try registerPasskey(key: key, rp: "example.com")
 let assertion = try signPasskey(key: key, rp: "example.com", credentialId: registration.credentialId, encryptedKey: registration.encryptedKey, clientHash: Data(repeating: 9, count: 32))
 precondition(assertion.authenticatorData.count == 37)
