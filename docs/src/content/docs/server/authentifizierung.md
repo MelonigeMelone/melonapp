@@ -102,3 +102,14 @@ Konto-Schlüssel nicht hat.
 - Laufzeit: Standard 14 Tage (`MELON_SESSION_TTL_HOURS`, 1–8760).
 - Abgelaufene Sitzungen werden beim Login des Nutzers und stündlich global gelöscht.
 - Logout löscht die Sitzung sofort.
+- **Geräte:** Unter „Konto → Geräte“ sieht man alle eigenen Sitzungen mit Gerätename, Anmeldedatum
+  und letzter Aktivität und kann einzelne oder alle anderen abmelden. Ein abgemeldetes Gerät
+  bekommt beim nächsten Sync `401` und sperrt sich mit „Deine Sitzung ist abgelaufen“.
+- Der Gerätename kommt vom Client (`device.ts`: Browser und Betriebssystem, „Erweiterung in …“,
+  „MelonApp für Mac/iPhone“). Er hilft beim Wiedererkennen, beweist aber nichts.
+- Master-Passwort ändern und Wiederherstellen melden alle anderen Geräte ohnehin ab.
+- **Abmelden ist kein Schlüsselwechsel.** Ein Gerät, das gerade entsperrt war, behält, was es
+  schon entschlüsselt im Speicher hat, bis es gesperrt wird. Neue Daten bekommt es nicht mehr. Bei
+  einem verlorenen oder gestohlenen Gerät deshalb zusätzlich das Master-Passwort ändern.
+- Gerätenamen ohne Steuerzeichen, unsichtbare Zeichen und Schreibrichtungs-Steuerzeichen, damit
+  ein Name nicht rückwärts dargestellt wie ein anderes Gerät aussieht.

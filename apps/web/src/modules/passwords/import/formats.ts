@@ -2,7 +2,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { emptyItem, newId, normalizeUrl, type Field, type FieldKind, type Item, type ItemType, type Section } from '../../../vault/item';
 import { parseCsv, toRecords } from './csv';
 
-export type SourceId = 'apple' | 'onepassword-csv' | 'onepassword-1pux' | 'chrome' | 'firefox' | 'bitwarden';
+export type SourceId = 'apple' | 'onepassword-csv' | 'onepassword-1pux' | 'chrome' | 'firefox' | 'bitwarden' | 'melonapp';
 
 export const SOURCE_LABELS: Record<SourceId, string> = {
   apple: 'Apple Passwörter',
@@ -11,6 +11,7 @@ export const SOURCE_LABELS: Record<SourceId, string> = {
   chrome: 'Chrome, Edge oder Brave',
   firefox: 'Firefox',
   bitwarden: 'Bitwarden',
+  melonapp: 'MelonApp (verschlüsselt)',
 };
 
 export interface ImportResult {
@@ -251,9 +252,17 @@ export function parse1pux(bytes: Uint8Array): ImportResult {
   return { source: 'onepassword-1pux', items, skippedArchived };
 }
 
+export class NeedsPassword extends Error {
+  constructor(readonly data: string) {
+    super('needs_password');
+  }
+}
+
 export async function readExport(file: File): Promise<ImportResult> {
   if (file.name.toLowerCase().endsWith('.1pux')) return parse1pux(new Uint8Array(await file.arrayBuffer()));
-  return parseCsvExport(await file.text());
+  const text = await file.text();
+  if (/^\s*\{/.test(text) && text.includes('"melonapp-export"')) throw new NeedsPassword(text);
+  return parseCsvExport(text);
 }
 
 export function dedupeKey(item: Item): string {

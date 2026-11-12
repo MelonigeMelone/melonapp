@@ -155,10 +155,10 @@ export class VaultStore {
     return itemId;
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, still: (item: Item) => boolean = () => true): Promise<void> {
     const attempt = async () => {
       const current = this.items.get(id);
-      if (!current) return;
+      if (!current || !still(current.item)) return;
       const { revision } = await this.remote.remove(id, current.revision);
       this.seen.raise(this.key(id), current.item.seq + 1);
       this.items.delete(id);

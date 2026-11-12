@@ -31,5 +31,7 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0017](/melonapp/entscheidungen/0017-issues-fuer-offene-arbeit/) | GitHub Issues für offene Arbeit | angenommen |
 | [0018](/melonapp/entscheidungen/0018-aurora-design/) | Aurora-Design statt Wassermelonen-Farben | angenommen |
 | [0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/) | CSP-Nonce für Styles statt 'unsafe-inline' | angenommen |
+| [0020](/melonapp/entscheidungen/0020-deploy-per-tag/) | Deployment per Versions-Tag | angenommen |
+| [0021](/melonapp/entscheidungen/0021-papierkorb-im-eintrag/) | Papierkorb als verschlüsselte Markierung im Eintrag | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.

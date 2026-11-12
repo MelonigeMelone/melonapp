@@ -16,6 +16,7 @@ import Typography from '@mui/material/Typography';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import EditIcon from '@mui/icons-material/Edit';
+import RestoreFromTrashOutlinedIcon from '@mui/icons-material/RestoreFromTrashOutlined';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEffect, useState } from 'react';
 import { CLIPBOARD_CLEAR_SECONDS, copySecret } from '../../clipboard';
@@ -24,19 +25,25 @@ import { PasswordText } from '../../components/PasswordText';
 import { TYPE_ICONS } from '../../components/TypeIcon';
 import { TEMPLATES, type VaultItem } from '../../vault/item';
 import type { VaultView } from '../../vault/manager';
+import { purgeDate } from '../../vault/trash';
 
 const dateFormat = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+const dayFormat = new Intl.DateTimeFormat('de-DE', { dateStyle: 'long' });
 
 export function ItemDetail({
   entry,
   vault,
   onEdit,
+  onTrash,
+  onRestore,
   onDelete,
   onBack,
 }: {
   entry: VaultItem;
   vault: VaultView | undefined;
   onEdit: () => void;
+  onTrash: () => Promise<void>;
+  onRestore: () => Promise<void>;
   onDelete: () => Promise<void>;
   onBack: () => void;
 }) {
@@ -44,8 +51,19 @@ export function ItemDetail({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
   const canWrite = vault?.canWrite ?? false;
   const TypeIcon = TYPE_ICONS[item.type];
+  const due = purgeDate(item);
+
+  const act = async (fn: () => Promise<void>) => {
+    setWorking(true);
+    try {
+      await fn();
+    } finally {
+      setWorking(false);
+    }
+  };
 
   useEffect(() => setConfirmDelete(false), [entry.id]);
 
@@ -144,21 +162,35 @@ export function ItemDetail({
       )}
 
       <Divider />
-      {canWrite ? (
+      {due && (
+        <Alert severity="warning" className="trash-notice">
+          Liegt im Papierkorb und wird am {dayFormat.format(due)} endgültig gelöscht.
+        </Alert>
+      )}
+      {!canWrite ? (
+        <Alert severity="info">In „{vault?.name}“ darfst du nur lesen.</Alert>
+      ) : due ? (
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <Button variant="contained" startIcon={<RestoreFromTrashOutlinedIcon />} loading={working} onClick={() => void act(onRestore)}>
+            Wiederherstellen
+          </Button>
+          <Button color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setConfirmDelete(true)}>
+            Endgültig löschen
+          </Button>
+        </Stack>
+      ) : (
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" startIcon={<EditIcon />} onClick={onEdit}>
             Bearbeiten
           </Button>
-          <Button color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setConfirmDelete(true)}>
-            Löschen
+          <Button color="error" startIcon={<DeleteOutlinedIcon />} loading={working} onClick={() => void act(onTrash)}>
+            In den Papierkorb
           </Button>
         </Stack>
-      ) : (
-        <Alert severity="info">In „{vault?.name}“ darfst du nur lesen.</Alert>
       )}
 
       <Dialog open={confirmDelete} onClose={() => !deleting && setConfirmDelete(false)}>
-        <DialogTitle>„{item.title || 'Ohne Titel'}“ löschen?</DialogTitle>
+        <DialogTitle>„{item.title || 'Ohne Titel'}“ endgültig löschen?</DialogTitle>
         <DialogContent>
           <DialogContentText>
             Der Eintrag verschwindet für alle, die Zugriff auf „{vault?.name}“ haben. Das lässt sich nicht rückgängig machen.
