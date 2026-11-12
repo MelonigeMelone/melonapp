@@ -12,6 +12,13 @@ use zeroize::Zeroizing;
 
 const SERVICE: &str = "de.melonapp.app.biometric.v1";
 
+fn sha256_hex(input: &[u8]) -> String {
+    Sha256::digest(input)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
 fn location(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
     let dir = app
         .path()
@@ -141,7 +148,7 @@ pub async fn api_request(
     let body = String::from_utf8(bytes).map_err(|_| "invalid_response")?;
     if method == "GET" && status == 200 {
         let scope = format!("{base}{path}");
-        let name = format!("cache-{:x}.enc", Sha256::digest(scope.as_bytes()));
+        let name = format!("cache-{}.enc", sha256_hex(scope.as_bytes()));
         let mut session = app
             .state::<Mutex<Session>>()
             .inner()
@@ -233,6 +240,14 @@ pub fn biometric_disable(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn cache_and_autofill_names_keep_their_hex_form() {
+        assert_eq!(
+            super::sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -295,10 +310,7 @@ pub async fn autofill_publish(
                 .ok_or("app_group_unavailable")?;
             let directory = PathBuf::from(url.path().ok_or("app_group_unavailable")?.to_string());
             let base = server(&app)?;
-            let scope = format!(
-                "{:x}",
-                Sha256::digest(format!("{base}/{user_id}").as_bytes())
-            );
+            let scope = sha256_hex(format!("{base}/{user_id}").as_bytes());
             let account = format!("autofill/v1/{scope}");
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

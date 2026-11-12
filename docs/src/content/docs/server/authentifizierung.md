@@ -78,7 +78,7 @@ Konto-Schlüssel nicht hat.
 
 ## Sitzungen
 
-- Token: 32 Byte aus `OsRng`, base64url-kodiert.
+- Token: 32 Byte direkt aus dem Betriebssystem (`SysRng`), base64url-kodiert.
 - In der Datenbank liegt nur `SHA-256(token)`. Ein Datenbank-Leak liefert also keine
   benutzbaren Tokens. SHA-256 statt Argon2 genügt, weil das Token 256 bit Zufall hat.
 - Laufzeit: Standard 14 Tage (`MELON_SESSION_TTL_HOURS`, 1–8760).

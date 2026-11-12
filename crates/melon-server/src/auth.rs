@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use argon2::{
     Algorithm, Argon2, Params, Version,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash},
 };
 use axum::{
     Json,
@@ -12,9 +12,9 @@ use base64::{
     Engine,
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use melon_crypto::{EncString, KdfParams, PublicKey, SealedKey};
-use rand::{RngCore, rngs::OsRng};
+use rand::{Rng, rand_core::UnwrapErr, rngs::SysRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -32,9 +32,7 @@ fn server_argon() -> Argon2<'static> {
 }
 
 pub fn hash_auth_key(auth_key: &[u8]) -> anyhow::Result<String> {
-    let salt = SaltString::generate(&mut OsRng);
-    server_argon()
-        .hash_password(auth_key, &salt)
+    PasswordHasher::<PasswordHash>::hash_password(&server_argon(), auth_key)
         .map(|h| h.to_string())
         .map_err(|e| anyhow!("hashing failed: {e}"))
 }
@@ -43,6 +41,15 @@ pub(crate) fn verify_auth_key(auth_key: &[u8], phc: &str) -> bool {
     PasswordHash::new(phc)
         .map(|h| server_argon().verify_password(auth_key, &h).is_ok())
         .unwrap_or(false)
+}
+
+fn fake_salt(server_secret: &[u8], email: &str) -> String {
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(server_secret).expect("HMAC accepts any key length");
+    mac.update(b"melon/prelogin-salt\0");
+    mac.update(email.as_bytes());
+    let fake = mac.finalize().into_bytes();
+    STANDARD.encode(&fake[..16])
 }
 
 pub(crate) fn token_hash(token: &str) -> Vec<u8> {
@@ -102,17 +109,10 @@ pub async fn prelogin(
             kdf: kdf_from_row(m, i, p),
             salt,
         },
-        None => {
-            let mut mac = Hmac::<Sha256>::new_from_slice(&state.config.server_secret)
-                .expect("HMAC accepts any key length");
-            mac.update(b"melon/prelogin-salt\0");
-            mac.update(email.as_bytes());
-            let fake = mac.finalize().into_bytes();
-            PreloginResponse {
-                kdf: KdfParams::default(),
-                salt: STANDARD.encode(&fake[..16]),
-            }
-        }
+        None => PreloginResponse {
+            kdf: KdfParams::default(),
+            salt: fake_salt(&state.config.server_secret, &email),
+        },
     };
     Ok(Json(resp))
 }
@@ -435,7 +435,7 @@ pub(crate) async fn create_session(
     minutes: i32,
 ) -> ApiResult<String> {
     let mut raw = [0u8; 32];
-    OsRng.fill_bytes(&mut raw);
+    UnwrapErr(SysRng).fill_bytes(&mut raw);
     let token = URL_SAFE_NO_PAD.encode(raw);
     sqlx::query("DELETE FROM sessions WHERE user_id = $1 AND expires_at < now()")
         .bind(user_id)
@@ -475,5 +475,28 @@ mod tests {
         assert!(verify_auth_key(&[7u8; 32], &phc));
         assert!(!verify_auth_key(&[8u8; 32], &phc));
         assert!(!verify_auth_key(&[7u8; 32], "garbage"));
+    }
+
+    #[test]
+    fn stored_auth_hashes_still_verify() {
+        let phc = "$argon2id$v=19$m=19456,t=2,p=1$Cr4ISRSg7EVLuimSoLPotA$H+nxfnqFI0mcRjaOhdVJJ2WoDtL1gpxOHVZ81k0csi4";
+        assert!(verify_auth_key(&[42u8; 32], phc));
+        assert!(!verify_auth_key(&[43u8; 32], phc));
+    }
+
+    #[test]
+    fn stored_session_tokens_and_fake_salts_stay_the_same() {
+        assert_eq!(
+            hex(&token_hash("session-token")),
+            "c101e911469c969171040b50d70543313cf968fdef5bacc780776f8fb399ab36"
+        );
+        assert_eq!(
+            fake_salt(&[b'k'; 32], "nobody@example.com"),
+            "ekERi91FYaJeP/10s7BBlA=="
+        );
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
     }
 }

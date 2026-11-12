@@ -1,7 +1,9 @@
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use hkdf::Hkdf;
-use rand::{RngCore, rngs::OsRng};
+use rand::Rng;
+
+use crate::rng::os_rng;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use unicode_normalization::UnicodeNormalization;
@@ -60,7 +62,7 @@ impl KdfParams {
 
 pub fn generate_salt() -> [u8; SALT_LEN] {
     let mut salt = [0u8; SALT_LEN];
-    OsRng.fill_bytes(&mut salt);
+    os_rng().fill_bytes(&mut salt);
     salt
 }
 

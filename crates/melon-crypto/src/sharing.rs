@@ -6,10 +6,9 @@ use hpke::{
     Deserializable, Kem as _, OpModeR, OpModeS, Serializable, aead::ChaCha20Poly1305,
     kdf::HkdfSha256, kem::X25519HkdfSha256,
 };
-use rand_core_09::{OsRng, TryRngCore};
 use zeroize::Zeroizing;
 
-use crate::{CryptoError, EncString, SymmetricKey};
+use crate::{CryptoError, EncString, SymmetricKey, rng::os_rng};
 
 type Kem = X25519HkdfSha256;
 type PrivateKey = <Kem as hpke::Kem>::PrivateKey;
@@ -54,8 +53,7 @@ pub struct KeyPair {
 
 impl KeyPair {
     pub fn generate() -> Self {
-        let mut rng = OsRng.unwrap_err();
-        let (private, public) = Kem::gen_keypair(&mut rng);
+        let (private, public) = Kem::gen_keypair_with_rng(&mut os_rng());
         Self {
             private,
             public: PublicKey(public),
@@ -161,14 +159,13 @@ pub fn seal_vault_key(
     vault_key: &SymmetricKey,
     context: &VaultKeyContext,
 ) -> SealedKey {
-    let mut rng = OsRng.unwrap_err();
-    let (encapped, ct) = hpke::single_shot_seal::<ChaCha20Poly1305, HkdfSha256, Kem, _>(
+    let (encapped, ct) = hpke::single_shot_seal_with_rng::<ChaCha20Poly1305, HkdfSha256, Kem>(
         &OpModeS::Base,
         &recipient.0,
         &context.info(),
         vault_key.as_bytes(),
         b"",
-        &mut rng,
+        &mut os_rng(),
     )
     .expect("HPKE sealing with a valid public key cannot fail");
     let mut raw = encapped.to_bytes().to_vec();
