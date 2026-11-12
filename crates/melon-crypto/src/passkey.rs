@@ -79,7 +79,7 @@ pub fn create_passkey(
             Value::Bytes(public.y().ok_or(CryptoError::Malformed)?.to_vec()),
         ),
     ]);
-    let mut data = auth_data(rp, 0x45);
+    let mut data = auth_data(rp, 0x5D);
     data.extend_from_slice(&[0; 16]);
     data.extend_from_slice(&(id.len() as u16).to_be_bytes());
     data.extend_from_slice(&id);
@@ -110,7 +110,7 @@ pub fn assert_passkey(
     }
     let private = cache_key.decrypt(&EncString::parse(encrypted_key)?, &aad(rp, id))?;
     let signing = SigningKey::from_slice(&private).map_err(|_| CryptoError::Malformed)?;
-    let authenticator_data = auth_data(rp, 0x05);
+    let authenticator_data = auth_data(rp, 0x1D);
     let mut message = authenticator_data.clone();
     message.extend_from_slice(client_hash);
     let signature: Signature = signing.sign(&message);
@@ -140,7 +140,7 @@ mod tests {
             .as_bytes()
             .unwrap();
         assert_eq!(&data[..32], Sha256::digest(b"example.com").as_slice());
-        assert_eq!(data[32], 0x45);
+        assert_eq!(data[32], 0x5D);
         assert_eq!(&data[53..55], &[0, 32]);
         assert_eq!(&data[55..87], registration.credential_id);
         let cose: Value = ciborium::de::from_reader(&data[87..]).unwrap();
@@ -174,7 +174,7 @@ mod tests {
         assert!(verifier.verify(&message, &signature).is_ok());
         message[40] ^= 1;
         assert!(verifier.verify(&message, &signature).is_err());
-        assert_eq!(assertion.authenticator_data[32], 0x05);
+        assert_eq!(assertion.authenticator_data[32], 0x1D);
     }
 
     #[test]

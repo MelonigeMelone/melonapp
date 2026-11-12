@@ -31,12 +31,22 @@ Verlassen von Rust mit dem Kontoschlüssel und an RP-ID sowie Credential-ID gebu
 verschlüsselt. Die Extension speichert diese Datensätze nochmals verschlüsselt in der
 App Group. WebAuthn-Registrierung verwendet Attestation `none`, Null-AAGUID und einen
 Signaturzähler von null. UP/UV werden nur im biometrisch authentifizierten Ablauf genutzt.
-Die Credentials sind gerätegebunden und werden nicht als gesichert/synchronisiert markiert.
+Die Credentials sind gerätegebunden. Trotzdem setzen Authenticator-Daten bei Registrierung und
+Anmeldung die Flags BE (backup eligible) und BS (backup state), also `0x5D` bzw. `0x1D`:
+iOS lehnt Passkeys von Drittanbieter-Extensions sonst mit „AuthData is missing a required
+flag“ ab, nur BE reicht nicht (im Simulator mit iOS 26.1 geprüft). Relying Parties halten
+MelonApp-Passkeys dadurch für synchronisiert, obwohl sie es nicht sind. Ein Verlust des
+Geräts oder der App-Daten verliert sie unwiderruflich.
 
 Passkeys bleiben in dieser Ausbaustufe lokal auf diesem Gerät. Server-Sync, Export,
 Wiederherstellung und Verwaltungsoberfläche benötigen ein separates Datenmodell und
 sind nicht Bestandteil der ersten Extension. Die Registrierung muss deshalb vor
 Benutzung für wichtige Konten gegen echte Relying Parties geprüft werden.
+
+Weil BS gesetzt ist, kann eine Relying Party annehmen, ein MelonApp-Passkey sei
+wiederherstellbar, und etwa das Passwort als Rückfall entfernen. Konten deshalb nie nur an
+einen MelonApp-Passkey binden, sondern immer Passwort oder zweiten Faktor behalten, bis
+Sync und Wiederherstellung (#32) umgesetzt sind.
 
 ## Alternativen
 
