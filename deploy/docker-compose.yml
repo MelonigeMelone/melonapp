@@ -30,6 +30,7 @@ services:
       MELON_SERVER_SECRET: ${MELON_SERVER_SECRET:?set MELON_SERVER_SECRET in .env}
       MELON_ALLOW_REGISTRATION: ${MELON_ALLOW_REGISTRATION:-false}
       MELON_CORS_ORIGINS: ${MELON_CORS_ORIGINS:-}
+      MELON_TRUST_PROXY: "true"
       RUST_LOG: info
     read_only: true
     cap_drop: [ALL]

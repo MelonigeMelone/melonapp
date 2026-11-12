@@ -10,6 +10,7 @@ use crate::{
         AuthUser, RecoveryUser, create_session, decode_auth_key, hash_auth_key, normalize_email,
         verify_auth_key,
     },
+    client_ip::{self, ClientIp},
     error::{ApiError, ApiResult},
     state::AppState,
 };
@@ -177,11 +178,17 @@ pub struct RecoverStarted {
 
 pub async fn recover_start(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     Json(req): Json<RecoverStart>,
 ) -> ApiResult<Json<RecoverStarted>> {
     let email = normalize_email(&req.email)?;
     let limiter_key = format!("recover:{email}");
-    if state.limiter.is_blocked(&limiter_key) {
+    let ip_key = ip.map(client_ip::limiter_key);
+    if state.limiter.is_blocked(&limiter_key)
+        || ip_key
+            .as_deref()
+            .is_some_and(|k| state.ip_limiter.is_blocked(k))
+    {
         return Err(ApiError::TooManyRequests);
     }
     let row: Option<(Uuid, Option<String>, Option<String>)> = sqlx::query_as(
@@ -203,6 +210,9 @@ pub async fn recover_start(
     });
     let Some((user_id, recovery_wrapped_account_key)) = found else {
         state.limiter.record_failure(&limiter_key);
+        if let Some(k) = &ip_key {
+            state.ip_limiter.record_failure(k);
+        }
         tracing::info!("failed recovery attempt");
         return Err(ApiError::Unauthorized);
     };

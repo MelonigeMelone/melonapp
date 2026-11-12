@@ -19,6 +19,10 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 async fn app(allow_registration: bool) -> Option<Router> {
+    app_with(allow_registration, false).await
+}
+
+async fn app_with(allow_registration: bool, trust_proxy: bool) -> Option<Router> {
     let Ok(url) = std::env::var("MELON_TEST_DATABASE_URL") else {
         assert!(
             std::env::var("MELON_REQUIRE_DB").is_err(),
@@ -40,6 +44,7 @@ async fn app(allow_registration: bool) -> Option<Router> {
         allow_registration,
         session_ttl_hours: 1,
         cors_origins: vec![],
+        trust_proxy,
     };
     Some(router(AppState::new(db, config).unwrap()))
 }
@@ -1262,4 +1267,54 @@ async fn native_client_registers_unlocks_and_roundtrips_items() {
             .call("decryptItems", json!({"vaultId":vault,"items":[]}))
             .is_err()
     );
+}
+
+async fn login_from(app: &Router, ip: &str, email: &str) -> StatusCode {
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/login")
+        .header("x-forwarded-for", ip)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            json!({ "email": email, "auth_key": STANDARD.encode([1u8; 32]) }).to_string(),
+        ))
+        .unwrap();
+    app.clone().oneshot(req).await.unwrap().status()
+}
+
+#[tokio::test]
+async fn many_failed_logins_from_one_address_are_blocked_across_accounts() {
+    let Some(app) = app_with(true, true).await else {
+        return;
+    };
+    let alice = Person::new("alice");
+    assert_eq!(alice.register(&app, None).await, StatusCode::CREATED);
+    for n in 0..30 {
+        let status = login_from(&app, "203.0.113.9", &format!("guess-{n}@example.com")).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+    assert_eq!(
+        login_from(&app, "203.0.113.9", &alice.email).await,
+        StatusCode::TOO_MANY_REQUESTS,
+        "the address is blocked even for an account it has not tried yet"
+    );
+    assert_eq!(
+        login_from(&app, "6.6.6.6, 203.0.113.9", &alice.email).await,
+        StatusCode::TOO_MANY_REQUESTS,
+        "a forged first entry does not escape the limit"
+    );
+    assert_eq!(
+        login_from(&app, "198.51.100.4", &alice.email).await,
+        StatusCode::UNAUTHORIZED,
+        "other addresses are unaffected"
+    );
+    let untrusted = app_with(true, false).await.unwrap();
+    for n in 0..31 {
+        let status = login_from(&untrusted, "203.0.113.9", &format!("x-{n}@example.com")).await;
+        assert_eq!(
+            status,
+            StatusCode::UNAUTHORIZED,
+            "without a trusted proxy the header is ignored"
+        );
+    }
 }

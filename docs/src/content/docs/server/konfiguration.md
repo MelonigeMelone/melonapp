@@ -15,6 +15,7 @@ sidebar:
 | `MELON_ALLOW_REGISTRATION` | | `false` | `true`/`1`/`yes` öffnet die Registrierung. Danach wieder ausschalten. |
 | `MELON_SESSION_TTL_HOURS` | | `336` (14 Tage) | Lebensdauer einer Sitzung, 1–8760 |
 | `MELON_CORS_ORIGINS` | | leer | kommagetrennte Browser-Origins (Web-App, Erweiterung). Leer heißt: kein Browser-Zugriff von fremden Origins. |
+| `MELON_TRUST_PROXY` | | `false` | `true`, wenn der Server **nur** über einen eigenen Reverse Proxy erreichbar ist. Dann gilt der letzte Eintrag von `X-Forwarded-For` als Client-Adresse für die Sperre pro Adresse ([Authentifizierung](/melonapp/server/authentifizierung/)). Die mitgelieferte Compose-Datei setzt das, weil der Server dort keinen eigenen Port hat. Nie setzen, wenn der Server direkt aus dem Internet erreichbar ist: Dann könnte jeder die Sperre mit einem gefälschten Header umgehen. |
 | `RUST_LOG` | | `info` | Log-Level, Ausgabe als JSON |
 
 ## HTTP-Schutz

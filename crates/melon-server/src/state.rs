@@ -17,6 +17,7 @@ pub struct Inner {
     pub config: Config,
     pub dummy_hash: String,
     pub limiter: LoginLimiter,
+    pub ip_limiter: LoginLimiter,
 }
 
 impl AppState {
@@ -26,6 +27,7 @@ impl AppState {
             config,
             dummy_hash: hash_auth_key(&[0u8; 32])?,
             limiter: LoginLimiter::default(),
+            ip_limiter: LoginLimiter::with_max(MAX_FAILURES_PER_IP),
         })))
     }
 }
@@ -38,19 +40,33 @@ impl Deref for AppState {
 }
 
 const MAX_FAILURES: u32 = 10;
+const MAX_FAILURES_PER_IP: u32 = 30;
 const WINDOW: Duration = Duration::from_secs(15 * 60);
 const MAX_TRACKED: usize = 10_000;
 
-#[derive(Default)]
 pub struct LoginLimiter {
     failures: Mutex<HashMap<String, (u32, Instant)>>,
+    max: u32,
+}
+
+impl Default for LoginLimiter {
+    fn default() -> Self {
+        Self::with_max(MAX_FAILURES)
+    }
 }
 
 impl LoginLimiter {
+    pub fn with_max(max: u32) -> Self {
+        Self {
+            failures: Mutex::new(HashMap::new()),
+            max,
+        }
+    }
+
     pub fn is_blocked(&self, key: &str) -> bool {
         let map = self.failures.lock().expect("limiter mutex poisoned");
         map.get(key)
-            .is_some_and(|(n, since)| *n >= MAX_FAILURES && since.elapsed() < WINDOW)
+            .is_some_and(|(n, since)| *n >= self.max && since.elapsed() < WINDOW)
     }
 
     pub fn record_failure(&self, key: &str) {

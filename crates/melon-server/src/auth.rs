@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::client_ip::{ClientIp, limiter_key};
 use crate::{
     access::bump_vault,
     error::{ApiError, ApiResult},
@@ -292,10 +293,16 @@ type UserAuthRow = (Uuid, String, String, String, String, bool);
 
 pub async fn login(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     Json(req): Json<LoginRequest>,
 ) -> ApiResult<Json<LoginResponse>> {
     let email = normalize_email(&req.email)?;
-    if state.limiter.is_blocked(&email) {
+    let ip_key = ip.map(limiter_key);
+    if state.limiter.is_blocked(&email)
+        || ip_key
+            .as_deref()
+            .is_some_and(|k| state.ip_limiter.is_blocked(k))
+    {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -321,6 +328,9 @@ pub async fn login(
         user.filter(|_| matches && key.is_some())
     else {
         state.limiter.record_failure(&email);
+        if let Some(k) = &ip_key {
+            state.ip_limiter.record_failure(k);
+        }
         tracing::info!("failed login");
         return Err(ApiError::Unauthorized);
     };
