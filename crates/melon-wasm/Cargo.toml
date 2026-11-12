@@ -9,7 +9,7 @@ publish.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-base64 = "0.22"
+base64 = "0.23"
 melon-crypto = { path = "../melon-crypto" }
 wasm-bindgen = "0.2"
 
