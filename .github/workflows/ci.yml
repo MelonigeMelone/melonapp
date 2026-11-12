@@ -86,7 +86,7 @@ jobs:
           -v "$PWD/apps/web/e2e:/e2e" -v "$RUNNER_TEMP:/out" -w /work
           mcr.microsoft.com/playwright:v1.65.0-noble
           bash -c "npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.65.0 >/dev/null && cp /e2e/vault.e2e.mjs . && node vault.e2e.mjs"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: melonapp-extension
           path: extension-build
