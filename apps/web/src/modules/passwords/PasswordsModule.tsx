@@ -435,7 +435,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
     </Box>
   );
 
-  const sticky = { position: { md: 'sticky' }, top: { md: TOOLBAR }, height: { md: `calc(100dvh - ${TOOLBAR}px)` }, overflowY: { md: 'auto' } } as const;
+  const sticky = { position: { md: 'sticky' }, top: { md: `calc(${TOOLBAR}px + env(safe-area-inset-top))` }, height: { md: `calc(100dvh - ${TOOLBAR}px - env(safe-area-inset-top))` }, overflowY: { md: 'auto' } } as const;
 
   return (
     <>

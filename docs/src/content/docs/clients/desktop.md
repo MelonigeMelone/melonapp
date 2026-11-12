@@ -109,7 +109,10 @@ npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
 
 Die Bundle-IDs und App-Group stehen in [ADR 0015](/melonapp/entscheidungen/0015-native-apple-clients/).
 Die Oberfläche berücksichtigt Safe Areas und verwendet mindestens 16 px große
-Eingabeschrift, damit iOS Eingaben nicht automatisch vergrößert.
+Eingabeschrift, damit iOS Eingaben nicht automatisch vergrößert. Die Kopfleiste klebt beim
+Scrollen unterhalb von `env(safe-area-inset-top)`, ein Streifen mit ihrem Hintergrund deckt die
+Statusleiste ab (`apps/desktop/src/mobile.css`); die mitlaufenden Spalten im breiten Layout
+rechnen denselben Abstand ein. Auf dem Mac und im Browser ist der Abstand 0.
 
 ## iOS AutoFill und Passkeys
 
