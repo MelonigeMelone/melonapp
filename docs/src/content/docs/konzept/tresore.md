@@ -50,7 +50,10 @@ Das gilt für jeden Passwortmanager.
 ihren **Sicherheitscode** (sechs fünfstellige Zahlen). Sie sieht ihren eigenen unter „Konto“.
 Stimmen beide überein, fügst du sie hinzu: Die App verschlüsselt den Bereichs-Schlüssel für sie, und
 sie sieht den Bereich sofort. Der Vergleich stellt sicher, dass niemand auf dem Server einen
-falschen Schlüssel untergeschoben hat.
+falschen Schlüssel untergeschoben hat. Danach steht bei ihr „Code geprüft“. Ändert sich ihr
+Schlüssel später, steht dort „Code geändert“, und sie bekommt keine neuen Bereichs-Schlüssel, bis
+du den Code neu verglichen hast. Den Code jedes Mitglieds kannst du auch nachträglich prüfen
+(Fingerabdruck-Knopf) und als geprüft markieren.
 
 **Hat sie noch kein Konto**, erzeugt die App einen **Einladungslink** (7 Tage gültig, nur
 einmal nutzbar, an die E-Mail gebunden). Den schickst du ihr per Messenger. Der Server

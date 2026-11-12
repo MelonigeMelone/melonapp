@@ -434,6 +434,18 @@ await step('re-adding bob shows his security code first', async () => {
   await shot(a, '7b-compare-code');
   await confirm.getByRole('button', { name: 'Code stimmt, hinzufügen' }).click();
   await dialog.getByText(`${bob.email} hat jetzt Zugriff.`).waitFor({ timeout: 15000 });
+  const bobRow = dialog.getByRole('listitem').filter({ hasText: bob.email });
+  await bobRow.getByText('Code geprüft').waitFor();
+  await bobRow.getByRole('button', { name: `Sicherheitscode von ${bob.email}` }).click();
+  const codeDialog = a.getByRole('dialog', { name: `Sicherheitscode von ${bob.email}` });
+  await codeDialog.getByText('Du hast diesen Code geprüft.').waitFor();
+  await codeDialog.getByRole('button', { name: 'Markierung entfernen' }).click();
+  await codeDialog.getByRole('button', { name: 'Code stimmt überein' }).waitFor({ timeout: 15000 });
+  if (await bobRow.getByText('Code geprüft').count()) throw new Error('mark still shown after removing it');
+  await codeDialog.getByRole('button', { name: 'Code stimmt überein' }).click();
+  await codeDialog.getByText('Du hast diesen Code geprüft.').waitFor({ timeout: 15000 });
+  await codeDialog.getByRole('button', { name: 'Schließen' }).click();
+  await bobRow.getByText('Code geprüft').waitFor();
   await dialog.getByRole('button', { name: 'Schließen' }).click();
 
   current = b;

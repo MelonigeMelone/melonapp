@@ -85,6 +85,11 @@ eigenen unter „Konto“. Stimmen beide überein, ist es der richtige Schlüsse
 
 Eingeladene Personen werden automatisch freigeschaltet. Ihren Code prüft man danach im Tresor-Dialog.
 
+Geprüfte Codes merkt sich die App verschlüsselt im persönlichen Tresor, gebunden an den
+öffentlichen Schlüssel. Tauscht der Server den Schlüssel einer geprüften Person später aus, zeigt
+die App „Code geändert“ und verschlüsselt keinen Tresor-Schlüssel mehr für sie, bis der neue Code
+geprüft ist.
+
 ## Wiederherstellung
 
 Der **Recovery-Key** aus dem Notfall-Kit verschlüsselt den Konto-Schlüssel ein zweites Mal. Damit

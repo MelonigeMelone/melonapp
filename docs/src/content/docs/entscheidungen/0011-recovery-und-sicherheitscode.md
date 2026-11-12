@@ -48,6 +48,16 @@ Telefon vorlesen.
 - Beim Hinzufügen eines bestehenden Kontos zeigt die App den Code und fragt, ob er mit dem der
   anderen Person übereinstimmt.
 - Jedes Mitglied hat im Tresor-Dialog einen Code-Knopf. Den eigenen Code zeigt „Konto“.
+- **Geprüfte Codes werden gemerkt** ([#42](https://github.com/MelonigeMelone/melonapp/issues/42)):
+  „Code stimmt überein“ bzw. „Code stimmt, hinzufügen“ speichert pro Person den geprüften
+  öffentlichen Schlüssel im verschlüsselten `encrypted_meta` des **persönlichen** Tresors
+  (`verified: { <userId>: { publicKey, at } }`). Damit ist die Markierung auf allen eigenen
+  Geräten da, und der Server kann sie weder lesen noch fälschen. Im Tresor-Dialog steht dann
+  „Code geprüft“.
+- **Gebunden an den Schlüssel:** Liefert der Server später einen anderen öffentlichen Schlüssel
+  für diese Person, zeigt die App „Code geändert“ und gibt ihr keinen Tresor-Schlüssel mehr
+  (Freigabe nach Einladung, Hinzufügen, Schlüsselwechsel brechen mit `key_changed` ab), bis man
+  den neuen Code geprüft hat. Ungeprüfte Personen verhalten sich wie bisher.
 
 ## Alternativen
 
@@ -60,6 +70,11 @@ Telefon vorlesen.
   mehr Platz auf dem Ausdruck.
 
 ## Folgen
+
+- Gleichzeitiges Markieren auf zwei Geräten: Wer zuletzt speichert, gewinnt, eine Markierung kann
+  dabei verloren gehen. Dann fehlt nur das „geprüft“, sicherer Zustand.
+- Spielt der Server ein altes `encrypted_meta` zurück, fehlen höchstens neuere Markierungen. Eine
+  Markierung für einen fremden Schlüssel kann er nicht erzeugen.
 
 - Wer Recovery-Key **und** E-Mail hat, kann das Konto übernehmen. Deshalb gehört das Kit offline
   aufbewahrt, und die Wiederherstellung ist wie der Login gegen Durchprobieren gesperrt.

@@ -4,6 +4,7 @@ import { newId, type Item, type VaultItem } from './item';
 import { storedLog, type SeenLog } from './seen';
 import { isConflict, VaultStore } from './store';
 import { expired, fromTrash, isTrashed, toTrash } from './trash';
+import { metaName, parseMeta, verifiedOf, verifyState, withVerified, type Meta, type Verified } from './verified';
 
 type Call = <M extends keyof CryptoMethods>(
   method: M,
@@ -28,6 +29,7 @@ export interface Snapshot {
   vaults: VaultView[];
   items: VaultItem[];
   trash: VaultItem[];
+  verified: Verified;
 }
 
 export interface FoundUser {
@@ -39,26 +41,16 @@ export interface FoundUser {
 
 interface Entry {
   remote: RemoteVault;
-  name: string;
+  meta: Meta;
   store: VaultStore | null;
 }
 
 const PERSONAL_NAME = 'Persönlich';
 
-function parseName(json: string): string {
-  try {
-    const o: unknown = JSON.parse(json);
-    const name = o && typeof o === 'object' ? (o as { name?: unknown }).name : undefined;
-    return typeof name === 'string' ? name : '';
-  } catch {
-    return '';
-  }
-}
-
 export class VaultsManager {
   private vaults = new Map<string, Entry>();
   private listeners = new Set<() => void>();
-  private snapshot: Snapshot = { vaults: [], items: [], trash: [] };
+  private snapshot: Snapshot = { vaults: [], items: [], trash: [], verified: {} };
   private running: Promise<void> | null = null;
 
   constructor(
@@ -79,9 +71,9 @@ export class VaultsManager {
   getSnapshot = () => this.snapshot;
 
   private emit = () => {
-    const views: VaultView[] = [...this.vaults.values()].map(({ remote, name, store }) => ({
+    const views: VaultView[] = [...this.vaults.values()].map(({ remote, meta, store }) => ({
       id: remote.id,
-      name: remote.personal ? name || PERSONAL_NAME : name || 'Bereich',
+      name: remote.personal ? metaName(meta) || PERSONAL_NAME : metaName(meta) || 'Bereich',
       personal: remote.personal,
       role: remote.role,
       members: remote.members,
@@ -100,7 +92,8 @@ export class VaultsManager {
     const trash = all
       .filter((v) => isTrashed(v.item))
       .sort((a, b) => (b.item.trashedAt ?? '').localeCompare(a.item.trashedAt ?? ''));
-    this.snapshot = { vaults: views, items, trash };
+    const personal = this.personalEntry();
+    this.snapshot = { vaults: views, items, trash, verified: personal ? verifiedOf(personal.meta) : {} };
     for (const l of this.listeners) l();
   };
 
@@ -126,7 +119,7 @@ export class VaultsManager {
     for (const id of this.vaults.keys()) if (!seen.has(id)) this.vaults.delete(id);
 
     for (const remote of vaults) {
-      const entry: Entry = this.vaults.get(remote.id) ?? { remote, name: '', store: null };
+      const entry: Entry = this.vaults.get(remote.id) ?? { remote, meta: {}, store: null };
       const rotated = entry.remote.key_version !== remote.key_version;
       entry.remote = remote;
       this.vaults.set(remote.id, entry);
@@ -143,7 +136,7 @@ export class VaultsManager {
           sealed: remote.encrypted_vault_key,
         });
       }
-      entry.name = parseName(await this.crypto('decryptMeta', { vaultId: remote.id, data: remote.encrypted_meta }));
+      entry.meta = parseMeta(await this.crypto('decryptMeta', { vaultId: remote.id, data: remote.encrypted_meta }));
       if (rotated) entry.store?.reset();
       entry.store ??= this.makeStore(remote.id);
       await entry.store.sync();
@@ -213,6 +206,7 @@ export class VaultsManager {
       return;
     }
     for (const m of remote.members.filter((m) => !m.has_key)) {
+      this.requireTrusted(m.user_id, m.public_key);
       const sealed = await this.crypto('sealFor', { vaultId: remote.id, publicKey: m.public_key, userId: m.user_id });
       await this.api.grantKey(remote.id, m.user_id, { encrypted_vault_key: sealed, key_version: remote.key_version });
       m.has_key = true;
@@ -225,11 +219,12 @@ export class VaultsManager {
     if (!entry?.store) throw new Error('vault_key_missing');
     await entry.store.sync();
     const keep = entry.remote.members.filter((m) => m.has_key && !removeUserIds.includes(m.user_id));
+    for (const m of keep) this.requireTrusted(m.user_id, m.public_key);
     const current = entry.store.rotationItems();
     const revisions = new Map(current.map((v) => [v.id, v.revision]));
     const rotated = await this.crypto('rotate', {
       vaultId,
-      meta: JSON.stringify({ name: entry.name }),
+      meta: JSON.stringify(entry.meta),
       members: keep.map((m) => ({ userId: m.user_id, publicKey: m.public_key })),
       items: current.map(({ id, plaintext }) => ({ id, plaintext })),
     });
@@ -293,10 +288,34 @@ export class VaultsManager {
   }
 
   async renameVault(vaultId: string, name: string) {
+    await this.writeMeta(vaultId, (meta) => ({ ...meta, name }));
+  }
+
+  private async writeMeta(vaultId: string, change: (meta: Meta) => Meta) {
+    await this.sync().catch(() => undefined);
     const entry = this.requireEntry(vaultId);
-    const meta = await this.crypto('encryptMeta', { vaultId, plaintext: JSON.stringify({ name }) });
-    await this.api.updateVault(vaultId, { encrypted_meta: meta, key_version: entry.remote.key_version });
+    const meta = change(entry.meta);
+    const encrypted = await this.crypto('encryptMeta', { vaultId, plaintext: JSON.stringify(meta) });
+    await this.api.updateVault(vaultId, { encrypted_meta: encrypted, key_version: entry.remote.key_version });
     await this.sync();
+  }
+
+  private requireTrusted(userId: string, publicKey: string) {
+    const personal = this.personalEntry();
+    if (personal && verifyState(verifiedOf(personal.meta), userId, publicKey) === 'changed') {
+      throw new ApiError(409, 'key_changed');
+    }
+  }
+
+  private personalEntry(): Entry | undefined {
+    return [...this.vaults.values()].find((e) => e.remote.personal && e.store !== null);
+  }
+
+  async setVerified(userId: string, publicKey: string | null) {
+    const personal = this.personalEntry();
+    if (!personal) throw new ApiError(404, 'vault_not_found');
+    const verification = publicKey ? { publicKey, at: this.now().toISOString() } : null;
+    await this.writeMeta(personal.remote.id, (meta) => withVerified(meta, userId, verification));
   }
 
   async deleteVault(vaultId: string) {
@@ -325,6 +344,7 @@ export class VaultsManager {
 
   async addKnownMember(vaultId: string, user: FoundUser, role: Role) {
     const entry = this.requireEntry(vaultId);
+    this.requireTrusted(user.user_id, user.public_key);
     const sealed = await this.crypto('sealFor', { vaultId, publicKey: user.public_key, userId: user.user_id });
     await this.api.addMember(vaultId, {
       user_id: user.user_id,

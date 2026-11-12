@@ -19,10 +19,13 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { useCallback, useEffect, useState, useSyncExternalStore, type FormEvent } from 'react';
 import type { InviteInfo, Role } from '../api';
 import { describeError } from '../session';
 import type { FoundUser, VaultsManager, VaultView } from '../vault/manager';
+import { verifyState } from '../vault/verified';
 import { monoFont } from '../theme';
 
 export const ROLE_LABELS: Record<Role, string> = { owner: 'Besitzer', editor: 'Bearbeiter', viewer: 'Betrachter' };
@@ -116,7 +119,8 @@ export function SpaceDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<FoundUser | null>(null);
-  const [codeFor, setCodeFor] = useState<{ email: string; code: string } | null>(null);
+  const [codeFor, setCodeFor] = useState<{ userId: string; email: string; publicKey: string; code: string } | null>(null);
+  const { verified } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
   const [confirm, setConfirm] = useState<{ kind: 'remove'; userId: string; email: string } | { kind: 'leave' } | { kind: 'delete' } | null>(null);
 
   const loadInvites = useCallback(async () => {
@@ -164,6 +168,7 @@ export function SpaceDialog({
   };
 
   const owners = vault.members.filter((m) => m.role === 'owner' && m.has_key).length;
+  const codeState = codeFor ? verifyState(verified, codeFor.userId, codeFor.publicKey) : 'unverified';
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="space-dialog-title">
@@ -205,7 +210,11 @@ export function SpaceDialog({
                       <Tooltip title="Sicherheitscode">
                         <IconButton
                           aria-label={`Sicherheitscode von ${m.email}`}
-                          onClick={() => void manager.fingerprint(m.public_key).then((code) => setCodeFor({ email: m.email, code }))}
+                          onClick={() =>
+                            void manager
+                              .fingerprint(m.public_key)
+                              .then((code) => setCodeFor({ userId: m.user_id, email: m.email, publicKey: m.public_key, code }))
+                          }
                         >
                           <FingerprintIcon />
                         </IconButton>
@@ -226,6 +235,12 @@ export function SpaceDialog({
                     secondary={m.has_key ? undefined : 'Wartet auf Freigabe durch einen Besitzer'}
                     slotProps={{ primary: { sx: { overflowWrap: 'anywhere' } } }}
                   />
+                  {m.user_id !== me && verifyState(verified, m.user_id, m.public_key) === 'verified' && (
+                    <Chip size="small" color="success" variant="outlined" icon={<VerifiedUserOutlinedIcon />} label="Code geprüft" />
+                  )}
+                  {m.user_id !== me && verifyState(verified, m.user_id, m.public_key) === 'changed' && (
+                    <Chip size="small" color="warning" icon={<WarningAmberIcon />} label="Code geändert" />
+                  )}
                   {vault.isOwner && m.user_id !== me ? (
                     <TextField
                       select
@@ -349,6 +364,7 @@ export function SpaceDialog({
             onClick={() =>
               void run('confirm-add', async () => {
                 if (!confirmUser) return;
+                await manager.setVerified(confirmUser.user_id, confirmUser.public_key);
                 await manager.addKnownMember(vault.id, confirmUser, role);
                 setNotice(`${confirmUser.email} hat jetzt Zugriff.`);
                 setConfirmUser(null);
@@ -365,12 +381,42 @@ export function SpaceDialog({
         <DialogTitle id="code-title">Sicherheitscode von {codeFor?.email}</DialogTitle>
         <DialogContent>
           {codeFor && <SecurityCode code={codeFor.code} />}
+          {codeFor && codeState === 'changed' && (
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              Dieser Code ist nicht mehr der, den du geprüft hast. Entweder hat {codeFor.email} das Konto wiederhergestellt oder den
+              Schlüssel gewechselt, oder jemand hat den Schlüssel auf dem Server ausgetauscht. Frag nach, bevor du weiter teilst.
+            </Alert>
+          )}
+          {codeFor && codeState === 'verified' && (
+            <Alert severity="success" sx={{ mb: 1.5 }}>
+              Du hast diesen Code geprüft.
+            </Alert>
+          )}
           <Typography color="text.secondary" variant="body2">
-            Vergleiche ihn mit dem Code, den diese Person unter „Konto“ sieht. Weicht er ab, entferne sie aus dem Bereich.
+            Vergleiche ihn mit dem Code, den diese Person unter „Konto“ sieht, am besten am Telefon oder persönlich. Weicht er ab,
+            entferne sie aus dem Bereich.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          {codeFor && codeFor.userId !== me && codeState === 'verified' && (
+            <Button
+              color="inherit"
+              loading={busy === 'unverify'}
+              onClick={() => void run('unverify', () => manager.setVerified(codeFor.userId, null))}
+            >
+              Markierung entfernen
+            </Button>
+          )}
           <Button onClick={() => setCodeFor(null)}>Schließen</Button>
+          {codeFor && codeFor.userId !== me && codeState !== 'verified' && (
+            <Button
+              variant="contained"
+              loading={busy === 'verify'}
+              onClick={() => void run('verify', () => manager.setVerified(codeFor.userId, codeFor.publicKey))}
+            >
+              Code stimmt überein
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

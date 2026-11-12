@@ -46,7 +46,7 @@ Seit Migration 0003 außerdem `id` (zufällige UUID, für die Geräteliste, nie 
 |---|---|
 | `id` | UUID, vom Client erzeugt |
 | `personal` | persönlicher Tresor (genau einer pro Konto, nicht teilbar) |
-| `encrypted_meta` | Name usw., mit dem Tresor-Schlüssel verschlüsselt |
+| `encrypted_meta` | Name usw., mit dem Tresor-Schlüssel verschlüsselt. Beim persönlichen Tresor auch die geprüften Sicherheitscodes. |
 | `key_version` | aktuelle Schlüsselversion |
 | `rotation_needed` | jemand mit Schlüssel hat den Tresor verlassen, ein Besitzer muss rotieren |
 | `revision` | steigt bei jeder Änderung an Tresor oder Mitgliedern |
