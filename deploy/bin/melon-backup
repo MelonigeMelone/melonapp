@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")/.."
+
+keep_days="${MELON_BACKUP_KEEP_DAYS:-14}"
+mkdir -p backups
+chmod 700 backups
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+target="backups/melon-$stamp.dump"
+
+docker compose exec -T db pg_dump -U melon -d melon --format=custom > "$target.tmp"
+docker compose exec -T db pg_restore --list < "$target.tmp" > /dev/null
+mv "$target.tmp" "$target"
+chmod 600 "$target"
+find backups -name 'melon-*.dump' -mtime "+$keep_days" -delete
+echo "backup: $target ($(du -h "$target" | cut -f1))"
+
+if [[ -f backup.env ]]; then
+  source ./backup.env
+  rsync -a --delete -e "ssh -p ${BACKUP_PORT:-23} -i $BACKUP_SSH_KEY -o BatchMode=yes" backups/ "$BACKUP_TARGET"
+  echo "copied to $BACKUP_TARGET"
+fi

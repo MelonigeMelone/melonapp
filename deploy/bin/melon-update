@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")/.."
+
+version="${1#v}"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "usage: melon-update <x.y.z>" >&2
+  exit 2
+fi
+exec 9> .update.lock
+flock -n 9 || { echo "another update is running" >&2; exit 1; }
+
+source="${MELON_UPDATE_SOURCE:-https://raw.githubusercontent.com/MelonigeMelone/melonapp}/v$version/deploy"
+files=(docker-compose.yml Caddyfile bin/melon-update bin/melon-backup bin/melon-restore bin/melon-deploy-ssh)
+
+for f in "${files[@]}"; do
+  curl -fsSL --max-time 30 "$source/$f" -o "$f.new"
+done
+
+bin/melon-backup
+
+for f in "${files[@]}" .env; do
+  if [[ -f "$f" ]]; then cp -p "$f" "$f.previous"; fi
+done
+
+pin() {
+  if grep -q "^$1=" .env; then
+    sed -i "s|^$1=.*|$1=$2|" .env
+  else
+    echo "$1=$2" >> .env
+  fi
+}
+pin MELON_IMAGE "ghcr.io/melonigemelone/melonapp-server:$version"
+pin MELON_WEB_IMAGE "ghcr.io/melonigemelone/melonapp-web:$version"
+for f in "${files[@]}"; do
+  mv "$f.new" "$f"
+done
+chmod +x bin/*
+
+healthy() {
+  for _ in $(seq 1 30); do
+    if docker compose exec -T caddy wget -qO- http://server:8080/health > /dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+if docker compose pull && docker compose up -d --no-build --remove-orphans && healthy; then
+  echo "running $version"
+  exit 0
+fi
+
+echo "update to $version failed, going back" >&2
+for f in "${files[@]}" .env; do
+  if [[ -f "$f.previous" ]]; then mv "$f.previous" "$f"; fi
+done
+docker compose up -d --no-build --remove-orphans || true
+echo "if the database was already migrated, restore the backup from before the update with bin/melon-restore" >&2
+exit 1
