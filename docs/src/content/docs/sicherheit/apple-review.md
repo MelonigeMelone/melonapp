@@ -98,8 +98,10 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   Anmeldung danach aus der Tresor-Kopie). Wiederherstellung auf einem zweiten Gerät
   (anmelden, Face ID einrichten, AutoFill veröffentlichen) vom Nutzer bestätigt. Gelöschte Passkeys verschwinden aus den iOS-Vorschlägen erst beim
   nächsten entsperrten AutoFill-Vorgang.
-- Notarisierung und TestFlight ([#30](https://github.com/MelonigeMelone/melonapp/issues/30)) sowie die Safari-Web-Erweiterung
-  ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) stehen aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
+- Release-Workflow für Notarisierung und TestFlight ([#30](https://github.com/MelonigeMelone/melonapp/issues/30),
+  [ADR 0024](/melonapp/entscheidungen/0024-apple-verteilung/)) ist eingerichtet; Installation
+  aus TestFlight und Start des DMG ohne Gatekeeper-Warnung sind noch zu bestätigen. Die
+  Safari-Web-Erweiterung ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) steht aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
   biometrische Aussagen gelten nur für die Hardware-Abnahme oben.
 
 ## Statusanzeige der Biometrie-Einstellungen

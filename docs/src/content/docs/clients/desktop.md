@@ -107,6 +107,12 @@ open apps/desktop/src-tauri/target/release/bundle/macos/MelonApp.app
 npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
 ```
 
+Fertige Versionen gibt es als notarisiertes DMG im GitHub-Release und für das iPhone über
+TestFlight ([Apple-Releases](/melonapp/betrieb/pipelines/#apple-releases)). Beide Targets
+enthalten `apps/desktop/apple/PrivacyInfo.xcprivacy`: kein Tracking, keine erhobenen
+Daten, nur die von Rust-Standardbibliothek und WebKit genutzten Systemschnittstellen
+(Dateizeitstempel, Systemlaufzeit, UserDefaults) mit Apple-Begründungscode.
+
 Die Bundle-IDs und App-Group stehen in [ADR 0015](/melonapp/entscheidungen/0015-native-apple-clients/).
 Die Oberfläche berücksichtigt Safe Areas und verwendet mindestens 16 px große
 Eingabeschrift, damit iOS Eingaben nicht automatisch vergrößert. Die Kopfleiste klebt beim
