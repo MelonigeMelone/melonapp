@@ -18,6 +18,9 @@ Internet ─► Caddy :443 (TLS, HSTS)  ─┬─ /api/*, /health ─► melon-s
 
 Die Web-App und die API laufen unter derselben Domain. CORS ist dafür nicht nötig.
 Caddy setzt für die Web-App eine strenge Content-Security-Policy ([Details](/melonapp/clients/web/#schutzmaßnahmen)).
+Dafür erzeugt Caddy je Aufruf einen Nonce (`templates` für `index.html`). Wer einen eigenen
+Reverse Proxy vor die Web-App setzt, muss `index.html` ungecacht durchreichen und den
+CSP-Header von Caddy übernehmen ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)).
 
 - Die Datenbank hängt nur im internen Netz und ist von außen nicht erreichbar.
 - Der Server-Container läuft schreibgeschützt (`read_only`), ohne Linux-Capabilities und mit
