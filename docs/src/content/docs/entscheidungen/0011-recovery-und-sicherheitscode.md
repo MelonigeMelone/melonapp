@@ -66,6 +66,16 @@ Telefon vorlesen.
   gesehene (zurückgespielt), verteilt die App gar keine Tresor-Schlüssel
   (`verifications_unavailable`). Den höchsten Zähler merkt sich jedes Gerät wie bei der
   [Rollback-Erkennung](/melonapp/clients/web/#rollback-erkennung).
+- **Ändern nur mit frischem Stand:** Markieren lädt die Liste zuerst neu und bricht ab, wenn das
+  nicht klappt. Der neue Zähler ist höher als alles, was dieses Gerät kennt. So bleibt kein Gerät
+  hängen, weil ein anderes mit altem Stand geschrieben hat.
+- **Server aus Backup wiederhergestellt:** Dann ist die Liste älter als auf den Geräten, und die
+  App gibt nichts weiter. Im Bereichs-Dialog steht ein Hinweis mit „Stand übernehmen“. Nach
+  Bestätigung gilt die Liste vom Server mit neuem Zähler. Da das auch ein zurückgedrehter Stand
+  sein kann, entscheidet das die Person bewusst.
+- **Die Erweiterung gibt keine Tresor-Schlüssel weiter.** Ihr Popup hat nach dem Entsperren nur
+  die Bereichs-Schlüssel, nicht den Konto-Schlüssel, und lässt Freigaben und Schlüsselwechsel der
+  Web-App oder den Apps.
 
 ## Alternativen
 

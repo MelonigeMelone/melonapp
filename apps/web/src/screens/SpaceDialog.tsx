@@ -120,7 +120,8 @@ export function SpaceDialog({
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<FoundUser | null>(null);
   const [codeFor, setCodeFor] = useState<{ userId: string; email: string; publicKey: string; code: string } | null>(null);
-  const { verified } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
+  const { verified, verifiedReady } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
+  const [adopt, setAdopt] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: 'remove'; userId: string; email: string } | { kind: 'leave' } | { kind: 'delete' } | null>(null);
 
   const loadInvites = useCallback(async () => {
@@ -201,6 +202,20 @@ export function SpaceDialog({
             <Typography variant="h3" sx={{ fontSize: '1.125rem', mb: 1 }}>
               Mitglieder
             </Typography>
+            {!verifiedReady && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 1.5 }}
+                action={
+                  <Button color="inherit" size="small" onClick={() => setAdopt(true)}>
+                    Stand übernehmen
+                  </Button>
+                }
+              >
+                Deine geprüften Sicherheitscodes fehlen oder sind älter als zuletzt auf diesem Gerät. Bis das geklärt ist, gibt die App
+                keine Bereichs-Schlüssel weiter.
+              </Alert>
+            )}
             <List disablePadding>
               {vault.members.map((m) => (
                 <ListItem
@@ -380,6 +395,35 @@ export function SpaceDialog({
             }
           >
             {confirmState === 'changed' ? 'Neuer Code stimmt, hinzufügen' : 'Code stimmt, hinzufügen'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={adopt} onClose={() => setAdopt(false)} maxWidth="xs" aria-labelledby="adopt-title">
+        <DialogTitle id="adopt-title">Gespeicherten Stand übernehmen?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Das passiert zu Recht, wenn der Server aus einem Backup wiederhergestellt wurde. Sonst kann es heißen, dass jemand auf dem
+            Server deine Markierungen zurückgedreht hat.
+          </Typography>
+          <Typography sx={{ mt: 1.5 }} color="text.secondary">
+            Übernimmst du den Stand, gelten nur die Markierungen, die jetzt auf dem Server liegen. Prüfe danach die Codes der Mitglieder
+            neu, bei denen „Code geprüft“ fehlt.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setAdopt(false)}>Abbrechen</Button>
+          <Button
+            variant="contained"
+            loading={busy === 'adopt'}
+            onClick={() =>
+              void run('adopt', async () => {
+                await manager.adoptStoredMarks();
+                setAdopt(false);
+              })
+            }
+          >
+            Übernehmen
           </Button>
         </DialogActions>
       </Dialog>

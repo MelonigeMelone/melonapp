@@ -30,6 +30,7 @@ export interface Snapshot {
   items: VaultItem[];
   trash: VaultItem[];
   verified: Verified;
+  verifiedReady: boolean;
 }
 
 export interface FoundUser {
@@ -51,9 +52,10 @@ const MARKS_SEEN = '#verified';
 export class VaultsManager {
   private vaults = new Map<string, Entry>();
   private listeners = new Set<() => void>();
-  private snapshot: Snapshot = { vaults: [], items: [], trash: [], verified: {} };
+  private snapshot: Snapshot = { vaults: [], items: [], trash: [], verified: {}, verifiedReady: false };
   private running: Promise<void> | null = null;
   private marks: Marks | null = null;
+  private marksLoads = 0;
 
   constructor(
     readonly userId: string,
@@ -61,6 +63,7 @@ export class VaultsManager {
     private readonly crypto: Call,
     private readonly seen: SeenLog = storedLog(userId),
     private readonly now: () => Date = () => new Date(),
+    private readonly shareKeys = true,
   ) {}
 
   subscribe = (listener: () => void) => {
@@ -94,7 +97,7 @@ export class VaultsManager {
     const trash = all
       .filter((v) => isTrashed(v.item))
       .sort((a, b) => (b.item.trashedAt ?? '').localeCompare(a.item.trashedAt ?? ''));
-    this.snapshot = { vaults: views, items, trash, verified: this.marks?.marks ?? {} };
+    this.snapshot = { vaults: views, items, trash, verified: this.marks?.marks ?? {}, verifiedReady: this.marks !== null };
     for (const l of this.listeners) l();
   };
 
@@ -144,8 +147,9 @@ export class VaultsManager {
       if (remote.role !== 'viewer') await this.purge(entry.store);
     }
     this.marks = await this.loadMarks();
+    this.marksLoads += 1;
     for (const entry of this.vaults.values()) {
-      if (!entry.store || entry.remote.role !== 'owner' || entry.remote.personal) continue;
+      if (!this.shareKeys || !entry.store || entry.remote.role !== 'owner' || entry.remote.personal) continue;
       try {
         await this.ownerDuties(entry);
       } catch (e) {
@@ -338,13 +342,39 @@ export class VaultsManager {
     return marks;
   }
 
-  async setVerified(userId: string, publicKey: string | null) {
+  private async freshPersonal(): Promise<Entry> {
+    const before = this.marksLoads;
     await this.sync().catch(() => undefined);
     const personal = this.personalEntry();
-    if (!personal || !this.marks) throw new ApiError(409, 'verifications_unavailable');
-    const next = changeMarks(this.marks, userId, publicKey ? { publicKey, at: this.now().toISOString() } : null);
-    const sealed = await this.crypto('sealPrivate', { userId: this.userId, purpose: MARKS_PURPOSE, plaintext: JSON.stringify(next) });
+    if (!personal || this.marksLoads === before) throw new ApiError(409, 'verifications_unavailable');
+    return personal;
+  }
+
+  private async writeMarks(personal: Entry, marks: Marks) {
+    const sealed = await this.crypto('sealPrivate', { userId: this.userId, purpose: MARKS_PURPOSE, plaintext: JSON.stringify(marks) });
     await this.writeMeta(personal.remote.id, (meta) => ({ ...meta, verified: sealed }));
+  }
+
+  async setVerified(userId: string, publicKey: string | null) {
+    const personal = await this.freshPersonal();
+    if (!this.marks) throw new ApiError(409, 'verifications_unavailable');
+    const base = { ...this.marks, counter: Math.max(this.marks.counter, this.seen.get(MARKS_SEEN)) };
+    await this.writeMarks(personal, changeMarks(base, userId, publicKey ? { publicKey, at: this.now().toISOString() } : null));
+  }
+
+  async adoptStoredMarks() {
+    const personal = await this.freshPersonal();
+    const sealed = personal.meta.verified;
+    let stored: Marks | null = null;
+    if (typeof sealed === 'string') {
+      try {
+        stored = parseMarks(await this.crypto('openPrivate', { userId: this.userId, purpose: MARKS_PURPOSE, data: sealed }));
+      } catch {
+        stored = null;
+      }
+    }
+    const marks = stored ?? emptyMarks();
+    await this.writeMarks(personal, { counter: Math.max(marks.counter, this.seen.get(MARKS_SEEN)) + 1, marks: marks.marks });
   }
 
   async deleteVault(vaultId: string) {

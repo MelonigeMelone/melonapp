@@ -71,7 +71,7 @@ class FakeServer {
   }
 }
 
-function setup(seen: SeenLog = memoryLog()) {
+function setup(seen: SeenLog = memoryLog(), shareKeys = true) {
   const server = new FakeServer();
   const crypto = (async (method: string, args: Record<string, unknown>) => {
     switch (method) {
@@ -103,7 +103,7 @@ function setup(seen: SeenLog = memoryLog()) {
         throw new Error(`unexpected ${method}`);
     }
   }) as unknown as ConstructorParameters<typeof VaultsManager>[2];
-  const manager = new VaultsManager(ME, server.api(), crypto, seen, () => new Date('2026-11-12T10:00:00Z'));
+  const manager = new VaultsManager(ME, server.api(), crypto, seen, () => new Date('2026-11-12T10:00:00Z'), shareKeys);
   return { server, manager };
 }
 
@@ -226,5 +226,54 @@ describe('verified security codes in the vaults manager', () => {
     await expect(manager.sync()).rejects.toMatchObject({ code: 'key_changed' });
     await manager.setVerified(MIA, 'ATTACKER-KEY');
     expect(server.sealedFor).toContain(MIA);
+  });
+
+  it('a device that missed newer marks catches up before writing, so no device gets stuck', async () => {
+    const seenA = memoryLog();
+    const a = setup(seenA);
+    await a.manager.sync();
+    await a.manager.setVerified(MIA, 'MIA-KEY');
+    await a.manager.setVerified(EVE, 'EVE-KEY');
+    const b = setup();
+    b.server.vaults = a.server.vaults;
+    await b.manager.sync();
+    await a.manager.setVerified('lea', 'LEA-KEY');
+    await b.manager.setVerified('max', 'MAX-KEY');
+    await a.manager.sync();
+    await b.manager.sync();
+    expect(a.manager.getSnapshot().verifiedReady).toBe(true);
+    expect(b.manager.getSnapshot().verifiedReady).toBe(true);
+    expect(Object.keys(a.manager.getSnapshot().verified).sort()).toEqual(['eve', 'lea', 'max', 'mia']);
+  });
+
+  it('refuses to write marks it could not load fresh', async () => {
+    const { server, manager } = await verifiedSetup();
+    const api = server.api();
+    (manager as unknown as { api: Api }).api = { ...api, listVaults: async () => Promise.reject(new Error('offline')) } as Api;
+    await expect(manager.setVerified(EVE, 'EVE-KEY')).rejects.toMatchObject({ code: 'verifications_unavailable' });
+  });
+
+  it('after a server restore the user can adopt the stored marks and share again', async () => {
+    const { server, manager } = await verifiedSetup();
+    const restored = server.vault('personal').encrypted_meta;
+    await manager.setVerified(EVE, 'EVE-KEY');
+    server.vault('personal').encrypted_meta = restored;
+    miaWaitsForKey(server);
+    await expect(manager.sync()).rejects.toMatchObject({ code: 'verifications_unavailable' });
+    expect(manager.getSnapshot().verifiedReady).toBe(false);
+    await manager.adoptStoredMarks();
+    expect(manager.getSnapshot().verifiedReady).toBe(true);
+    expect(Object.keys(manager.getSnapshot().verified)).toEqual([MIA]);
+    expect(server.sealedFor).toContain(MIA);
+  });
+
+  it('the extension popup never shares keys and still syncs without the account key', async () => {
+    const { server } = await verifiedSetup();
+    const popup = setup(memoryLog(), false);
+    popup.server.vaults = server.vaults;
+    swapMiasKey(popup.server);
+    miaWaitsForKey(popup.server);
+    await popup.manager.sync();
+    expect(popup.server.sealedFor).toEqual([]);
   });
 });
