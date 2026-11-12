@@ -146,6 +146,29 @@ Die eigene AAD verhindert, dass die Recovery-Kopie des Konto-Schlüssels mit der
 Passwort-Kopie verwechselt oder vertauscht wird. Begründung:
 [ADR 0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/).
 
+## Export (`export.rs`)
+
+Eine verschlüsselte Export-Datei ist JSON:
+
+```json
+{ "format": "melonapp-export", "version": 1,
+  "kdf": { "memory_kib": 65536, "iterations": 3, "parallelism": 4 },
+  "salt": "<16 Byte, Base64>", "data": "1.<EncString>" }
+```
+
+- Schlüssel: Argon2id über das **Export-Passwort** mit eigenem Zufalls-Salt, dann derselbe
+  HKDF-Schritt wie beim Master-Passwort (`wrapping_key`). Mit dem Konto hat er nichts zu tun: Wer
+  die Datei und das Export-Passwort hat, kann sie öffnen, ohne Zugang zum Server.
+- Verschlüsselung: XChaCha20-Poly1305 mit AAD `melon/export/v1`.
+- Das Export-Passwort braucht mindestens 12 Zeichen (`WeakExportPassword`) und darf nicht das
+  Master-Passwort sein. Sonst würde jede Export-Datei, etwa in einem Cloud-Backup, zu einem
+  weiteren Ziel für Offline-Angriffe auf das Master-Passwort.
+- Exporte werden immer mit den Standard-Parametern versiegelt, und beim Öffnen werden **nur**
+  diese angenommen. Eine manipulierte Datei kann also weder einen schwachen noch einen teuren
+  Argon2-Lauf (bis 1 GiB im Browser) erzwingen. Größer als 64 MB wird nicht gelesen.
+- Dieselbe Funktion läuft im Browser (WASM: `sealExport`, `openExport`) und in der nativen
+  Sitzung. Ein Export aus dem Browser lässt sich in der Desktop-App einlesen und umgekehrt.
+
 ## Speicherhygiene
 
 `MasterKey`, `AuthKey`, `SymmetricKey` und der private Schlüssel werden beim Verlassen des Gültigkeitsbereichs

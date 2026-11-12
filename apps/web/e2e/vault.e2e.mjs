@@ -246,6 +246,86 @@ await step('entry in the shared vault', async () => {
   await a.locator('main .MuiChip-label', { hasText: /^Familie$/ }).waitFor();
 });
 
+await step('export encrypted and as CSV, import the encrypted file again', async () => {
+  const exportPassword = 'Export-Passwort-fuer-Tests!';
+  const openExport = async () => {
+    await a.getByRole('button', { name: 'Exportieren' }).click();
+    const dialog = a.getByRole('dialog', { name: 'Exportieren' });
+    await dialog.waitFor();
+    return dialog;
+  };
+
+  let dialog = await openExport();
+  await dialog.getByLabel('Export-Passwort', { exact: true }).fill(exportPassword);
+  await dialog.getByLabel('Export-Passwort wiederholen').fill(exportPassword);
+  await dialog.getByLabel('Master-Passwort zur Bestätigung').fill('falsch falsch falsch');
+  await dialog.getByRole('button', { name: 'Verschlüsselt exportieren' }).click();
+  await dialog.getByText('Das Master-Passwort stimmt nicht.').waitFor({ timeout: 30000 });
+  await dialog.getByLabel('Master-Passwort zur Bestätigung').fill(alice.master);
+  await shot(a, '4b-export');
+  const [encrypted] = await Promise.all([
+    a.waitForEvent('download', { timeout: 30000 }),
+    dialog.getByRole('button', { name: 'Verschlüsselt exportieren' }).click(),
+  ]);
+  const file = await (await import('node:fs/promises')).readFile(await encrypted.path(), 'utf8');
+  if (!encrypted.suggestedFilename().endsWith('.melon.json')) throw new Error(`unexpected name ${encrypted.suggestedFilename()}`);
+  if (!file.includes('"melonapp-export"') || file.includes('Stadtwerke') || file.includes('wlan-geheim')) throw new Error('export is not encrypted');
+  await dialog.getByRole('button', { name: 'Fertig' }).click();
+
+  dialog = await openExport();
+  await dialog.getByLabel('Unverschlüsselt (CSV)', { exact: false }).check();
+  const plain = dialog.getByRole('button', { name: 'Unverschlüsselt exportieren' });
+  await dialog.getByLabel('Master-Passwort zur Bestätigung').fill(alice.master);
+  if (await plain.isEnabled()) throw new Error('CSV export possible without confirming the warning');
+  await dialog.getByLabel('Ich verstehe', { exact: false }).check();
+  const [csv] = await Promise.all([a.waitForEvent('download', { timeout: 30000 }), plain.click()]);
+  const csvText = await (await import('node:fs/promises')).readFile(await csv.path(), 'utf8');
+  if (!csv.suggestedFilename().includes('UNVERSCHLUESSELT')) throw new Error('CSV name does not warn');
+  if (!csvText.startsWith('folder,favorite,type,name') || !csvText.includes('Stadtwerke') || !csvText.includes('wlan-geheim-12345')) {
+    throw new Error('CSV export incomplete');
+  }
+  await dialog.getByText('Klartext', { exact: false }).first().waitFor();
+  await dialog.getByRole('button', { name: 'Fertig' }).click();
+
+  await a.getByRole('button', { name: 'Neuer Bereich' }).click();
+  await a.getByLabel('Name').fill('Wiederhergestellt');
+  await a.getByRole('button', { name: 'Bereich anlegen' }).click();
+  await a.getByRole('dialog', { name: 'Wiederhergestellt' }).getByRole('button', { name: 'Schließen' }).click();
+
+  await a.getByRole('button', { name: 'Importieren' }).first().click();
+  const imp = a.getByRole('dialog', { name: 'Passwörter importieren' });
+  await imp.getByLabel('Export-Datei').setInputFiles({ name: encrypted.suggestedFilename(), mimeType: 'application/json', buffer: Buffer.from(file) });
+  await imp.getByLabel('Export-Passwort').fill('nicht das richtige');
+  await imp.getByRole('button', { name: 'Öffnen' }).click();
+  await imp.getByText('Das Export-Passwort stimmt nicht.').waitFor({ timeout: 30000 });
+  await imp.getByLabel('Export-Passwort').fill(exportPassword);
+  await imp.getByRole('button', { name: 'Öffnen' }).click();
+  await imp.getByText('Erkannt: MelonApp (verschlüsselt)', { exact: false }).waitFor({ timeout: 30000 });
+  await imp.getByLabel('In diesen Bereich').click();
+  await a.getByRole('option', { name: 'Wiederhergestellt' }).click();
+  await imp.getByRole('button', { name: /importieren$/ }).click();
+  await imp.getByText('importiert.', { exact: false }).waitFor({ timeout: 30000 });
+  await imp.getByRole('button', { name: 'Fertig' }).click();
+  const restored = a.locator('.entry-row', { hasText: 'Stadtwerke' });
+  await restored.first().waitFor();
+  if ((await restored.count()) !== 1) throw new Error('the imported vault should hold exactly one copy');
+  await restored.first().click();
+  const pw = a.locator('.concealed-field').first();
+  await pw.getByRole('button', { name: 'Anzeigen' }).click();
+  if ((await pw.locator('.concealed-value .pw').innerText()) !== 'strom,gas"2026') throw new Error('password changed on the way through the export');
+  await a.locator('.entry-row', { hasText: 'WLAN Zuhause' }).first().waitFor();
+
+  await a.getByRole('button', { name: 'Wiederhergestellt: Mitglieder und Einstellungen' }).click();
+  const space = a.getByRole('dialog', { name: 'Wiederhergestellt' });
+  await space.getByRole('button', { name: 'Bereich löschen' }).click();
+  await a.getByRole('button', { name: 'Endgültig löschen' }).click();
+  await a.locator('.entry-row', { hasText: 'Stadtwerke' }).first().waitFor();
+  await a.waitForFunction(() => document.querySelectorAll('.entry-row').length > 0);
+  if ((await a.getByRole('button', { name: 'Wiederhergestellt: Mitglieder und Einstellungen' }).count()) !== 0) {
+    throw new Error('test vault was not deleted');
+  }
+});
+
 const b = await newPage();
 await step('bob registers through the invite link and waits', async () => {
   current = b;

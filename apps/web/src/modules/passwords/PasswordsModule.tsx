@@ -19,6 +19,7 @@ import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import AddIcon from '@mui/icons-material/Add';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
@@ -36,6 +37,7 @@ import type { ShellContext } from '../../Shell';
 import { emptyItem, matchesSearch, subtitle, TEMPLATES, type Item, type ItemType } from '../../vault/item';
 import type { ModuleDef } from '../registry';
 import { ItemDetail } from './ItemDetail';
+import { ExportDialog } from './ExportDialog';
 import { ImportDialog } from './ImportDialog';
 import { ItemEditor } from './ItemEditor';
 import { SecurityCheck } from './SecurityCheck';
@@ -60,6 +62,7 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
   const [drawer, setDrawer] = useState(false);
   const [newMenu, setNewMenu] = useState<HTMLElement | null>(null);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [checking, setChecking] = useState(() => window.location.hash.endsWith('/sicherheit'));
   const wide = useMediaQuery((t) => t.breakpoints.up('md'), { noSsr: true });
 
@@ -198,6 +201,17 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
           sx={{ color: 'text.secondary' }}
         >
           Importieren
+        </Button>
+        <Button
+          startIcon={<FileDownloadOutlinedIcon />}
+          onClick={() => {
+            setDrawer(false);
+            setExporting(true);
+          }}
+          disabled={snapshot.items.length === 0}
+          sx={{ color: 'text.secondary' }}
+        >
+          Exportieren
         </Button>
       </Stack>
     </Box>
@@ -369,6 +383,8 @@ export function PasswordsModule({ ctx, module }: { ctx: ShellContext; module: Mo
           onImported={(id) => setScope(id)}
         />
       )}
+
+      {exporting && <ExportDialog session={session} items={snapshot.items} vaults={vaults} onClose={() => setExporting(false)} />}
 
       {!wide && (
         <Drawer open={drawer} onClose={() => setDrawer(false)}>

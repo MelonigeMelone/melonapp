@@ -90,6 +90,18 @@ function reauth(session: Session, password: string) {
   return { password, salt: session.salt, kdf: session.kdf, wrappedAccountKey: session.wrappedAccountKey };
 }
 
+export function sealExport(session: Session, password: string, exportPassword: string, plaintext: string): Promise<string> {
+  return cryptoCall('sealExport', { ...reauth(session, password), exportPassword, plaintext });
+}
+
+export async function checkPassword(session: Session, password: string): Promise<void> {
+  await cryptoCall('checkPassword', reauth(session, password));
+}
+
+export function openExport(password: string, data: string): Promise<string> {
+  return cryptoCall('openExport', { password, data });
+}
+
 export async function setupRecovery(session: Session, password: string): Promise<{ recoveryKey: string; account: Partial<Account> }> {
   const r = await cryptoCall('setupRecovery', reauth(session, password));
   await authed(session.token).setRecovery({
