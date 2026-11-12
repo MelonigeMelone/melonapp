@@ -51,6 +51,9 @@ healthy() {
 if docker compose pull && docker compose up -d --no-build --remove-orphans && healthy; then
   rm -f ./*.previous bin/*.previous
   echo "running $version"
+  if [[ -f backup.env ]] && { ! command -v age > /dev/null || [[ ! -f "$(source ./backup.env; echo "${BACKUP_RECIPIENTS:-backup.recipients}")" ]]; }; then
+    echo "warning: backups are only copied encrypted now, set up age and backup.recipients (Selbst hosten → Backups)" >&2
+  fi
   exit 0
 fi
 

@@ -188,9 +188,13 @@ systemctl list-timers melon-backup.timer
 Lokal hält `bin/melon-backup` in `backups/` und `offsite/` je höchstens 14 Tage und höchstens 60
 Dateien.
 
-**Umstellen von unverschlüsselten Kopien:** Nach dem ersten verschlüsselten Lauf die alten
-`melon-*.dump` auf der Box löschen (mit dem Server-Sub-Account per `sftp`, `rm melon-*.dump` im
-Zielordner). In den Snapshots der Box bleiben sie, bis diese auslaufen.
+**Umstellen von unverschlüsselten Kopien:** Erst age und `backup.recipients` auf dem Server
+einrichten, dann das Update einspielen (`bin/melon-update` warnt, wenn es fehlt, sonst bricht ab
+dann die nächtliche Kopie ab). Nach dem ersten verschlüsselten Lauf und einer erfolgreichen
+Test-Wiederherstellung damit die alten `melon-*.dump` löschen: auf der Box mit dem
+Server-Sub-Account per `sftp` (`rm melon-*.dump` im Zielordner), zu Hause im Zielordner
+(`melon-*.dump` und `melon-*.dump.part`). In den Snapshots der Box bleiben sie, bis diese
+auslaufen.
 
 **Kopie zu Hause (Windows, optional):** Der eigene Rechner holt sich alle 30 Tage den neuesten
 verschlüsselten Dump von der Storage Box. Er braucht dafür einen **eigenen, nur lesenden** Zugang,
@@ -219,26 +223,38 @@ damit ein befallener Rechner dort nichts löschen kann.
    ```
 
 Das Skript lädt nur den neuesten `melon-*.dump.age`, prüft den age-Header (sonst wird die Datei
-verworfen), behält die 12 neuesten, löscht alte unverschlüsselte `melon-*.dump` im Zielordner und
-schreibt `home-backup.log`. Läuft es als geplante Aufgabe und scheitert, erscheint ein
+verworfen), behält die 12 neuesten und schreibt `home-backup.log`. Läuft es als geplante Aufgabe und scheitert, erscheint ein
 Hinweisfenster. `-Uninstall` entfernt die Aufgabe. Der Rechner braucht dafür keinen Schlüssel.
 
 **Wiederherstellen:**
 
+Aus einem lokalen Dump auf dem Server (z. B. nach einem misslungenen Update):
+
 ```sh
 bin/melon-restore backups/melon-20261112T033000Z.dump --yes
-bin/melon-restore melon-20261112T033000Z.dump.age --yes --identity melon-backup-key.age
 ```
 
-Das ersetzt die ganze Datenbank durch den Dump, stoppt dafür kurz den Server und startet ihn
-wieder. Einen `.age`-Dump entschlüsselt es zuerst vollständig (bei `melon-backup-key.age` fragt
-age nach der Passphrase). Falscher Schlüssel oder veränderte Datei brechen ab, bevor die Datenbank
-angefasst wird. Die Schlüsseldatei danach vom Server löschen. Alternativ auf dem eigenen Rechner
-entschlüsseln und nur den Dump hochladen:
+Aus einer verschlüsselten Kopie: auf dem **eigenen Rechner** entschlüsseln (fragt nach der
+Passphrase), hochladen, einspielen, danach die Klartext-Datei auf beiden Seiten löschen. So
+kommen Schlüssel und Passphrase nie auf den Server:
 
 ```powershell
-age -d -i $HOME\.melonapp\melon-backup-key.age -o melon.dump melon-20261112T033000Z.dump.age
+age -d -i $HOME\.melonapp\melon-backup-key.age -o melon-restore.dump melon-20261112T033000Z.dump.age
+scp melon-restore.dump root@app.example.com:/home/melon/melonapp/backups/
+Remove-Item melon-restore.dump
 ```
+
+```sh
+bin/melon-restore backups/melon-restore.dump --yes && rm backups/melon-restore.dump
+```
+
+`bin/melon-restore` kann `.age` auch selbst (`--identity <Schlüsseldatei>`), etwa auf einem
+frisch aufgesetzten Server. Dann aber Schlüsseldatei danach löschen und bedenken: Auf einem
+übernommenen Server wären Schlüssel und Passphrase offen.
+
+Das ersetzt die ganze Datenbank durch den Dump, stoppt dafür kurz den Server und startet ihn
+wieder. Ein `.age`-Dump wird zuerst vollständig entschlüsselt: Falscher Schlüssel oder veränderte
+Datei brechen ab, bevor die Datenbank angefasst wird.
 
 Nur eigene Dumps einspielen: Ein manipulierter Dump könnte als Datenbank-Superuser Befehle im
 Datenbank-Container ausführen. age prüft, dass die Datei unverändert ist, aber nicht, wer sie

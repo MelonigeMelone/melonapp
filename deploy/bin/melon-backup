@@ -22,6 +22,7 @@ docker compose exec -T db pg_restore --list < "$target.tmp" > /dev/null
 mv "$target.tmp" "$target"
 chmod 600 "$target"
 prune backups 'melon-*.dump'
+find backups -maxdepth 1 -name 'restore-*.dump' -mmin +60 -delete
 echo "backup: $target ($(du -h "$target" | cut -f1))"
 
 if [[ "${1:-}" == "--local" || ! -f backup.env ]]; then

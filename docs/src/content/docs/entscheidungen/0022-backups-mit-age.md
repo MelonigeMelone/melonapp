@@ -25,10 +25,13 @@ bei einem anderen Anbieter und auf einem Alltagsrechner, also an Orten mit eigen
   Wiederherstellen gebraucht.
 - Die Dumps in `backups/` auf dem Server bleiben unverschlüsselt. Der Server hat die Datenbank
   ohnehin, und `bin/melon-update` braucht sie für eine schnelle Rückkehr ohne Schlüssel.
-- `bin/melon-restore` spielt `*.dump.age` mit `--identity <Schlüsseldatei>` ein. Es entschlüsselt
-  zuerst vollständig in eine temporäre Datei und rührt die Datenbank erst danach an.
-- `scripts/home-backup.ps1` holt nur noch `*.dump.age`, prüft den age-Header und löscht alte
-  unverschlüsselte Kopien im Zielordner.
+- Wiederherstellen aus einer Kopie: auf dem eigenen Rechner entschlüsseln und den Dump
+  hochladen, damit der Schlüssel nie auf den Server muss. `bin/melon-restore` kann `*.dump.age`
+  zur Not auch selbst (`--identity`). Es entschlüsselt zuerst vollständig in eine temporäre Datei
+  und rührt die Datenbank erst danach an.
+- `scripts/home-backup.ps1` holt nur noch `*.dump.age` und prüft den age-Header. Alte
+  unverschlüsselte Kopien löscht man von Hand, erst nach einer Test-Wiederherstellung mit dem
+  neuen Schlüssel.
 
 ## Alternativen
 
@@ -45,6 +48,8 @@ bei einem anderen Anbieter und auf einem Alltagsrechner, also an Orten mit eigen
 - age prüft Unversehrtheit, aber nicht den Absender: Wer den öffentlichen Schlüssel kennt und
   auf die Box schreiben kann, kann einen gültigen Dump unterschieben. Schreiben kann dort nur
   der Server-Sub-Account. Wie bisher gilt: nur eigene Dumps einspielen.
-- Der Server braucht das Paket `age`. Fehlt es, bricht die Kopie mit Fehler ab.
+- Der Server braucht das Paket `age`. Fehlt es oder `backup.recipients`, bricht die Kopie mit
+  Fehler ab, und `bin/melon-update` warnt nach dem Update. Eine Benachrichtigung bei
+  fehlgeschlagenen Backups gibt es noch nicht, nur das Journal.
 - Ältere, unverschlüsselte Dumps auf der Box und in ihren Snapshots bleiben, bis man sie löscht
   bzw. bis die Snapshots auslaufen.

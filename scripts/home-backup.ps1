@@ -10,7 +10,6 @@
 $ErrorActionPreference = 'Stop'
 $Sftp = Join-Path $env:SystemRoot 'System32\OpenSSH\sftp.exe'
 $DumpPattern = '^melon-\d{8}T\d{6}Z\.dump\.age$'
-$PlainPattern = '^melon-\d{8}T\d{6}Z\.dump$'
 $AgeHeader = "age-encryption.org/v1`n"
 
 function Read-Settings {
@@ -90,7 +89,6 @@ function Invoke-Backup {
 
     Get-ChildItem $s.Target -Filter 'melon-*.dump.age' | Where-Object { $_.Name -match $DumpPattern } |
         Sort-Object Name -Descending | Select-Object -Skip $s.Keep | Remove-Item
-    Get-ChildItem $s.Target -Filter 'melon-*.dump' | Where-Object { $_.Name -match $PlainPattern } | Remove-Item
     (Get-Date).ToString('o', [Globalization.CultureInfo]::InvariantCulture) | Set-Content $marker
     Write-Log $s "ok $newest"
     $newest
