@@ -73,6 +73,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Erweiterung im echten Chromium: kein Ausfüllen ohne Klick, nichts auf fremder Domain, Speichern landet verschlüsselt im Bereich, Sperren beendet Ausfüllen | CI-Job `e2e` (`apps/extension/e2e`) |
 | Zwei Personen im echten Browser: Einladen, automatische Freigabe, Entfernen mit Schlüsselwechsel, Zugriff danach weg | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
 | Datenbank enthält nach dem Browser-Test keinen Klartext, auch keine Tresor-Namen | CI-Job `e2e`, Schritt „no plaintext“ |
+| Backups verlassen den Server nur mit age verschlüsselt (ohne Empfänger wird nichts kopiert); falscher Schlüssel oder veränderte Datei lassen die Datenbank unberührt, der richtige stellt sie wieder her | CI-Job „Server scripts“, `deploy/test/backup-restore.sh` |
 
 ## Lokal ausführen
 
