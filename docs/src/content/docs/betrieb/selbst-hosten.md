@@ -123,15 +123,16 @@ Ohne `DEPLOY_HOST` baut ein Tag nur die Images und deployt nichts.
 Die Einträge sind Ende-zu-Ende verschlüsselt, ohne Master-Passwort oder Recovery-Key sind sie
 auch im Backup nicht lesbar. **Trotzdem ist ein Dump schützenswert:** Er enthält E-Mail-Adressen,
 Salts und die Argon2-Hashes der Login-Schlüssel. Wer ihn hat, kann offline Master-Passwörter
-raten, gebremst nur durch Argon2. Ein Backup ist also so sicher wie das schwächste
-Master-Passwort darin. Deshalb: starke Master-Passwörter und die Backups nicht offen ablegen.
+raten, gebremst nur durch Argon2. Deshalb verlässt ein Dump den Server nur mit
+[age](https://age-encryption.org) verschlüsselt, an einen Schlüssel, dessen privater Teil nicht
+auf dem Server liegt ([ADR 0022](/melonapp/entscheidungen/0022-backups-mit-age/)).
 
 | Was | Wann | Wo |
 |---|---|---|
-| `bin/melon-backup`: `pg_dump` im Custom-Format, danach mit `pg_restore --list` geprüft | nächtlich 03:30 (systemd-Timer) und vor jedem Update | `backups/` auf dem Server (`chmod 700`), 14 Tage |
-| Kopie per `rsync` (ohne `--delete`) | nächtlich, wenn `backup.env` existiert. Vor Updates nur lokal, damit ein Ausfall der Storage Box kein Deployment blockiert. | Hetzner Storage Box. Dort wird nichts gelöscht, auch nicht von einem übernommenen Server aus. |
+| `bin/melon-backup`: `pg_dump` im Custom-Format, danach mit `pg_restore --list` geprüft | nächtlich 03:30 (systemd-Timer) und vor jedem Update | `backups/` auf dem Server (`chmod 700`), 14 Tage, unverschlüsselt |
+| Verschlüsselte Kopie (`offsite/*.dump.age`) per `rsync` (ohne `--delete`) | nächtlich, wenn `backup.env` existiert. Vor Updates nur lokal, damit ein Ausfall der Storage Box kein Deployment blockiert. | Hetzner Storage Box. Dort wird nichts gelöscht, auch nicht von einem übernommenen Server aus. |
 | Hetzner-Backups (Server-Snapshot) | täglich, 7 Tage | Hetzner, Schutz gegen „Server kaputt“ |
-| Kopie zu Hause (`scripts/home-backup.ps1`) | wenn das letzte Mal 30 Tage her ist, geprüft bei jeder Anmeldung und täglich um 12 Uhr | eigener Windows-Rechner, die 12 neuesten, Schutz gegen „Hetzner-Konto weg“ |
+| Kopie zu Hause (`scripts/home-backup.ps1`) | wenn das letzte Mal 30 Tage her ist, geprüft bei jeder Anmeldung und täglich um 12 Uhr | eigener Windows-Rechner, die 12 neuesten, verschlüsselt, Schutz gegen „Hetzner-Konto weg“ |
 
 **Timer einrichten (einmal):**
 
@@ -140,6 +141,28 @@ sudo cp systemd/melon-backup.* /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now melon-backup.timer
 systemctl list-timers melon-backup.timer
 ```
+
+**Backup-Schlüssel (einmal, auf dem eigenen Rechner, nicht auf dem Server):**
+
+1. age installieren: unter Windows `winget install FiloSottile.age` (danach PowerShell neu
+   öffnen), unter macOS `brew install age`.
+2. Schlüssel erzeugen. Die Ausgabe `Public key: age1…` ist der öffentliche Teil:
+
+   ```powershell
+   age-keygen -o melon-backup-key.txt
+   ```
+
+3. `melon-backup-key.txt` **ausdrucken** (die Zeile `AGE-SECRET-KEY-1…` zählt) und zum
+   Notfall-Kit legen.
+4. Eine mit Passphrase geschützte Kopie für den Rechner anlegen, dann das Original löschen:
+
+   ```powershell
+   age -p -o $HOME\.melonapp\melon-backup-key.age melon-backup-key.txt
+   Remove-Item melon-backup-key.txt
+   ```
+
+   Die Passphrase gehört in den Passwortmanager **und** aufs Papier zum Schlüssel. Ohne den
+   Schlüssel sind alle Kopien auf Box und Rechner wertlos.
 
 **Storage Box (optional, empfohlen):**
 
@@ -151,14 +174,31 @@ systemctl list-timers melon-backup.timer
    und beim Sub-Account hinterlegen.
 4. Den Host-Schlüssel der Box festhalten und den Fingerabdruck mit der Hetzner-Doku vergleichen:
    `ssh-keyscan -p 23 <box>.your-storagebox.de >> ~/.ssh/known_hosts`
-5. `backup.env.example` nach `backup.env` kopieren (`chmod 600`) und ausfüllen. Ein Lauf von
-   `bin/melon-backup` zeigt danach `copied to …`.
+5. age installieren (`sudo apt install age`) und den **öffentlichen** Backup-Schlüssel eintragen.
+   Mehrere Zeilen sind möglich, z. B. ein zweiter Schlüssel bei einer Vertrauensperson:
 
-Lokal hält `bin/melon-backup` höchstens 14 Tage und höchstens 60 Dumps.
+   ```sh
+   echo age1… > ~/melonapp/backup.recipients
+   ```
+
+6. `backup.env.example` nach `backup.env` kopieren (`chmod 600`) und ausfüllen. Ein Lauf von
+   `bin/melon-backup` zeigt danach `copied offsite/melon-….dump.age to …`. Fehlt age oder
+   `backup.recipients`, bricht die Kopie mit Fehler ab und es wird nichts unverschlüsselt kopiert.
+
+Lokal hält `bin/melon-backup` in `backups/` und `offsite/` je höchstens 14 Tage und höchstens 60
+Dateien.
+
+**Umstellen von unverschlüsselten Kopien:** Erst age und `backup.recipients` auf dem Server
+einrichten, dann das Update einspielen (`bin/melon-update` warnt, wenn es fehlt, sonst bricht ab
+dann die nächtliche Kopie ab). Nach dem ersten verschlüsselten Lauf und einer erfolgreichen
+Test-Wiederherstellung damit die alten `melon-*.dump` löschen: auf der Box mit dem
+Server-Sub-Account per `sftp` (`rm melon-*.dump` im Zielordner), zu Hause im Zielordner
+(`melon-*.dump` und `melon-*.dump.part`). In den Snapshots der Box bleiben sie, bis diese
+auslaufen.
 
 **Kopie zu Hause (Windows, optional):** Der eigene Rechner holt sich alle 30 Tage den neuesten
-Dump von der Storage Box. Er braucht dafür einen **eigenen, nur lesenden** Zugang, damit ein
-befallener Rechner dort nichts löschen kann.
+verschlüsselten Dump von der Storage Box. Er braucht dafür einen **eigenen, nur lesenden** Zugang,
+damit ein befallener Rechner dort nichts löschen kann.
 
 1. In der Storage Box einen zweiten Sub-Account für `melonapp/` anlegen, SSH an, noch **nicht**
    schreibgeschützt.
@@ -182,22 +222,46 @@ befallener Rechner dort nichts löschen kann.
    powershell -ExecutionPolicy Bypass -File scripts\home-backup.ps1 -Install
    ```
 
-Das Skript lädt nur den neuesten Dump, prüft, dass er mit `PGDMP` beginnt (sonst wird er
-verworfen), behält die 12 neuesten und schreibt `home-backup.log` in den Zielordner. Läuft es als
-geplante Aufgabe und scheitert, erscheint ein Hinweisfenster. `-Uninstall` entfernt die Aufgabe.
-Der Dump ist schützenswert (siehe oben), der Zielordner gehört also nicht in einen geteilten
-Cloud-Ordner. Verschlüsselt wird er erst mit [#77](https://github.com/MelonigeMelone/melonapp/issues/77).
+Das Skript lädt nur den neuesten `melon-*.dump.age`, prüft den age-Header (sonst wird die Datei
+verworfen), behält die 12 neuesten und schreibt `home-backup.log`. Läuft es als geplante Aufgabe und scheitert, erscheint ein
+Hinweisfenster. `-Uninstall` entfernt die Aufgabe. Der Rechner braucht dafür keinen Schlüssel.
 
 **Wiederherstellen:**
+
+Aus einem lokalen Dump auf dem Server (z. B. nach einem misslungenen Update):
 
 ```sh
 bin/melon-restore backups/melon-20261112T033000Z.dump --yes
 ```
 
+Aus einer verschlüsselten Kopie: auf dem **eigenen Rechner** entschlüsseln (fragt nach der
+Passphrase), hochladen, einspielen, danach die Klartext-Datei auf beiden Seiten löschen. So
+kommen Schlüssel und Passphrase nie auf den Server:
+
+```powershell
+age -d -i $HOME\.melonapp\melon-backup-key.age -o melon-restore.dump melon-20261112T033000Z.dump.age
+scp melon-restore.dump root@app.example.com:/home/melon/melonapp/backups/
+Remove-Item melon-restore.dump
+```
+
+```sh
+bin/melon-restore backups/melon-restore.dump --yes && rm backups/melon-restore.dump
+```
+
+`bin/melon-restore` kann `.age` auch selbst (`--identity <Schlüsseldatei>`), etwa auf einem
+frisch aufgesetzten Server. Dann aber Schlüsseldatei danach löschen und bedenken: Auf einem
+übernommenen Server wären Schlüssel und Passphrase offen.
+
 Das ersetzt die ganze Datenbank durch den Dump, stoppt dafür kurz den Server und startet ihn
-wieder. Nur eigene Dumps einspielen: Ein manipulierter Dump könnte als Datenbank-Superuser
-Befehle im Datenbank-Container ausführen. Die Wiederherstellung einmal auf einem Testserver (oder lokal) durchzuspielen gehört zur
-Einrichtung: Erst wenn man mit dem eingespielten Stand entsperren kann, ist ein Backup eines.
+wieder. Ein `.age`-Dump wird zuerst vollständig entschlüsselt: Falscher Schlüssel oder veränderte
+Datei brechen ab, bevor die Datenbank angefasst wird.
+
+Nur eigene Dumps einspielen: Ein manipulierter Dump könnte als Datenbank-Superuser Befehle im
+Datenbank-Container ausführen. age prüft, dass die Datei unverändert ist, aber nicht, wer sie
+verschlüsselt hat. Wer den öffentlichen Schlüssel kennt und auf die Box schreiben kann, könnte
+also einen gültigen Dump unterschieben. Die Wiederherstellung einmal auf einem Testserver (oder
+lokal) durchzuspielen gehört zur Einrichtung: Erst wenn man mit dem eingespielten Stand
+entsperren kann, ist ein Backup eines.
 
 ## Optional: nur über Tailscale
 
