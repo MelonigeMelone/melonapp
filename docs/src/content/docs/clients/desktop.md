@@ -28,9 +28,12 @@ Rust sperrt nach fünf Minuten ohne gemeldete Eingabe, zusätzlich zum vorhanden
 UI-Timer. Fokusverlust sperrt sofort. `⌘⇧M` bringt auf macOS das Fenster nach vorn,
 entsperrt es aber nicht. Hintergrund-Sperren werden als Ereignis an React gemeldet.
 
-Beim Sperren meldet sich die App beim Server ab, **außer** biometrisches Entsperren ist
-aktiv: Dann steckt das Sitzungstoken im verschlüsselten Wiederaufnahmezustand und muss gültig
-bleiben. Es läuft trotzdem nach der normalen Sitzungsdauer ab.
+Jedes Sperren meldet beim Server ab, auch die nativen (Fokusverlust, iOS-Suspendieren,
+Rust-Timer). **Ausnahme:** Das Sitzungstoken ist genau das, das im biometrischen
+Wiederaufnahmezustand steckt. Dafür speichert die App beim Aktivieren
+`biometric.token` = SHA-256(`melon/biometric-token\0` ‖ Server ‖ `\0` ‖ Token). Ein später per
+Passwort geholtes Token oder eines für einen anderen Server wird also abgemeldet. Das
+biometrisch genutzte Token läuft nach der normalen Sitzungsdauer ab.
 
 Schlägt das Entsperren fehl (falsches Passwort), verwirft die native Sitzung alles, auch den
 schon abgeleiteten Login-Nachweis. Ein Serverwechsel wird nur abgelehnt, solange ein Tresor

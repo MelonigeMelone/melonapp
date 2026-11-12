@@ -32,7 +32,7 @@ const platform = {
     return open(s.email, s.userId, s.token, s);
   },
   async disableBiometric() { await invoke('biometric_disable'); },
-  async biometricEnabled() { return invoke<boolean>('biometric_enabled'); },
+  async biometricKeepsToken(token: string) { return invoke<boolean>('biometric_keeps_token', { token }); },
   async onLock(callback: () => void) { return listen('melon-locked', callback); },
 };
 setNativePlatform(platform);

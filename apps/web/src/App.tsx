@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AuthScreen } from './screens/AuthScreen';
 import { lock, type Account, type Session } from './session';
 import { useAutoLockMinutes } from './prefs';
@@ -56,12 +56,16 @@ export function App() {
     [session],
   );
 
+  const current = useRef(session);
+  current.current = session;
+
   useEffect(() => {
     const platform = nativePlatform();
     if (!platform) return;
     let disposed = false;
     let cleanup: (() => void) | undefined;
     void platform.onLock(() => {
+      void lock(current.current);
       setSession(null);
       setNotice('MelonApp wurde gesperrt.');
     }).then((off) => { if (disposed) off(); else cleanup = off; });

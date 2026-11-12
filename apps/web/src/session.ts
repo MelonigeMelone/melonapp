@@ -141,7 +141,7 @@ export async function lock(session: Session | null) {
   await cryptoCall('lock');
   if (!session) return;
   const platform = nativePlatform();
-  if (platform && (await platform.biometricEnabled().catch(() => false))) return;
+  if (platform && (await platform.biometricKeepsToken(session.token).catch(() => false))) return;
   await api.logout(session.token).catch(() => undefined);
 }
 

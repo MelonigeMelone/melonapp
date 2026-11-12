@@ -173,6 +173,11 @@ pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<
     tauri::async_runtime::spawn_blocking(move || {
         let base = server(&app)?;
         let scope = format!("{base}/biometric");
+        let token = metadata
+            .get("token")
+            .and_then(Value::as_str)
+            .ok_or("invalid_request")?
+            .to_owned();
         let (key, snapshot) = {
             let state = app.state::<Mutex<Session>>();
             let mut session = state.lock().map_err(|_| "session_unavailable")?;
@@ -196,6 +201,11 @@ pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<
         }
         passwords::set_generic_password_options(&key, config)
             .map_err(|_| "biometric_unavailable")?;
+        write(
+            &app,
+            "biometric.token",
+            token_marker(&base, &token).as_bytes(),
+        )?;
         write(&app, "biometric.enc", snapshot.as_bytes())
     })
     .await
@@ -223,9 +233,17 @@ pub async fn biometric_unlock(app: tauri::AppHandle) -> Result<Value, String> {
     .map_err(|_| "biometric_unavailable")?
 }
 
+fn token_marker(base: &str, token: &str) -> String {
+    sha256_hex(format!("melon/biometric-token\0{base}\0{token}").as_bytes())
+}
+
 #[tauri::command]
-pub fn biometric_enabled(app: tauri::AppHandle) -> bool {
+pub fn biometric_keeps_token(app: tauri::AppHandle, token: String) -> bool {
+    let (Ok(base), Ok(marker)) = (server(&app), read(&app, "biometric.token")) else {
+        return false;
+    };
     location(&app, "biometric.enc").is_ok_and(|path| path.exists())
+        && marker.trim() == token_marker(&base, &token)
 }
 
 #[tauri::command]
@@ -236,9 +254,11 @@ pub fn biometric_disable(app: tauri::AppHandle) -> Result<(), String> {
     {
         return Err("biometric_unavailable".into());
     }
-    let path = location(&app, "biometric.enc")?;
-    if path.exists() {
-        fs::remove_file(path).map_err(|_| "storage_unavailable")?;
+    for name in ["biometric.enc", "biometric.token"] {
+        let path = location(&app, name)?;
+        if path.exists() {
+            fs::remove_file(path).map_err(|_| "storage_unavailable")?;
+        }
     }
     autofill_remove()
 }
@@ -282,6 +302,14 @@ fn autofill_remove() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn biometric_token_marker_is_bound_to_server_and_token() {
+        let marker = super::token_marker("https://a.example", "t1");
+        assert_eq!(marker, super::token_marker("https://a.example", "t1"));
+        assert_ne!(marker, super::token_marker("https://b.example", "t1"));
+        assert_ne!(marker, super::token_marker("https://a.example", "t2"));
+    }
+
     #[test]
     fn cache_and_autofill_names_keep_their_hex_form() {
         assert_eq!(

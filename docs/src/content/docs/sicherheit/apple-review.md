@@ -25,7 +25,7 @@ kleinere Punkte und ein Bedienfehler, alle behoben (#61–#65, siehe unten).
   Serverwechsel erfordert, dass kein Tresor offen ist; eine abgebrochene Anmeldung samt
   Login-Nachweis wird dabei verworfen (#63, #65). API-URLs erlauben HTTPS und für lokale
   Entwicklung HTTP auf Loopback; Weiterleitungen sind abgeschaltet.
-- Sperren meldet beim Server ab, solange biometrisches Entsperren aus ist (#61).
+- Jedes Sperren, auch Fokusverlust, Suspendieren und der native Timer, meldet beim Server ab. Ausgenommen ist nur genau das Token, das im biometrischen Wiederaufnahmezustand steckt (#61).
 - Caches verwenden authentifizierte Verschlüsselung mit Konto-/Server-/Formatkontext. Der
   biometrische Wiederaufnahmezustand hat einen eigenen Kontext und lässt sich nicht mit
   einer Cache-Datei vertauschen (#62). Deaktivieren löscht auch den AutoFill-Schlüssel (#64).
