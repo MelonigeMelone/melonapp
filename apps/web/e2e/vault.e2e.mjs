@@ -326,6 +326,44 @@ await step('export encrypted and as CSV, import the encrypted file again', async
   }
 });
 
+await step('trash: undo, restore and delete for good', async () => {
+  const row = () => a.locator('.entry-row', { hasText: 'Bibliothek Familie' });
+  const trashNav = a.locator('.trash-nav');
+  const toTrash = async () => {
+    await row().click();
+    await a.getByRole('button', { name: 'In den Papierkorb' }).click();
+    await row().waitFor({ state: 'detached' });
+  };
+
+  await a.locator('nav[aria-label="Bereiche"]').getByText('Alle Einträge').click();
+  await toTrash();
+  await a.getByText('liegt im Papierkorb', { exact: false }).waitFor();
+  await a.getByRole('button', { name: 'Rückgängig' }).click();
+  await row().waitFor();
+
+  await toTrash();
+  await trashNav.getByText('1 Eintrag').waitFor();
+  await trashNav.click();
+  await row().click();
+  await a.locator('.trash-notice').getByText('endgültig gelöscht', { exact: false }).waitFor();
+  await shot(a, '4c-trash');
+  if (await a.getByRole('button', { name: 'Bearbeiten' }).count()) throw new Error('trashed item can be edited');
+  await a.getByRole('button', { name: 'Wiederherstellen' }).click();
+  await a.getByText('Der Papierkorb ist leer.').waitFor();
+  await a.locator('nav[aria-label="Bereiche"]').getByText('Alle Einträge').click();
+  await row().waitFor();
+
+  await toTrash();
+  await trashNav.click();
+  await row().click();
+  await a.getByRole('button', { name: 'Endgültig löschen' }).click();
+  await a.getByRole('dialog').getByRole('button', { name: 'Endgültig löschen' }).click();
+  await a.getByText('Der Papierkorb ist leer.').waitFor();
+  await a.locator('nav[aria-label="Bereiche"]').getByText('Alle Einträge').click();
+  await a.locator('.entry-row', { hasText: 'Stadtwerke' }).first().waitFor();
+  if (await row().count()) throw new Error('deleted item came back');
+});
+
 const b = await newPage();
 await step('bob registers through the invite link and waits', async () => {
   current = b;
@@ -423,7 +461,7 @@ await step('security code and master password change', async () => {
   await a.getByRole('button', { name: 'Konto' }).click();
   await a.getByRole('heading', { name: 'Konto', level: 1 }).waitFor();
   await a.locator('[data-row="kit"]').getByText('Eingerichtet', { exact: false }).waitFor();
-  await a.locator('[data-row="audit"]').getByText('Hinweise', { exact: false }).waitFor();
+  await a.locator('[data-row="audit"]').getByText(/[0-9]+ Hinweis/).waitFor();
   await a.locator('[data-row="code"]').getByRole('button', { name: 'Anzeigen' }).click();
   await a.locator('.security-code').filter({ hasText: /\d/ }).waitFor();
   const code = await a.locator('.security-code').innerText();

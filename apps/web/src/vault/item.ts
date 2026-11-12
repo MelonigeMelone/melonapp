@@ -29,6 +29,7 @@ export interface Item {
   notes: string;
   history: HistoryEntry[];
   seq: number;
+  trashedAt?: string;
 }
 
 export interface VaultItem {
@@ -154,6 +155,7 @@ export function parseItem(json: string): Item {
       return { fieldId: str(ho.fieldId), label: str(ho.label), value: str(ho.value), changedAt: str(ho.changedAt) };
     }),
     seq: Number.isSafeInteger(o.seq) && (o.seq as number) > 0 ? (o.seq as number) : 0,
+    ...(typeof o.trashedAt === 'string' && !Number.isNaN(Date.parse(o.trashedAt)) ? { trashedAt: o.trashedAt } : {}),
   };
 }
 
