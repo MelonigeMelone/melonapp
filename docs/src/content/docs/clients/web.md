@@ -176,6 +176,32 @@ Im Passwortmanager unter „Importieren“ (`modules/passwords/import/`). Unters
   standardmäßig übersprungen.
 - Danach erinnert die App daran, die Export-Datei zu löschen, weil sie unverschlüsselt ist.
 
+## Export
+
+Im Passwortmanager unter „Exportieren“ (`modules/passwords/ExportDialog.tsx`,
+`modules/passwords/export/`). Exportiert werden alle Einträge aus allen Bereichen, auf die man
+Zugriff hat. Die Datei entsteht nur im Browser.
+
+| Format | Wofür | Inhalt |
+|---|---|---|
+| **Verschlüsselt** (`.melon.json`, empfohlen) | eigenes Backup, Umzug auf einen anderen MelonApp-Server | jeder Eintrag vollständig (alle Typen, Abschnitte, Verlauf, 2FA) mit dem Namen seines Bereichs. Verschlüsselt mit einem eigenen **Export-Passwort** (mindestens 12 Zeichen), siehe [Kryptografie](/melonapp/sicherheit/kryptografie/#export-exportrs). |
+| **Unverschlüsselt** (CSV im Bitwarden-Format) | Umzug zu einem anderen Passwortmanager | Logins mit allen Websites, Benutzername, Passwort und 2FA-Schlüssel; andere Typen als Notiz mit ihren Feldern; Bereich als Ordner. Kein Verlauf. |
+
+- **Beide brauchen das Master-Passwort.** Wer an einem entsperrten Gerät sitzt, kann so nicht
+  einfach alles mitnehmen. Geprüft wird es wie beim Passwortwechsel: Der daraus abgeleitete
+  Schlüssel muss den Konto-Schlüssel entpacken (`checkPassword` bzw. `sealExport` im Worker und
+  in der nativen Sitzung).
+- **CSV nur nach Bestätigung:** roter Hinweis, Häkchen „Ich verstehe …“, roter Button, der
+  Dateiname enthält `UNVERSCHLUESSELT`. Passwörter werden **unverändert** geschrieben, auch wenn sie
+  mit `=` beginnen. Darum der Hinweis, die Datei nicht in Excel zu öffnen.
+- **Wieder einlesen:** Der Import erkennt eine `.melon.json`, fragt nach dem Export-Passwort und
+  zeigt danach die normale Vorschau mit Ziel-Bereich und Doppelten-Prüfung.
+- Einträge, die sich nicht entschlüsseln ließen oder als älterer Stand verworfen wurden
+  ([Rollback-Erkennung](#rollback-erkennung)), fehlen im Export. Der Dialog sagt das.
+- In der **Desktop-App** speichert der Browser-Download noch keine Datei, dafür fehlt ein nativer
+  Speichern-Dialog ([#81](https://github.com/MelonigeMelone/melonapp/issues/81)). Bis dahin im Browser
+  exportieren.
+
 ## 2FA-Codes
 
 Ein Login kann einen 2FA-Schlüssel haben (Begründung:

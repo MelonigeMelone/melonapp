@@ -26,6 +26,9 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 |---|---|
 | Bestehende Tresore bleiben nach Krypto-Updates lesbar (feste Daten aus älteren Versionen) | `compat::*` in `melon-crypto`, `auth::tests::stored_auth_hashes_still_verify`, `auth::tests::stored_session_tokens_and_fake_salts_stay_the_same` |
 | Manipulierter Chiffretext wird erkannt | `cipher::tests::tampering_is_detected` |
+| Export: nur das richtige Export-Passwort öffnet die Datei, kurze Passwörter, geschwächte KDF, fremdes Salt und neue Versionen werden abgelehnt | `export::tests` in `melon-crypto` |
+| Export braucht das Master-Passwort, auch in der nativen Sitzung | `melon-native`: `export_needs_the_master_password_and_reopens_with_the_export_password`, E2E-Schritt „export encrypted and as CSV …“ |
+| Export-Datei ist wirklich verschlüsselt, CSV nur nach Bestätigung, Wieder-Import mit falschem Export-Passwort scheitert | E2E-Schritt „export encrypted and as CSV, import the encrypted file again“ |
 | Server spielt alte Version eines Eintrags oder einen gelöschten Eintrag zurück, auch nach Neustart | `store.test.ts` (`detects an old version replayed …`, `remembers what it has seen across sessions`, `detects a deleted item brought back …`), `seen.test.ts` |
 | Native Apps: fehlgeschlagenes Entsperren und Serverwechsel verwerfen Login-Nachweise; Cache und Biometrie-Zustand sind nicht vertauschbar | `melon-native`: `failed_unlock_discards_pending_auth_proofs`, `server_change_drops_an_abandoned_login_but_not_an_open_vault`, `api_cache_and_biometric_snapshot_cannot_be_swapped` |
 | Chiffretext lässt sich nicht in anderen Eintrag/Tresor/Schlüsselversion verschieben | `sharing::tests::item_aad_separates_contexts`, `api::personal_vault_flow` |
