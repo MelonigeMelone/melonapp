@@ -26,6 +26,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
+melon-native = { path = "../melon-native" }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 

@@ -108,6 +108,10 @@ export class ApiError extends Error {
 
 let apiBase = '';
 
+export type NativeRequest = (method: string, path: string, opts: { token?: string; body?: unknown }) => Promise<{ status: number; body: string }>;
+let nativeRequest: NativeRequest | null = null;
+export function setNativeRequest(request: NativeRequest) { nativeRequest = request; }
+
 export function setApiBase(base: string) {
   apiBase = base.replace(/\/+$/, '');
 }
@@ -118,7 +122,7 @@ async function request<T>(method: string, path: string, opts: { token?: string; 
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
   let res: Response;
   try {
-    res = await fetch(`${apiBase}/api/v1${path}`, {
+    res = nativeRequest ? await nativeRequest(method, path, opts).then((r) => new Response(r.status === 204 ? null : r.body, { status: r.status })) : await fetch(`${apiBase}/api/v1${path}`, {
       method,
       headers,
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),

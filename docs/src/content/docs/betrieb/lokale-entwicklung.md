@@ -96,3 +96,88 @@ Ohne passendes Node geht es auch per Docker:
 docker run --rm -it -p 4321:4321 -v "$PWD:/src" -v melon-node:/src/node_modules -w /src node:22-bookworm \
   bash -c "npm install && npm run dev -w docs -- --host"
 ```
+
+## Entwicklung auf macOS ohne Docker
+
+Xcode aus dem App Store installieren und einmal öffnen. Danach prüfen:
+
+```sh
+xcode-select -p
+xcodebuild -version
+xcrun simctl list devices available
+```
+
+Homebrew installieren, falls es fehlt (Anleitung auf https://brew.sh). Rust ≥ 1.87 mit rustup
+verwalten; ein vorhandenes Homebrew-Rust muss nicht entfernt werden. `~/.cargo/bin` muss
+für dieses Projekt im Suchpfad vor Homebrew stehen.
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+rustup target add aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim wasm32-unknown-unknown
+rustup component add rustfmt clippy
+nvm install 22
+nvm use 22
+npm ci
+npm test -w web
+```
+
+Die Server-Integrationstests benötigen auch lokal PostgreSQL. Eine eigene Instanz
+verhindert Eingriffe in vorhandene Datenbanken:
+
+```sh
+brew install postgresql@15
+export PATH="$(brew --prefix postgresql@15)/bin:$PATH"
+mkdir -p tmp
+initdb -D tmp/apple-postgres -A trust
+pg_ctl -D tmp/apple-postgres -l "$PWD/tmp/apple-postgres.log" -o '-p 55432 -h 127.0.0.1' start
+createdb -h 127.0.0.1 -p 55432 melon_test
+export MELON_TEST_DATABASE_URL="postgres://$(whoami)@127.0.0.1:55432/melon_test"
+MELON_REQUIRE_DB=1 cargo test --workspace --locked
+bash scripts/build-wasm.sh
+npm run build -w web
+```
+
+Die Trust-Authentifizierung gilt ausschließlich für diese lokale Testinstanz; sie bindet
+nur an Loopback. Beenden mit `pg_ctl -D tmp/apple-postgres stop`. Für einen vollständigen
+lokalen Server eine eigene Datenbank anlegen und die Variablen aus
+[Server-Konfiguration](/melonapp/server/konfiguration/) setzen.
+
+
+### Signierter macOS-Entwicklungsbuild
+
+Eine vorhandene Apple-Development-Identität aus `security find-identity -v -p codesigning`
+verwenden. Der Team-Identifier steht im Zertifikat beziehungsweise in Xcode. Das Skript
+prüft das passende macOS-Provisioning-Profil, bettet es ein, erzeugt temporäre
+Entitlements für die Data Protection Keychain und prüft die Signatur:
+
+```sh
+export APPLE_DEVELOPMENT_TEAM="DEIN_TEAM"
+export APPLE_SIGNING_IDENTITY="Apple Development: Dein Name (IDENTITY)"
+export APPLE_PROVISIONING_PROFILE="/absoluter/Pfad/zum/macOS-Entwicklungsprofil.provisionprofile"
+bash scripts/build-macos-signed.sh
+```
+
+Es werden keine Apple-Zugangsdaten gespeichert. Ein solcher Entwicklungsbuild ist
+nicht notarisiert und nicht zur öffentlichen Verteilung gedacht.
+
+Eine gültige Codesign-Signatur allein genügt für diese Keychain-Entitlements nicht:
+ohne passendes eingebettetes Provisioning-Profil kann macOS den Start verweigern.
+Der normale `tauri build` bleibt für Passwort-Anmeldung ohne Biometrie nutzbar.
+
+### Browser-End-to-End-Test nativ
+
+Bei laufendem lokalem Server auf Port 8080 und `npm run dev -w web -- --host 127.0.0.1`
+in einem zweiten Terminal:
+
+```sh
+npm install --prefix tmp/playwright playwright@1.65.0
+tmp/playwright/node_modules/.bin/playwright install chromium
+cp apps/web/e2e/vault.e2e.mjs tmp/playwright/vault.e2e.mjs
+mkdir -p tmp/apple-e2e
+BASE=http://127.0.0.1:5173 OUT="$PWD/tmp/apple-e2e" node tmp/playwright/vault.e2e.mjs
+```
+
+Dafür eine separate lokale Datenbank und offene Registrierung verwenden. Der Test
+legt ausschließlich synthetische Konten und Einträge an; niemals gegen den produktiven
+Server laufen lassen. Er prüft unter anderem Teilen, Rotation, Recovery und Mobilansicht.

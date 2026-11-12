@@ -1,3 +1,4 @@
+import { nativePlatform } from '../platform';
 import Alert from '@mui/material/Alert';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
@@ -205,6 +206,21 @@ export function AccountScreen({ ctx, onUpdate }: { ctx: ShellContext; onUpdate: 
   return (
     <Box component="main" sx={{ maxWidth: '48rem', mx: 'auto', px: { xs: 2, md: 4 }, py: { xs: 3, md: 6 } }}>
       <Stack spacing={4}>
+        {nativePlatform() && <Stack spacing={1}>
+          <Typography variant="h6">Touch ID / Face ID</Typography>
+          {nativePlatform()!.supportsAutofill && <Button variant="outlined" onClick={async () => {
+            try { await nativePlatform()!.publishAutofill(session); window.alert('AutoFill-Cache für 24 Stunden aktualisiert. Aktiviere MelonApp in den iOS-Einstellungen für AutoFill.'); }
+            catch { window.alert('AutoFill konnte nicht vorbereitet werden. Prüfe App Group, Signierung und Biometrie.'); }
+          }}>Passwörter für iOS AutoFill aktualisieren</Button>}
+          <Button variant="outlined" onClick={async () => {
+            try { await nativePlatform()!.enableBiometric(session); window.alert('Biometrisches Entsperren aktiviert.'); }
+            catch { window.alert('Biometrie konnte nicht aktiviert werden. Prüfe Signierung und biometrische Einstellungen.'); }
+          }}>Auf diesem Gerät aktivieren</Button>
+          <Button onClick={async () => {
+            try { await nativePlatform()!.disableBiometric(); window.alert('Biometrisches Entsperren deaktiviert.'); }
+            catch { window.alert('Deaktivieren fehlgeschlagen.'); }
+          }}>Deaktivieren</Button>
+        </Stack>}
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Avatar sx={{ width: 64, height: 64, bgcolor: 'secondary.main', color: 'secondary.contrastText', fontSize: '1.75rem', fontWeight: 700 }} aria-hidden="true">
             {session.email.slice(0, 1).toUpperCase()}

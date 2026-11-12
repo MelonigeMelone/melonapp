@@ -28,9 +28,9 @@ sidebar:
 | Sync-Server | Rust, axum, PostgreSQL | `crates/melon-server` | ✅ |
 | WASM-Brücke | wasm-bindgen | `crates/melon-wasm` → `packages/melon-wasm` | ✅ |
 | Web-App | React + TypeScript + MUI, Krypto im Web Worker | `apps/web` | ✅ |
-| Desktop & iOS | Tauri 2 mit derselben React-UI | `apps/desktop` | M3 / M5 |
+| Desktop & iOS | Tauri 2 mit derselben React-UI, native Schlüsselverwaltung | `apps/desktop`, `crates/melon-native` | macOS und iOS-Simulator gebaut |
 | Browser-Erweiterung | WebExtension (MV3), React + MUI, Chromium (auch Opera GX) und Firefox | `apps/extension` | ✅ |
-| iOS-AutoFill | Swift Credential Provider Extension, ruft `melon-crypto` über UniFFI | `apps/desktop/src-tauri/gen/apple` | M5 |
+| iOS-AutoFill | Swift Credential Provider Extension, ruft `melon-crypto` über UniFFI | `apps/desktop/apple`, `crates/melon-ffi` | gebaut; Geräte-Abnahme offen |
 | Doku | Starlight (Astro) | `docs` | ✅ |
 
 Warum diese Technik gewählt wurde, steht in den [Entscheidungen](/melonapp/entscheidungen/).

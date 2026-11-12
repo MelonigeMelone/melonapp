@@ -69,3 +69,47 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklung/).
+
+## Native Apple-Sitzung
+
+`cargo test -p melon-native` prüft die native Schlüsselgrenze unabhängig von Tauri:
+
+| Eigenschaft | Test |
+|---|---|
+| Eintragsverschlüsselung und Bindung an die Eintrags-ID | `roundtrip_and_wrong_item_context` |
+| Cache lehnt falschen Schlüssel, Kontext und Manipulation ab | `cache_rejects_wrong_key_scope_and_tampering` |
+| Gesperrte Sitzung kann weder Cache noch Tresor lesen | `locked_state_cannot_access_cache_or_vaults` |
+| Falsches Passwort verbraucht die Ableitung ohne Restschlüssel | `wrong_password_does_not_leave_keys_and_retry_needs_derivation` |
+| Rust erzwingt Ablauf ohne UI-Timer | `timeout_is_enforced_without_ui_timer` |
+| Kein Import/Export roher Schlüssel über die UI-Schnittstelle | `raw_keys_and_unknown_commands_are_never_exposed` |
+| Fehler bei neuer Anmeldung löschen den alten Zustand | `failed_derivation_clears_previous_session` |
+
+| Zusätzliche native Eigenschaft | Test |
+|---|---|
+| Biometrischer Snapshot authentifiziert Schlüssel und Kontext; Ergebnis enthält nur UI-Metadaten | `biometric_restore_authenticates_snapshot_and_never_returns_keys` |
+| Server-Adresse erzwingt TLS außer Loopback und lehnt eingebettete Zugangsdaten ab | `platform::tests::server_requires_tls_except_loopback_and_rejects_credentials` |
+
+| Apple-Extension-Eigenschaft | Test |
+|---|---|
+| UniFFI-Cache: Roundtrip, falscher Schlüssel/Kontext und falsche Schlüssellänge | `swift_cache_roundtrip_and_attack_cases` |
+| Passkey-Registrierung/Assertion: Attestation, Signatur und Challenge-Bindung | `passkey::tests::registration_and_assertion_verify_and_bind_challenge` |
+| Passkey: falsche RP-ID, Schlüssel, Credential-ID, Hash und beschädigte Schlüsselhülle | `passkey::tests::wrong_rp_key_id_hash_and_tampered_key_fail` |
+| Swift: exakte HTTPS-Hosts, keine Eltern-/Subdomains, Cache-Ablauf und Aufrufe über echte UniFFI-Bindings | `bash scripts/test-apple-swift.sh` |
+
+| Native Authentifizierung | Test |
+|---|---|
+| React erhält nur zufällige Auth-Handles; fremde und gesperrte Handles werden verworfen | `auth_proofs_stay_native_and_handles_expire_on_lock` |
+| Nativer Client registriert und entsperrt gegen den echten Server mit PostgreSQL, liest verschlüsselte Items und richtet Recovery ein | `api::native_client_registers_unlocks_and_roundtrips_items` |
+
+
+| Zusätzliche Lebenszyklus- und Speichertests | Test |
+|---|---|
+| Hintergrund verwirft Schlüssel und verhindert verspätetes biometrisches Entsperren | `background_rejects_pending_biometric_restore_and_new_derivation` |
+| Teilen/Rotation binden Empfänger und Version; alter Schlüssel liest neue Version nicht | `sharing_and_rotation_preserve_context_and_versions` |
+| Passwortwechsel und Recovery behalten Kontoidentität, falsches Passwort wird abgelehnt | `password_change_and_recovery_preserve_account_and_reject_wrong_password` |
+| Cache-Dateien bleiben privat (0600), atomarer Ersatz hinterlässt keine temporäre Datei | `platform::tests::cache_files_are_private_and_atomically_replaced` |
+
+Der Passkey-Test rekonstruiert den öffentlichen Schlüssel direkt aus dem ausgelieferten
+COSE-Objekt der Registrierung und prüft damit die Assertion. Er greift für diesen
+Nachweis nicht auf den verschlüsselten privaten Schlüssel zurück; falsche COSE-Labels,
+Kurvenparameter oder Koordinaten fallen damit im Interoperabilitätstest auf.

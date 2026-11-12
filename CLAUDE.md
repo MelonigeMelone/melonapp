@@ -20,11 +20,14 @@ Passwortmanager. Die gesamte Doku liegt in `docs/src/content/docs/` (Starlight).
 - `crates/melon-server`: axum + PostgreSQL, speichert nur Chiffretext
 - `crates/melon-wasm` → `packages/melon-wasm`: WASM-Bindings (`bash scripts/build-wasm.sh`)
 - `apps/web`: React-Web-App, Krypto im Web Worker; E2E-Test in `apps/web/e2e`
+- `apps/desktop`: Tauri 2, gemeinsame React-UI, eigener Cargo-Workspace
+- `crates/melon-native`: native Schlüsselsitzung und Cache
+- `crates/melon-ffi` → `apps/desktop/apple/Bindings`: UniFFI für die Swift-AutoFill-Extension
 - `docs/`: Starlight-Doku (npm-Workspace)
 - `deploy/`: Docker Compose für den eigenen Server
 
 ## Befehle
 
-Rust und Node ≥ 22 sind auf dem Entwicklungsrechner nicht installiert. Gebaut wird in Docker
+Native Entwicklung auf macOS und Docker werden unterstützt
 (Befehle in `docs/src/content/docs/betrieb/lokale-entwicklung.md`). Unter Git Bash vorher
 `export MSYS_NO_PATHCONV=1` setzen.

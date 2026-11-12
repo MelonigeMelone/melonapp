@@ -1,3 +1,4 @@
+import { nativePlatform } from './platform';
 import { api, ApiError, authed, DEFAULT_KDF, NetworkError, type Kdf } from './api';
 import { cryptoCall } from './crypto/client';
 import { newId } from './vault/item';
@@ -18,7 +19,7 @@ export interface Session extends Account {
   vaults: VaultsManager;
 }
 
-function open(email: string, userId: string, token: string, account: Account): Session {
+export function open(email: string, userId: string, token: string, account: Account): Session {
   return { email, userId, token, vaults: new VaultsManager(userId, authed(token), cryptoCall), ...account };
 }
 
@@ -138,7 +139,7 @@ export async function recoverAccount(email: string, recoveryKey: string, newPass
 
 export async function lock(session: Session | null) {
   await cryptoCall('lock');
-  if (session) await api.logout(session.token).catch(() => undefined);
+  if (session && !nativePlatform()) await api.logout(session.token).catch(() => undefined);
 }
 
 const messages: Record<string, string> = {
@@ -170,6 +171,5 @@ export function describeError(e: unknown): string {
   if (e instanceof Error && e.message.includes('KDF')) {
     return 'Der Server hat ungültige Sicherheitsparameter geschickt. Anmeldung abgebrochen.';
   }
-  console.error(e);
   return 'Etwas ist schiefgelaufen. Lade die Seite neu und versuche es erneut.';
 }

@@ -13,9 +13,9 @@ sidebar:
 | **M4 – Konto absichern** | Recovery-Key (Notfall-Kit), Master-Passwort ändern, Sicherheitscode für geteilte Schlüssel | ✅ fertig |
 | **M4b – App-Rahmen** | Startbildschirm, Module als Unterbereiche, „Bereiche“ gelten für alle Module ([ADR 0012](/melonapp/entscheidungen/0012-app-shell-und-bereiche/)) | ✅ fertig |
 | **M4c – Import** | Apple Passwörter, 1Password (1PUX/CSV), Chrome, Firefox, Bitwarden, mit Vorschau und Erkennung von Doppelten | ✅ fertig |
-| M5 – Desktop | Tauri-App für Windows/Mac, lokaler verschlüsselter Cache, Hotkey, Windows Hello/Touch ID | geplant |
+| M5 – Desktop | macOS: Tauri mit nativer Krypto, verschlüsselter Cache, Hotkey und Keychain/Touch ID; Windows bleibt offen | macOS-Build und Start geprüft; Hardware-Abnahme offen |
 | **M6 – Browser-Erweiterung** | Chromium (Chrome, Edge, Brave, Opera GX) und Firefox: Ausfüllen per Klick, Speichern, Generator, Auto-Lock ([Details](/melonapp/clients/erweiterung/)) | ✅ fertig |
-| M7 – iOS | Tauri-iOS-App + Credential Provider Extension, Face ID, Passkeys, Safari-Erweiterung | als Nächstes |
+| M7 – iOS | Tauri-iOS-App, Face-ID-Keychain, Credential Provider Extension und gerätelokale Passkeys; Safari-Erweiterung bleibt offen | Simulator-Build und Start geprüft; Geräte-/AutoFill-Abnahme offen |
 | **M8a – 2FA und Sicherheits-Check** | 2FA-Codes in Web-App und Erweiterung (auch per QR-Bild), Stärke-Anzeige, schwache und mehrfach verwendete Passwörter, Datenleck-Abgleich auf Knopfdruck ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)) | ✅ fertig |
 | M8 – Mehr | Personengruppen, eigene Symbole, Anhänge, Export | geplant |
 | M9 – Android | Tauri-Android + Autofill Service | später |

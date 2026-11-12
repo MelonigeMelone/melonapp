@@ -239,3 +239,10 @@ ihre Farben über Theme-Pfade wie `melon.digit` oder `primary.main`, nie über f
 | Buttons als Pillen, Eingabefelder mit 10 px Radius, Dialoge mit 18 px | klare Hierarchie: Aktionen rund, Felder ruhig |
 | Symbol-Buttons (Kopieren, Anzeigen, Sperren) mit Tooltip und `aria-label` | wenig Platz, trotzdem verständlich und per Screenreader bedienbar |
 | Mobil: Liste und Detail als getrennte Ansichten | kleine Bildschirme |
+
+## Gemeinsame native Oberfläche
+
+Desktop und iOS verwenden diese Komponenten ebenfalls. Die optionale Plattform-
+Schnittstelle ergänzt Serverwahl und biometrisches Entsperren ausschließlich im nativen
+Einstieg. Web-Builds behalten den Worker und den bisherigen HTTP-Transport.
+Fehlerobjekte werden nicht mehr pauschal in die Konsole geschrieben.

@@ -33,6 +33,13 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Images werden standardmäßig als `latest` gezogen | im Betrieb auf `sha-…`-Tags festlegen ([Selbst hosten](/melonapp/betrieb/selbst-hosten/#updates)) |
 | RustCrypto-Major-Updates (sha2 0.11, hkdf 0.13, hmac 0.13, chacha20poly1305 0.11) | gemeinsam als ein Update einspielen, Dependabot gruppiert sie |
 
+## Native Apple-Clients
+
+Hardware-Biometrie, signierte App-Group-Zugriffe, Safari-AutoFill und gerätelokale
+Passkeys benötigen noch eine unabhängige und interaktive Abnahme. Details und die
+begründete UniFFI-Generator-Wartungsausnahme stehen im
+[Apple-Review](/melonapp/sicherheit/apple-review/).
+
 ## Schwachstelle gefunden?
 
 Bitte nicht öffentlich als Issue melden, sondern über

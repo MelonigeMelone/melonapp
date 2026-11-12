@@ -149,3 +149,12 @@ genullt (`zeroize`) und implementieren kein `Debug`. Klartexte kommen als
 
 Für `wasm32-unknown-unknown` holt `getrandom` den Zufall über `crypto.getRandomValues`
 (Feature `js`). Die CI baut die Crate bei jedem Push für WASM.
+
+## Native Passkeys
+
+Die iOS-Extension nutzt `melon-crypto` über UniFFI. ES256-Signaturen werden mit dem
+RustCrypto-Crate `p256` erzeugt. Private P-256-Schlüssel werden mit XChaCha20-Poly1305
+unter dem Kontoschlüssel verschlüsselt; der authentifizierte Kontext enthält eine
+Formatkennung, längenkodierte RP-ID und Credential-ID. Assertions signieren
+`authenticatorData || clientDataHash`. Falsche RP-ID, Credential-ID, Schlüssel und
+ungültige Hash-Länge werden abgelehnt. Details: [ADR 0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/).

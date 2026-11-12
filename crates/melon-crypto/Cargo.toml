@@ -17,6 +17,8 @@ rand = "0.8"
 rand_core_09 = { package = "rand_core", version = "0.9", features = ["os_rng"] }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
+p256 = { version = "0.14", default-features = false, features = ["ecdsa", "alloc", "getrandom"] }
+ciborium = "0.2"
 thiserror = "2"
 unicode-normalization = "0.1"
 zeroize = { version = "1", features = ["derive"] }
@@ -24,6 +26,7 @@ zeroize = { version = "1", features = ["derive"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+getrandom_04 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 
 [lints]
 workspace = true

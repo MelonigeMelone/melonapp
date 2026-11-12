@@ -32,6 +32,20 @@ jobs:
       - name: Check production dependencies for known vulnerabilities
         run: npm audit --omit=dev --audit-level=high
 
+  apple-dependencies:
+    name: Apple dependencies (cargo-deny)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [aarch64-apple-darwin, aarch64-apple-ios-sim]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: apps/desktop/src-tauri/Cargo.toml
+          arguments: --target ${{ matrix.target }}
+          command: check advisories bans licenses sources
+
   secrets:
     name: Leaked secrets (gitleaks)
     runs-on: ubuntu-latest
