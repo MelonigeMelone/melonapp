@@ -13,7 +13,7 @@ bindgen = ["uniffi/cli"]
 
 [dependencies]
 melon-crypto = { path = "../melon-crypto" }
-uniffi = "0.31"
+uniffi = "0.32"
 thiserror = "2"
 zeroize = "1"
 
