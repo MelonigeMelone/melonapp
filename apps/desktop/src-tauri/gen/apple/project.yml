@@ -130,9 +130,9 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_INCLUDE_PATHS: $(SRCROOT)/../../../apple/Bindings
         OTHER_SWIFT_FLAGS: $(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../../../apple/Bindings/melon_ffiFFI.modulemap
-        LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]: $(SRCROOT)/../../../../../target/aarch64-apple-ios-sim/release
-        LIBRARY_SEARCH_PATHS[sdk=iphoneos*]: $(SRCROOT)/../../../../../target/aarch64-apple-ios/release
-        OTHER_LDFLAGS: $(inherited) -lmelon_ffi
+        MELON_FFI_DIR[sdk=iphonesimulator*]: $(SRCROOT)/../../../../../target/aarch64-apple-ios-sim/release
+        MELON_FFI_DIR[sdk=iphoneos*]: $(SRCROOT)/../../../../../target/aarch64-apple-ios/release
+        OTHER_LDFLAGS: $(inherited) $(MELON_FFI_DIR)/libmelon_ffi.a
         APPLICATION_EXTENSION_API_ONLY: true
         SKIP_INSTALL: true
         CODE_SIGN_STYLE: Automatic

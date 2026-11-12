@@ -480,9 +480,9 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios/release";
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios-sim/release";
-				OTHER_LDFLAGS = "$(inherited) -lmelon_ffi";
+				"MELON_FFI_DIR[sdk=iphoneos*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios/release";
+				"MELON_FFI_DIR[sdk=iphonesimulator*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios-sim/release";
+				OTHER_LDFLAGS = "$(inherited) $(MELON_FFI_DIR)/libmelon_ffi.a";
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../../../apple/Bindings/melon_ffiFFI.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = de.melonigemelone.app.autofill;
 				PRODUCT_NAME = MelonAutoFill;
@@ -598,9 +598,9 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios/release";
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios-sim/release";
-				OTHER_LDFLAGS = "$(inherited) -lmelon_ffi";
+				"MELON_FFI_DIR[sdk=iphoneos*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios/release";
+				"MELON_FFI_DIR[sdk=iphonesimulator*]" = "$(SRCROOT)/../../../../../target/aarch64-apple-ios-sim/release";
+				OTHER_LDFLAGS = "$(inherited) $(MELON_FFI_DIR)/libmelon_ffi.a";
 				OTHER_SWIFT_FLAGS = "$(inherited) -Xcc -fmodule-map-file=$(SRCROOT)/../../../apple/Bindings/melon_ffiFFI.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = de.melonigemelone.app.autofill;
 				PRODUCT_NAME = MelonAutoFill;

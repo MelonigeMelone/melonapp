@@ -46,6 +46,8 @@ jobs:
       - run: bash scripts/build-apple-ffi.sh iphonesimulator
       - run: xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
       - run: npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
+      - name: AutoFill extension links only system libraries
+        run: "! otool -L apps/desktop/src-tauri/gen/apple/build/arm64-sim/MelonApp.app/PlugIns/MelonAutoFill.appex/MelonAutoFill | tail -n +2 | grep -v -e /usr/lib/ -e /System/Library/"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-apps-unsigned

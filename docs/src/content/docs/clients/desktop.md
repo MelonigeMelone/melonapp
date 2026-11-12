@@ -34,6 +34,11 @@ Sekunden, bis die App wieder aktiv ist, und stellt die Sitzung erst dann unter d
 Sperre wieder her. Bleibt die App inaktiv oder im Hintergrund, scheitert es mit
 `background_locked`; einen Weg, im Hintergrund zu entsperren, gibt es weiterhin nicht.
 
+Biometrisch geschützte Schlüsselbund-Einträge werden beim Neu-Einrichten und beim
+Aktualisieren des AutoFill-Caches erst gelöscht und dann neu angelegt, nie per
+`SecItemUpdate` überschrieben. Ein Update verlangt Face ID, und der Dialog würde die App
+inaktiv machen und den offenen Tresor sperren.
+
 Jedes Sperren meldet beim Server ab, auch die nativen (Fokusverlust, iOS-Suspendieren,
 Rust-Timer). **Ausnahme:** Das Sitzungstoken ist genau das, das im biometrischen
 Wiederaufnahmezustand steckt. Dafür speichert die App beim Aktivieren
@@ -134,6 +139,12 @@ bash scripts/build-apple-ffi.sh iphonesimulator
 xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
 npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
 ```
+
+Die Extension bindet `melon-ffi` statisch ein (`$(MELON_FFI_DIR)/libmelon_ffi.a`). Mit
+`-lmelon_ffi` wählte der Linker die ebenfalls gebaute `libmelon_ffi.dylib` mit absolutem Pfad
+auf dem Build-Mac: im Simulator unauffällig, auf dem iPhone stürzte die Extension beim Start ab
+(„Library not loaded“). Die Apple-CI prüft deshalb mit `otool -L`, dass die Extension nur
+System-Bibliotheken lädt.
 
 Nicht erneut `tauri ios init` ausführen, um eigene Extension-Einstellungen zu erhalten.
 Die Quelle des Xcode-Projekts ist `project.yml`; generierte UniFFI-Bindings und Libraries
