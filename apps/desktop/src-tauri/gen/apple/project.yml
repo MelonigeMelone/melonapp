@@ -37,6 +37,8 @@ targets:
         buildPhase: resources
         type: folder
       - path: LaunchScreen.storyboard
+      - path: ../../../apple/PrivacyInfo.xcprivacy
+        buildPhase: resources
     info:
       path: melon-desktop_iOS/Info.plist
       properties:
@@ -102,6 +104,8 @@ targets:
     sources:
       - path: ../../../apple/AutoFill
       - path: ../../../apple/Bindings/melon_ffi.swift
+      - path: ../../../apple/PrivacyInfo.xcprivacy
+        buildPhase: resources
     info:
       path: MelonAutoFill/Info.plist
       properties:
@@ -136,6 +140,7 @@ targets:
         APPLICATION_EXTENSION_API_ONLY: true
         SKIP_INSTALL: true
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ${APPLE_DEVELOPMENT_TEAM}
     dependencies:
       - sdk: AuthenticationServices.framework
       - sdk: Security.framework

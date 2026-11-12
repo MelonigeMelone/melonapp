@@ -172,7 +172,9 @@ bash scripts/build-macos-signed.sh
 ```
 
 Es werden keine Apple-Zugangsdaten gespeichert. Ein solcher Entwicklungsbuild ist
-nicht notarisiert und nicht zur öffentlichen Verteilung gedacht.
+nicht notarisiert und nicht zur öffentlichen Verteilung gedacht. Weitere Argumente gehen
+an `tauri build`; der Release-Workflow nutzt dasselbe Skript mit Developer ID und
+`--bundles app,dmg` ([Pipelines](/melonapp/betrieb/pipelines/#apple-releases)).
 
 Eine gültige Codesign-Signatur allein genügt für diese Keychain-Entitlements nicht:
 ohne passendes eingebettetes Provisioning-Profil kann macOS den Start verweigern.

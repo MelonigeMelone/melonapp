@@ -18,8 +18,10 @@
 		401516BEEC02467597126857 /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF6CC5D34903E07486870439 /* AuthenticationServices.framework */; };
 		491E93571C6D4C9BACE8F7FD /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 83D81824DAD471B33BA7B66C /* CoreGraphics.framework */; };
 		6389E7765FA5C91676A977B9 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EEB178935BD1F5C3E810A3CD /* Security.framework */; };
+		71190F6048901A9E7EC12BB1 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 977FB034E8FF855913DBED33 /* PrivacyInfo.xcprivacy */; };
 		7648D5222C6855A4024B3330 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 7C81E91425307D03F596761A /* LaunchScreen.storyboard */; };
 		7D5829ADEC8508A4B64B152A /* assets in Resources */ = {isa = PBXBuildFile; fileRef = A5CAB4CF329BB20ABC1A3EF7 /* assets */; };
+		A7ECFD165098E3A55323BDE5 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 977FB034E8FF855913DBED33 /* PrivacyInfo.xcprivacy */; };
 		DFBD80CC7748F03D5BAEFFD5 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0C90EE882608C44EEF9108C0 /* WebKit.framework */; };
 		F0F572A210936E72685349C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EC864CD7A98F837DBCE4278B /* Assets.xcassets */; };
 		F8884FE1C0299FA4CA396708 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7B031A594B795CDA4D3C20CE /* QuartzCore.framework */; };
@@ -62,10 +64,12 @@
 		3A25598D73D7CB83795B4969 /* LocalAuthentication.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = LocalAuthentication.framework; path = System/Library/Frameworks/LocalAuthentication.framework; sourceTree = SDKROOT; };
 		637E6C398E79BFFFE721822C /* CredentialVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialVault.swift; sourceTree = "<group>"; };
 		714D348075F639D930E372A1 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		782B5716C0BDAB4C7B60155C /* passkeys.rs */ = {isa = PBXFileReference; path = passkeys.rs; sourceTree = "<group>"; };
 		79DEA4CCF4F0FAC4D892998D /* MelonAutoFill.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MelonAutoFill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7B031A594B795CDA4D3C20CE /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		7C81E91425307D03F596761A /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		83D81824DAD471B33BA7B66C /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		977FB034E8FF855913DBED33 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		9CEDCFF58ED60CB0EFFFDDD3 /* platform.rs */ = {isa = PBXFileReference; path = platform.rs; sourceTree = "<group>"; };
 		9D2980887A5E336CB0D5B640 /* melon-desktop_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "melon-desktop_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2F5A234EA56772E21E896D0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -149,6 +153,7 @@
 			children = (
 				714D348075F639D930E372A1 /* lib.rs */,
 				B9B2B18685A67A682322C974 /* main.rs */,
+				782B5716C0BDAB4C7B60155C /* passkeys.rs */,
 				9CEDCFF58ED60CB0EFFFDDD3 /* platform.rs */,
 			);
 			name = src;
@@ -212,6 +217,7 @@
 				A5CAB4CF329BB20ABC1A3EF7 /* assets */,
 				EC864CD7A98F837DBCE4278B /* Assets.xcassets */,
 				7C81E91425307D03F596761A /* LaunchScreen.storyboard */,
+				FE711385FCB921055A05C949 /* apple */,
 				8BF814092F604C23949B3306 /* AutoFill */,
 				18A9AE92947ADE18065D754F /* Bindings */,
 				A3E27ED6DB4FC8FF5E90AC57 /* Externals */,
@@ -223,14 +229,23 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_8CEA74A6-C142-4E0B-9556-1B80F80FA109" /* x86_64 */ = {
+		FE711385FCB921055A05C949 /* apple */ = {
+			isa = PBXGroup;
+			children = (
+				977FB034E8FF855913DBED33 /* PrivacyInfo.xcprivacy */,
+			);
+			name = apple;
+			path = ../../../apple;
+			sourceTree = "<group>";
+		};
+		"TEMP_AD39B11B-57D1-4E64-A769-5A3AF2079BCB" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
 			sourceTree = "<group>";
 		};
-		"TEMP_CA4B071C-8751-4E0B-986E-0FBDEDC95C02" /* arm64 */ = {
+		"TEMP_B1EBF66D-92C7-4AF9-914B-23D19D94235E" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -268,6 +283,7 @@
 			buildPhases = (
 				CF1324F1CF7AFC81F30422EA /* Build UniFFI */,
 				7836048E2642F02E7E2B2C2E /* Sources */,
+				90157CEE8E71EA04F90B1B0C /* Resources */,
 				30D252E3AE7C365BC0B720DF /* Frameworks */,
 			);
 			buildRules = (
@@ -291,6 +307,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					873DC7FD64BEB9F9B6321055 = {
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -316,12 +333,21 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		90157CEE8E71EA04F90B1B0C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				71190F6048901A9E7EC12BB1 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D00FBFC6BF3DE9C50F033E12 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				F0F572A210936E72685349C3 /* Assets.xcassets in Resources */,
 				7648D5222C6855A4024B3330 /* LaunchScreen.storyboard in Resources */,
+				A7ECFD165098E3A55323BDE5 /* PrivacyInfo.xcprivacy in Resources */,
 				7D5829ADEC8508A4B64B152A /* assets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -473,6 +499,7 @@
 				);
 				CODE_SIGN_ENTITLEMENTS = MelonAutoFill/MelonAutoFill.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = MelonAutoFill/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -519,7 +546,7 @@
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = de.melonigemelone.app;
-				PRODUCT_NAME = "MelonApp";
+				PRODUCT_NAME = MelonApp;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
@@ -591,6 +618,7 @@
 				);
 				CODE_SIGN_ENTITLEMENTS = MelonAutoFill/MelonAutoFill.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "";
 				INFOPLIST_FILE = MelonAutoFill/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -637,7 +665,7 @@
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = de.melonigemelone.app;
-				PRODUCT_NAME = "MelonApp";
+				PRODUCT_NAME = MelonApp;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;

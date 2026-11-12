@@ -107,6 +107,12 @@ open apps/desktop/src-tauri/target/release/bundle/macos/MelonApp.app
 npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci
 ```
 
+Fertige Versionen gibt es als notarisiertes DMG im GitHub-Release und für das iPhone über
+TestFlight ([Apple-Releases](/melonapp/betrieb/pipelines/#apple-releases)). Beide Targets
+enthalten `apps/desktop/apple/PrivacyInfo.xcprivacy`: kein Tracking, keine erhobenen
+Daten, nur die von Rust-Standardbibliothek und WebKit genutzten Systemschnittstellen
+(Dateizeitstempel, Systemlaufzeit, UserDefaults) mit Apple-Begründungscode.
+
 Die Bundle-IDs und App-Group stehen in [ADR 0015](/melonapp/entscheidungen/0015-native-apple-clients/).
 Die Oberfläche berücksichtigt Safe Areas und verwendet mindestens 16 px große
 Eingabeschrift, damit iOS Eingaben nicht automatisch vergrößert. Die Kopfleiste klebt beim
@@ -157,6 +163,10 @@ Die Extension bindet `melon-ffi` statisch ein (`$(MELON_FFI_DIR)/libmelon_ffi.a`
 auf dem Build-Mac: im Simulator unauffällig, auf dem iPhone stürzte die Extension beim Start ab
 („Library not loaded“). Die Apple-CI prüft deshalb mit `otool -L`, dass die Extension nur
 System-Bibliotheken lädt.
+
+Für signierte Gerätebuilds `APPLE_DEVELOPMENT_TEAM` beim `xcodegen generate` und beim
+`tauri ios build` setzen: Tauri trägt das Team nur in die App ein, die Extension bekommt
+es aus `project.yml`. Ohne die Variable bleibt das Team im generierten Projekt leer.
 
 Nicht erneut `tauri ios init` ausführen, um eigene Extension-Einstellungen zu erhalten.
 Die Quelle des Xcode-Projekts ist `project.yml`; generierte UniFFI-Bindings und Libraries
