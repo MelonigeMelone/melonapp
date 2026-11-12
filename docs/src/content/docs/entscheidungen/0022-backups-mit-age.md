@@ -49,7 +49,8 @@ bei einem anderen Anbieter und auf einem Alltagsrechner, also an Orten mit eigen
   auf die Box schreiben kann, kann einen gültigen Dump unterschieben. Schreiben kann dort nur
   der Server-Sub-Account. Wie bisher gilt: nur eigene Dumps einspielen.
 - Der Server braucht das Paket `age`. Fehlt es oder `backup.recipients`, bricht die Kopie mit
-  Fehler ab, und `bin/melon-update` warnt nach dem Update. Eine Benachrichtigung bei
-  fehlgeschlagenen Backups gibt es noch nicht, nur das Journal.
+  Fehler ab, und `bin/melon-update` warnt nach dem Update. Mit `BACKUP_PING_URL` meldet
+  ein Überwachungsdienst das gescheiterte oder ausbleibende Backup
+  ([#94](https://github.com/MelonigeMelone/melonapp/issues/94)).
 - Ältere, unverschlüsselte Dumps auf der Box und in ihren Snapshots bleiben, bis man sie löscht
   bzw. bis die Snapshots auslaufen.

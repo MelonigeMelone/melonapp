@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 
 keep_days="${MELON_BACKUP_KEEP_DAYS:-14}"
@@ -11,6 +11,29 @@ stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 target="backups/melon-$stamp.dump"
 sealed="offsite/melon-$stamp.dump.age"
 trap 'rm -f "$target.tmp" "$sealed.tmp"' EXIT
+
+local_only=false
+if [[ "${1:-}" == "--local" || ! -f backup.env ]]; then
+  local_only=true
+else
+  source ./backup.env
+fi
+ping_url=""
+if [[ "$local_only" == false ]]; then
+  ping_url="${BACKUP_PING_URL:-}"
+fi
+
+ping() {
+  if [[ -n "$ping_url" ]]; then
+    curl -fsS -m 10 --retry 3 -o /dev/null --data-raw "$2" "$ping_url$1" || echo "could not reach $ping_url" >&2
+  fi
+}
+die() {
+  echo "$1" >&2
+  ping /fail "$(hostname): $1"
+  exit 1
+}
+trap 'ping /fail "$(hostname): melon-backup failed in line $LINENO (${BASH_COMMAND%% *})"' ERR
 
 prune() {
   find "$1" -maxdepth 1 -name "$2" -mtime "+$keep_days" -delete
@@ -25,20 +48,17 @@ prune backups 'melon-*.dump'
 find backups -maxdepth 1 -name 'restore-*.dump' -mmin +60 -delete
 echo "backup: $target ($(du -h "$target" | cut -f1))"
 
-if [[ "${1:-}" == "--local" || ! -f backup.env ]]; then
+if [[ "$local_only" == true ]]; then
+  exit 0
+fi
+if [[ -z "${BACKUP_TARGET:-}" ]]; then
+  ping "" "$(hostname): $target, no offsite copy configured"
   exit 0
 fi
 
-source ./backup.env
 recipients="${BACKUP_RECIPIENTS:-backup.recipients}"
-if ! command -v age > /dev/null; then
-  echo "age is not installed, nothing copied (apt install age)" >&2
-  exit 1
-fi
-if ! grep -qE '^(age1|ssh-)' "$recipients" 2> /dev/null; then
-  echo "no age recipient in $recipients, nothing copied (backups are only copied encrypted)" >&2
-  exit 1
-fi
+command -v age > /dev/null || die "age is not installed, nothing copied (apt install age)"
+grep -qE '^(age1|ssh-)' "$recipients" 2> /dev/null || die "no age recipient in $recipients, nothing copied (backups are only copied encrypted)"
 mkdir -p offsite
 chmod 700 offsite
 age -R "$recipients" -o "$sealed.tmp" "$target"
@@ -46,3 +66,4 @@ mv "$sealed.tmp" "$sealed"
 prune offsite 'melon-*.dump.age'
 rsync -a --exclude '*.tmp' -e "ssh -p ${BACKUP_PORT:-23} -i '$BACKUP_SSH_KEY' -o BatchMode=yes" offsite/ "$BACKUP_TARGET"
 echo "copied $sealed to $BACKUP_TARGET"
+ping "" "$(hostname): $sealed copied"

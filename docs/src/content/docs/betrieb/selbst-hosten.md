@@ -196,6 +196,23 @@ Server-Sub-Account per `sftp` (`rm melon-*.dump` im Zielordner), zu Hause im Zie
 (`melon-*.dump` und `melon-*.dump.part`). In den Snapshots der Box bleiben sie, bis diese
 auslaufen.
 
+**Benachrichtigung (empfohlen):** Ein gescheitertes Backup steht sonst nur im Journal.
+`bin/melon-backup` meldet sich deshalb nach jedem nächtlichen Lauf bei einem Überwachungsdienst,
+der [healthchecks.io](https://healthchecks.io) versteht (dort kostenlos, oder selbst gehostet).
+Bleibt die Meldung aus, weil der ganze Server steht, schlägt der Dienst ebenfalls Alarm.
+
+1. Bei healthchecks.io einen Check anlegen: Zeitplan „Cron“, `30 3 * * *`, Zeitzone
+   `Europe/Berlin`, Gnadenfrist 2 Stunden. Unter „Integrations“ E-Mail oder die Smartphone-App
+   (z. B. ntfy, Pushover) einrichten.
+2. Die Ping-URL in `backup.env` eintragen: `BACKUP_PING_URL=https://hc-ping.com/<uuid>`
+3. `sudo systemctl start melon-backup.service`, im Dashboard erscheint „up“.
+
+Gemeldet wird: Erfolg nach der verschlüsselten Kopie (oder nach dem lokalen Dump, wenn
+`BACKUP_TARGET` leer ist), `/fail` mit kurzer Ursache (z. B. „no age recipient …“ oder Zeile und
+Befehl), nichts bei `--local` vor Updates. Die Meldung enthält nur den Hostnamen und den
+Dateinamen, keine Zugangsdaten oder Pfade der Box. Die Ping-URL ist geheim zu halten (wer sie
+kennt, kann „up“ melden), sie steht deshalb in `backup.env` (`chmod 600`).
+
 **Kopie zu Hause (Windows, optional):** Der eigene Rechner holt sich alle 30 Tage den neuesten
 verschlüsselten Dump von der Storage Box. Er braucht dafür einen **eigenen, nur lesenden** Zugang,
 damit ein befallener Rechner dort nichts löschen kann.
