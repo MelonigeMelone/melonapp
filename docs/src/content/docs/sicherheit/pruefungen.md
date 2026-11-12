@@ -10,7 +10,7 @@ sidebar:
 | `cargo clippy -D warnings`, `cargo test` | jeder Push/PR | Code-Qualität und Sicherheits-Tests |
 | `cargo-deny` | jeder Push/PR + täglich | bekannte Schwachstellen (RustSec), Lizenzen, unbekannte Paketquellen |
 | CodeQL (`security-extended`) | jeder Push/PR + täglich | statische Code-Analyse für Rust und die Workflows. Testverzeichnisse (`crates/*/tests`, `apps/*/e2e`) sind ausgenommen (`.github/codeql/codeql-config.yml`), weil feste Testpasswörter und -Salts dort gewollt sind. |
-| gitleaks | jeder Push/PR + täglich | versehentlich committete Secrets |
+| gitleaks | jeder Push/PR + täglich | versehentlich committete Secrets im gesamten Verlauf des geprüften Stands (`--log-opts=HEAD`). Andere Branches prüft ihr eigener PR, damit ein fremder Branch nicht jeden PR rot macht. Geprüfte Fehlalarme stehen mit Fingerprint (Commit:Datei:Regel:Zeile) in `.gitleaksignore`; bisher nur ein erfundener Testwert in `export/formats.test.ts` (zweimal, weil der Squash-Merge einen neuen Commit erzeugt; Fingerprints gelten pro Commit). |
 | Fuzzing (`cargo-fuzz`, `fuzz/`) | täglich + manuell, je Ziel 2 Minuten | Abstürze und falsche Annahmen bei kaputten Eingaben. `formats`: `EncString`, `SealedKey`, Recovery-Key, öffentlicher Schlüssel (Parsen, Rundweg, Entschlüsseln mit falschem Schlüssel schlägt fehl). `passkey`: Passkey-Signatur mit beliebiger RP-ID, ID und Schlüssel. `native_session`: jede Methode der nativen Sitzung mit beliebigem JSON, Auflösen von Login-Nachweisen, Cache und biometrischem Zustand; Login-Schlüssel kommen nie im Klartext heraus. Funde landen als Artefakt `fuzz-<Ziel>`. |
 | GitHub Secret Scanning mit Push-Schutz | jeder Push | lehnt Pushes mit erkannten Secrets ab, bevor sie im Repo landen |
 | Dependabot-Alerts und -Sicherheitsupdates | laufend | Warnung und automatischer PR, sobald eine Abhängigkeit eine bekannte Schwachstelle hat |
@@ -110,6 +110,17 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | UniFFI-Cache: Roundtrip, falscher Schlüssel/Kontext und falsche Schlüssellänge | `swift_cache_roundtrip_and_attack_cases` |
 | Passkey-Registrierung/Assertion: Attestation, Signatur und Challenge-Bindung | `passkey::tests::registration_and_assertion_verify_and_bind_challenge` |
 | Passkey: falsche RP-ID, Schlüssel, Credential-ID, Hash und beschädigte Schlüsselhülle | `passkey::tests::wrong_rp_key_id_hash_and_tampered_key_fail` |
+| Passkey-Sync: Schlüssel neu verpackt signiert identisch | `passkey::tests::exported_key_reseals_and_signs_like_the_original` |
+| Passkey-Sync: Öffnen mit falschem Schlüssel, RP-ID, Credential-ID oder manipulierter Hülle scheitert | `passkey::tests::export_rejects_wrong_key_rp_id_and_tampering` |
+| Passkey-Sync: ungültiger Skalar, RP-ID oder ID wird nicht verpackt | `passkey::tests::seal_rejects_invalid_scalars_rp_and_ids` |
+| Passkey-Sync nur mit entsperrtem, eigenem Konto | `tests::passkey_keys_move_between_wrappings_only_with_the_unlocked_account` (`melon-native`) |
+| Briefkasten: fremder Scope, fremdes Konto, umbenannte oder manipulierte Datei wird ignoriert | `passkeys::tests::foreign_renamed_or_tampered_outbox_files_are_ignored` (Desktop) |
+| Briefkasten: Bestätigen löscht nur Briefkasten-Dateien dieses Scopes, keine Pfade | `passkeys::tests::acknowledge_only_deletes_this_scopes_outbox_files` (Desktop) |
+| Briefkasten und Veröffentlichen verweigern bei gesperrter Sitzung | `passkeys::tests::locked_session_reads_and_publishes_nothing` (Desktop) |
+| Übernahme in den Tresor: keine Doppelten, Papierkorb respektiert, Datei bleibt bei Fehler; gleiche Credential-ID in geteiltem Bereich verdrängt keinen neuen Passkey | `vault/passkeys.test.ts` |
+| Teilweise unlesbare Gerätedatei wird nicht gelöscht | `passkeys::tests::partly_unreadable_legacy_file_is_marked_partial` (Desktop) |
+| Extension: eigener Passkey gewinnt gegen gleichnamige ID aus dem Tresor | `apps/desktop/apple/Tests/main.swift` |
+| CSV-Export enthält keine Passkeys, verschlüsselter Export behält sie vollständig | `export/formats.test.ts` |
 | Swift: exakte HTTPS-Hosts, keine Eltern-/Subdomains, Cache-Ablauf und Aufrufe über echte UniFFI-Bindings | `bash scripts/test-apple-swift.sh` |
 
 | Native Authentifizierung | Test |

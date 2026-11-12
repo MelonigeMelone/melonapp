@@ -90,6 +90,10 @@ Jeder Eintrag hat einen **Typ**. Der Typ legt die Standardfelder fest:
 | Kreditkarte | Karteninhaber, Nummer, Ablaufdatum, Prüfnummer, PIN |
 | Identität | Name, Geburtsdatum, Adresse, Telefon, E-Mail |
 | WLAN | Netzwerkname, Passwort, Sicherheit |
+| Passkey | Website (RP-ID), Benutzername, Credential-ID, User-Handle, privater Schlüssel (verborgen, nie angezeigt) |
+
+Passkeys entstehen nur über die iOS-AutoFill-Extension und lassen sich nicht von Hand anlegen
+oder ihre Schlüsselfelder bearbeiten ([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)).
 
 Zusätzlich kann jeder Eintrag **eigene Abschnitte und Felder** haben, mit frei wählbarem Namen:
 
@@ -114,4 +118,4 @@ und braucht keine Verbindung nach außen.
 ## Später
 
 - **Personengruppen** („Familie“), die man mehreren Bereichen auf einmal hinzufügt
-- einzelnen Eintrag per Link teilen, Passkeys, Anhänge
+- einzelnen Eintrag per Link teilen, Anhänge

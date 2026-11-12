@@ -1,3 +1,5 @@
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+mod passkeys;
 mod platform;
 use melon_native::Session;
 use std::sync::Mutex;
@@ -35,6 +37,9 @@ pub fn run() {
             platform::biometric_keeps_token,
             platform::biometric_disable,
             platform::autofill_publish,
+            platform::autofill_active,
+            platform::passkeys_pending,
+            platform::passkeys_acknowledge,
             platform::is_ios
         ])
         .setup(|app| {

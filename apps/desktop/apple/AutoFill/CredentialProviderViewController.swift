@@ -172,7 +172,9 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
                 } else if let parameters {
                     let matches = try vault.withKey { key in
                         try self.cancellation.check()
-                        return try vault.passkeys(key: key).filter { $0.rp == parameters.relyingPartyIdentifier && (parameters.allowedCredentials.isEmpty || parameters.allowedCredentials.contains($0.id)) }
+                        let all = vault.passkeys(key: key)
+                        vault.refreshSuggestions(all)
+                        return all.filter { $0.rp == parameters.relyingPartyIdentifier && (parameters.allowedCredentials.isEmpty || parameters.allowedCredentials.contains($0.id)) }
                     }
                     result = .passkeys(matches, parameters, vault)
                 } else {
@@ -249,15 +251,14 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
               request.supportedAlgorithms.contains(.ES256), !identity.userHandle.isEmpty, identity.userHandle.count <= 64 else { throw VaultError.invalid }
         return try vault.withKey { key in
             try cancellation.check()
-            var stored = try vault.passkeys(key: key)
+            let stored = vault.passkeys(key: key)
             if #available(iOS 18.0, *), let excluded = request.excludedCredentials {
                 guard !stored.contains(where: { item in item.rp == identity.relyingPartyIdentifier && excluded.contains(where: { $0.credentialID == item.id }) }) else { throw VaultError.invalid }
             }
             let created = try registerPasskey(key: key, rp: identity.relyingPartyIdentifier)
-            stored.append(StoredPasskey(id: created.credentialId, rp: identity.relyingPartyIdentifier, userName: identity.userName, userHandle: identity.userHandle, encryptedKey: created.encryptedKey))
-            try vault.save(stored, key: key)
-            let suggestion = ASPasskeyCredentialIdentity(relyingPartyIdentifier: identity.relyingPartyIdentifier, userName: identity.userName, credentialID: created.credentialId, userHandle: identity.userHandle, recordIdentifier: created.credentialId.base64EncodedString())
-            ASCredentialIdentityStore.shared.saveCredentialIdentities([suggestion]) { _, _ in }
+            let passkey = StoredPasskey(id: created.credentialId, rp: identity.relyingPartyIdentifier, userName: identity.userName, userHandle: identity.userHandle, encryptedKey: created.encryptedKey)
+            try vault.saveOutbox(passkey, key: key)
+            vault.refreshSuggestions(stored + [passkey])
             return ASPasskeyRegistrationCredential(relyingParty: identity.relyingPartyIdentifier, clientDataHash: request.clientDataHash, credentialID: created.credentialId, attestationObject: created.attestation)
         }
     }
@@ -266,7 +267,9 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         guard let identity = request.credentialIdentity as? ASPasskeyCredentialIdentity else { throw VaultError.invalid }
         return try vault.withKey { key in
             try cancellation.check()
-            guard let stored = try vault.passkeys(key: key).first(where: { $0.rp == identity.relyingPartyIdentifier && $0.id == identity.credentialID && $0.userHandle == identity.userHandle }) else { throw VaultError.invalid }
+            let all = vault.passkeys(key: key)
+            vault.refreshSuggestions(all)
+            guard let stored = all.first(where: { $0.rp == identity.relyingPartyIdentifier && $0.id == identity.credentialID && $0.userHandle == identity.userHandle }) else { throw VaultError.invalid }
             return try complete(stored, hash: request.clientDataHash, key: key)
         }
     }

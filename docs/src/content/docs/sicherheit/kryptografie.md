@@ -198,3 +198,10 @@ unter dem Kontoschlüssel verschlüsselt; der authentifizierte Kontext enthält 
 Formatkennung, längenkodierte RP-ID und Credential-ID. Assertions signieren
 `authenticatorData || clientDataHash`. Falsche RP-ID, Credential-ID, Schlüssel und
 ungültige Hash-Länge werden abgelehnt. Details: [ADR 0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/).
+
+Für den Sync öffnet `open_passkey_key` einen so verpackten Schlüssel nur mit passender RP-ID,
+Credential-ID und gültigem P-256-Skalar; `seal_passkey_key` verpackt ihn mit denselben Prüfungen
+neu. Im Tresor liegt der Skalar im verschlüsselten Eintrag (Bereichsschlüssel, AAD mit Bereich,
+Eintrag und Schlüsselversion). Briefkasten-Dateien der Extension sind zusätzlich an Scope und
+Credential-ID im Dateinamen gebunden; umbenannte, fremde oder manipulierte Dateien werden
+ignoriert ([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)).

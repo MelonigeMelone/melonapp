@@ -36,8 +36,8 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 
 ## Native Apple-Clients
 
-Hardware-Biometrie, signierte App-Group-Zugriffe, Safari-AutoFill und gerätelokale
-Passkeys benötigen noch eine unabhängige und interaktive Abnahme
+Hardware-Biometrie, signierte App-Group-Zugriffe, Safari-AutoFill und Passkeys sind auf
+einem iPhone abgenommen; der Passkey-Sync aus ADR 0023 und eine unabhängige Prüfung stehen noch aus
 ([Label `apple`](https://github.com/MelonigeMelone/melonapp/issues?q=is%3Aopen+label%3Aapple)).
 Details und die begründete UniFFI-Generator-Wartungsausnahme stehen im
 [Apple-Review](/melonapp/sicherheit/apple-review/).

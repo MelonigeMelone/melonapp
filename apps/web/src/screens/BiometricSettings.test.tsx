@@ -16,6 +16,7 @@ function platform(configured = false) {
     enableBiometric: vi.fn().mockResolvedValue(undefined),
     disableBiometric: vi.fn().mockResolvedValue(undefined),
     publishAutofill: vi.fn().mockResolvedValue(undefined),
+    syncPasskeys: vi.fn().mockResolvedValue(undefined),
     setServer: vi.fn(),
     unlockBiometric: vi.fn(),
     biometricKeepsToken: vi.fn(),

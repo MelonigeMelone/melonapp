@@ -252,6 +252,23 @@ impl Session {
         Ok(value["metadata"].clone())
     }
 
+    pub fn passkey_open(
+        &mut self,
+        rp: &str,
+        id: &[u8],
+        encrypted_key: &str,
+    ) -> Result<Zeroizing<Vec<u8>>> {
+        self.expire();
+        melon_crypto::open_passkey_key(self.require_account()?, rp, id, encrypted_key)
+            .map_err(|_| "decrypt_failed")
+    }
+
+    pub fn passkey_seal(&mut self, rp: &str, id: &[u8], private: &[u8]) -> Result<String> {
+        self.expire();
+        melon_crypto::seal_passkey_key(self.require_account()?, rp, id, private)
+            .map_err(|_| "invalid_passkey")
+    }
+
     pub fn cache_seal(&mut self, scope: &str, plaintext: &[u8]) -> Result<String> {
         self.expire();
         if plaintext.len() > 32 * 1024 * 1024 {
@@ -790,6 +807,50 @@ mod tests {
         assert!(session.call("recoveryReset", json!({})).is_err());
         session.call("derive",json!({"password":"reset-password","salt":STANDARD.encode(b"0123456789abcdef"),"kdf":KdfParams::minimum()})).unwrap();
         assert_eq!(session.call("unlock",json!({"wrappedAccountKey":reset["wrappedAccountKey"],"encryptedPrivateKey":created["encryptedPrivateKey"]})).unwrap(),created["publicKey"]);
+    }
+
+    #[test]
+    fn passkey_keys_move_between_wrappings_only_with_the_unlocked_account() {
+        let (mut session, _) = account();
+        let device = SymmetricKey::from_bytes(
+            session
+                .biometric_key()
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        );
+        let created = melon_crypto::create_passkey(&device, "example.com").unwrap();
+        let id = created.credential_id.clone();
+        let private = session
+            .passkey_open("example.com", &id, &created.encrypted_key)
+            .unwrap();
+        let sealed = session.passkey_seal("example.com", &id, &private).unwrap();
+        assert!(
+            melon_crypto::assert_passkey(&device, "example.com", &id, &sealed, &[1; 32]).is_ok()
+        );
+        assert!(
+            session
+                .passkey_open("other.example", &id, &created.encrypted_key)
+                .is_err()
+        );
+        let (mut other, _) = account();
+        assert!(
+            other
+                .passkey_open("example.com", &id, &created.encrypted_key)
+                .is_err()
+        );
+        session.lock();
+        assert_eq!(
+            session
+                .passkey_open("example.com", &id, &created.encrypted_key)
+                .err(),
+            Some("locked")
+        );
+        assert_eq!(
+            session.passkey_seal("example.com", &id, &private).err(),
+            Some("locked")
+        );
     }
 
     #[test]
