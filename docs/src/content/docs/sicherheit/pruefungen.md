@@ -107,6 +107,15 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | UniFFI-Cache: Roundtrip, falscher Schlüssel/Kontext und falsche Schlüssellänge | `swift_cache_roundtrip_and_attack_cases` |
 | Passkey-Registrierung/Assertion: Attestation, Signatur und Challenge-Bindung | `passkey::tests::registration_and_assertion_verify_and_bind_challenge` |
 | Passkey: falsche RP-ID, Schlüssel, Credential-ID, Hash und beschädigte Schlüsselhülle | `passkey::tests::wrong_rp_key_id_hash_and_tampered_key_fail` |
+| Passkey-Sync: Schlüssel neu verpackt signiert identisch | `passkey::tests::exported_key_reseals_and_signs_like_the_original` |
+| Passkey-Sync: Öffnen mit falschem Schlüssel, RP-ID, Credential-ID oder manipulierter Hülle scheitert | `passkey::tests::export_rejects_wrong_key_rp_id_and_tampering` |
+| Passkey-Sync: ungültiger Skalar, RP-ID oder ID wird nicht verpackt | `passkey::tests::seal_rejects_invalid_scalars_rp_and_ids` |
+| Passkey-Sync nur mit entsperrtem, eigenem Konto | `tests::passkey_keys_move_between_wrappings_only_with_the_unlocked_account` (`melon-native`) |
+| Briefkasten: fremder Scope, fremdes Konto, umbenannte oder manipulierte Datei wird ignoriert | `passkeys::tests::foreign_renamed_or_tampered_outbox_files_are_ignored` (Desktop) |
+| Briefkasten: Bestätigen löscht nur Briefkasten-Dateien dieses Scopes, keine Pfade | `passkeys::tests::acknowledge_only_deletes_this_scopes_outbox_files` (Desktop) |
+| Briefkasten und Veröffentlichen verweigern bei gesperrter Sitzung | `passkeys::tests::locked_session_reads_and_publishes_nothing` (Desktop) |
+| Übernahme in den Tresor: keine Doppelten, Papierkorb respektiert, Datei bleibt bei Fehler | `vault/passkeys.test.ts` |
+| CSV-Export enthält keine Passkeys, verschlüsselter Export behält sie vollständig | `export/formats.test.ts` |
 | Swift: exakte HTTPS-Hosts, keine Eltern-/Subdomains, Cache-Ablauf und Aufrufe über echte UniFFI-Bindings | `bash scripts/test-apple-swift.sh` |
 
 | Native Authentifizierung | Test |

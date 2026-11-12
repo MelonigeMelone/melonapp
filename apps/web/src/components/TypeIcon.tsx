@@ -1,6 +1,7 @@
 import Avatar from '@mui/material/Avatar';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined';
+import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import WifiOutlinedIcon from '@mui/icons-material/WifiOutlined';
@@ -13,6 +14,7 @@ export const TYPE_ICONS: Record<ItemType, SvgIconComponent> = {
   card: CreditCardOutlinedIcon,
   identity: BadgeOutlinedIcon,
   wifi: WifiOutlinedIcon,
+  passkey: KeyOutlinedIcon,
 };
 
 export function ItemAvatar({ item }: { item: Item }) {

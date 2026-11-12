@@ -120,12 +120,18 @@ Entsperren. Der Snapshot ist höchstens 24 Stunden gültig; Änderungen erforder
 neue Veröffentlichung. Aktiviere anschließend MelonApp unter iOS **Einstellungen →
 Allgemein → Automatisch ausfüllen & Passwörter** (die Bezeichnung variiert je iOS-Version).
 
-Die Extension enthält iOS-17-Callbacks für Passkey-Registrierung und Assertions. Diese
-Passkeys bleiben gerätelokal: keine Synchronisation, kein Export, keine
-Wiederherstellungszusage. Die Authenticator-Daten melden trotzdem BE und BS („gesichert“), weil iOS
-Passkeys von Drittanbietern sonst ablehnt (siehe [ADR 0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/)).
-Relying Parties halten sie deshalb für synchronisiert; Passwort oder zweiten Faktor behalten. Biometrie, App-Group-Provisioning und echte Safari-Passkey-
-Abläufe sind vor Einsatz mit wichtigen Konten noch auf einem Gerät zu prüfen.
+Die Extension enthält iOS-17-Callbacks für Passkey-Registrierung und Assertions. Die
+Authenticator-Daten melden BE und BS („gesichert“), weil iOS Passkeys von Drittanbietern sonst
+ablehnt (siehe [ADR 0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/)).
+
+Neue Passkeys landen zuerst als einzelne Datei im Briefkasten der App Group
+(`{scope}.outbox.{id}.enc`). Nach jedem Entsperren übernimmt die App sie als Eintrag vom Typ
+„Passkey“ in den persönlichen Bereich und löscht die Datei erst danach. Ist AutoFill für das
+Konto schon aktiv, veröffentlicht die App gleich neu; dabei landen alle Passkeys aus dem
+Tresor als `{scope}.synced.enc` bei der Extension. Ein neues iPhone bekommt so nach Anmelden,
+Face ID einrichten und „Passwörter für iOS AutoFill aktualisieren“ alle Passkeys zurück
+([ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/)). Alte gerätelokale Passkeys
+aus `{scope}.passkeys.enc` werden dabei einmalig mit übernommen.
 
 Die Extension nutzt dieselben Farben wie die App (`MelonTheme` in
 `CredentialProviderViewController.swift`): fast schwarzer bzw. kühl-weißer Hintergrund und

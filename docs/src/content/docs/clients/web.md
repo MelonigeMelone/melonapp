@@ -71,7 +71,7 @@ den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
 ([Konzept](/melonapp/konzept/tresore/#eintragstypen-und-eigene-felder)):
 
 ```ts
-{ type: 'login' | 'note' | 'card' | 'identity' | 'wifi',
+{ type: 'login' | 'note' | 'card' | 'identity' | 'wifi' | 'passkey',
   title, notes,
   fields:   [{ id, label, kind, value }],
   sections: [{ id, title, fields: [...] }],
@@ -91,6 +91,10 @@ den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
 - **`seq`** zählt jede gespeicherte Version hoch (Rollback-Erkennung, siehe unten). Einträge
   ohne `seq` gelten als 0.
 - **Suche** durchsucht Titel und sichtbare Felder (Text, URL, E-Mail, Telefon), nie verborgene.
+- **Passkeys** (`passkey`) entstehen nur über die iOS-Extension (`vault/passkeys.ts` übernimmt sie
+  aus dem Briefkasten). Ihr Schlüsselfeld `privateKey` blendet die Detailansicht aus
+  (`visibleFields`), der Editor zeigt die Passkey-Felder nicht, und „Neu“ bietet den Typ nicht an
+  (`CREATABLE_TYPES`). Siehe [ADR 0022](/melonapp/entscheidungen/0022-passkeys-im-tresor/).
 - Links entstehen nur für `http(s):`, `mailto:` und `tel:` (`safeHref`).
 
 ## Sync
@@ -198,7 +202,7 @@ Zugriff hat. Die Datei entsteht nur im Browser.
 | Format | Wofür | Inhalt |
 |---|---|---|
 | **Verschlüsselt** (`.melon.json`, empfohlen) | eigenes Backup, Umzug auf einen anderen MelonApp-Server | jeder Eintrag vollständig (alle Typen, Abschnitte, Verlauf, 2FA) mit dem Namen seines Bereichs. Verschlüsselt mit einem eigenen **Export-Passwort** (mindestens 12 Zeichen), siehe [Kryptografie](/melonapp/sicherheit/kryptografie/#export-exportrs). |
-| **Unverschlüsselt** (CSV im Bitwarden-Format) | Umzug zu einem anderen Passwortmanager | Logins mit allen Websites, Benutzername, Passwort und 2FA-Schlüssel; andere Typen als Notiz mit ihren Feldern; Bereich als Ordner. Kein Verlauf. |
+| **Unverschlüsselt** (CSV im Bitwarden-Format) | Umzug zu einem anderen Passwortmanager | Logins mit allen Websites, Benutzername, Passwort und 2FA-Schlüssel; andere Typen als Notiz mit ihren Feldern; Bereich als Ordner. Kein Verlauf. **Ohne Passkeys**, ihr privater Schlüssel gehört nicht in Klartext. |
 
 - **Beide brauchen das Master-Passwort.** Wer an einem entsperrten Gerät sitzt, kann so nicht mit
   ein paar Klicks alles mitnehmen. Gegen Schadcode in der Seite schützt das nicht, der kommt ohnehin
