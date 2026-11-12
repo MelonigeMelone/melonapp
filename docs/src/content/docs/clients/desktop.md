@@ -28,6 +28,15 @@ Rust sperrt nach fünf Minuten ohne gemeldete Eingabe, zusätzlich zum vorhanden
 UI-Timer. Fokusverlust sperrt sofort. `⌘⇧M` bringt auf macOS das Fenster nach vorn,
 entsperrt es aber nicht. Hintergrund-Sperren werden als Ereignis an React gemeldet.
 
+Beim Sperren meldet sich die App beim Server ab, **außer** biometrisches Entsperren ist
+aktiv: Dann steckt das Sitzungstoken im verschlüsselten Wiederaufnahmezustand und muss gültig
+bleiben. Es läuft trotzdem nach der normalen Sitzungsdauer ab.
+
+Schlägt das Entsperren fehl (falsches Passwort), verwirft die native Sitzung alles, auch den
+schon abgeleiteten Login-Nachweis. Ein Serverwechsel wird nur abgelehnt, solange ein Tresor
+offen ist. Eine begonnene, aber nicht abgeschlossene Anmeldung (z. B. falsche Server-Adresse)
+wird beim Wechsel verworfen, ihr Login-Nachweis geht also nie an den neuen Server.
+
 Erfolgreiche GET-Antworten werden zusätzlich mit dem Kontoschlüssel verschlüsselt unter
 dem App-Datenverzeichnis gespeichert. Der authentifizierte Kontext enthält Server und
 API-Pfad, Dateinamen sind SHA-256-Ableitungen dieses Kontextes. Temporäre Dateien haben
@@ -40,8 +49,16 @@ Einträge dürfen nicht unbemerkt durch veraltete Daten ersetzt werden.
 Im Konto kann biometrisches Entsperren aktiviert oder deaktiviert werden. Der
 Kontoschlüssel liegt ausschließlich in der Data Protection Keychain, mit
 `biometryCurrentSet` und `WhenPasscodeSetThisDeviceOnly`, ohne iCloud-Synchronisation.
-Der verschlüsselte Wiederaufnahmezustand enthält Identität und Sitzungsdaten.
-Ein anderer Schlüssel, Server oder manipuliertes Dokument wird abgelehnt.
+Der verschlüsselte Wiederaufnahmezustand enthält Identität und Sitzungsdaten. Er hat einen
+eigenen Verschlüsselungskontext (`melon/native/biometric/v1/…`), getrennt vom API- und
+AutoFill-Cache (`melon/native/cache/v1/…`). Eine zwischengespeicherte Server-Antwort lässt sich
+so nie als Wiederaufnahmezustand ausgeben. Ein anderer Schlüssel, Server oder manipuliertes
+Dokument wird abgelehnt.
+
+„Biometrisches Entsperren deaktivieren“ löscht den Schlüsselbund-Eintrag und den
+Wiederaufnahmezustand, auf iOS zusätzlich den AutoFill-Schlüssel (`de.melonapp.autofill.v1`),
+die Passwort-Kopie in der App Group und `active.txt`. Gespeicherte Passkeys bleiben
+verschlüsselt erhalten und sind nach erneutem Aktivieren wieder nutzbar.
 
 Ein fehlendes Entitlement, abgebrochene Biometrie oder nicht verfügbare Hardware führt
 zu einem Fehler; es gibt keinen ungeschützten Ersatzspeicher. Nach Änderung der

@@ -31,6 +31,7 @@ pub fn run() {
             platform::api_request,
             platform::biometric_enable,
             platform::biometric_unlock,
+            platform::biometric_enabled,
             platform::biometric_disable,
             platform::autofill_publish,
             platform::is_ios

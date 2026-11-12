@@ -104,6 +104,10 @@ fn sealed(
     Ok(seal_vault_key(&public, key, &context(vault, user, version)).to_string())
 }
 
+fn biometric_aad(scope: &str) -> Vec<u8> {
+    format!("melon/native/biometric/v1/{scope}").into_bytes()
+}
+
 fn wipe(value: &mut Value) {
     match value {
         Value::String(s) => s.zeroize(),
@@ -122,7 +126,18 @@ impl Session {
     }
 
     pub fn is_locked(&self) -> bool {
-        self.account.is_none() && self.wrapping.is_none() && self.recovery.is_none()
+        self.account.is_none()
+            && self.wrapping.is_none()
+            && self.recovery.is_none()
+            && self.proofs.is_empty()
+    }
+
+    pub fn prepare_server_change(&mut self) -> Result<()> {
+        if self.account.is_some() {
+            return Err("lock_before_changing_server");
+        }
+        self.lock();
+        Ok(())
     }
 
     pub fn lock(&mut self) {
@@ -175,7 +190,9 @@ impl Session {
             )
             .map_err(|_| "invalid_request")?,
         );
-        self.cache_seal(scope, &plaintext)
+        Ok(account
+            .encrypt(&plaintext, &biometric_aad(scope))
+            .to_string())
     }
 
     pub fn biometric_restore(&mut self, key: &[u8], scope: &str, snapshot: &str) -> Result<Value> {
@@ -186,10 +203,7 @@ impl Session {
         let bytes: [u8; 32] = key.try_into().map_err(|_| "invalid_key")?;
         let account = SymmetricKey::from_bytes(bytes);
         let plaintext = account
-            .decrypt(
-                &parse(snapshot)?,
-                format!("melon/native/cache/v1/{scope}").as_bytes(),
-            )
+            .decrypt(&parse(snapshot)?, &biometric_aad(scope))
             .map_err(|_| "decrypt_failed")?;
         let value: Value = serde_json::from_slice(&plaintext).map_err(|_| "invalid_cache")?;
         let identity = KeyPair::open_with(&account, &parse(text(&value, "identity")?)?)
@@ -230,6 +244,9 @@ impl Session {
     pub fn call(&mut self, method: &str, mut a: Value) -> Result<Value> {
         let result = self.call_inner(method, &a);
         wipe(&mut a);
+        if result.is_err() && matches!(method, "unlock" | "createAccount") {
+            self.lock();
+        }
         let mut result = result?;
         if matches!(method, "derive" | "recoveryAuth") {
             self.hide_proof(&mut result)?;
@@ -757,6 +774,61 @@ mod tests {
                 Some("unsupported_method")
             );
         }
+    }
+
+    #[test]
+    fn failed_unlock_discards_pending_auth_proofs() {
+        let (mut session, created) = account();
+        let handle = session
+            .call("derive",json!({"password":"wrong", "salt":STANDARD.encode(b"0123456789abcdef"), "kdf":KdfParams::minimum()}))
+            .unwrap();
+        assert!(!session.is_locked());
+        let args = json!({"wrappedAccountKey":created["wrappedAccountKey"], "encryptedPrivateKey":created["encryptedPrivateKey"]});
+        assert_eq!(session.call("unlock", args).err(), Some("decrypt_failed"));
+        assert!(session.is_locked());
+        assert_eq!(
+            session
+                .resolve_auth_proofs(&mut json!({ "auth_key": handle }))
+                .err(),
+            Some("invalid_auth_handle")
+        );
+    }
+
+    #[test]
+    fn server_change_drops_an_abandoned_login_but_not_an_open_vault() {
+        let mut session = Session::default();
+        let handle = session
+            .call("derive",json!({"password":"pw", "salt":STANDARD.encode(b"0123456789abcdef"), "kdf":KdfParams::minimum()}))
+            .unwrap();
+        assert!(session.prepare_server_change().is_ok());
+        assert!(session.is_locked());
+        assert!(
+            session
+                .resolve_auth_proofs(&mut json!({ "auth_key": handle }))
+                .is_err()
+        );
+        let (mut open, _) = account();
+        assert_eq!(
+            open.prepare_server_change().err(),
+            Some("lock_before_changing_server")
+        );
+        assert!(open.account.is_some());
+    }
+
+    #[test]
+    fn api_cache_and_biometric_snapshot_cannot_be_swapped() {
+        let (mut session, _) = account();
+        let scope = "https://melon.example/biometric";
+        let snapshot = session.biometric_snapshot(scope, json!({})).unwrap();
+        assert!(session.cache_open(scope, &snapshot).is_err());
+        let cached = session
+            .cache_seal(scope, br#"{"identity":"x","metadata":{}}"#)
+            .unwrap();
+        let key = session.biometric_key().unwrap();
+        assert_eq!(
+            session.biometric_restore(&key, scope, &cached).err(),
+            Some("decrypt_failed")
+        );
     }
 
     #[test]

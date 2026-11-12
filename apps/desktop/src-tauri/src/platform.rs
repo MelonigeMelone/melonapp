@@ -81,9 +81,9 @@ pub fn get_server(app: tauri::AppHandle) -> Result<String, String> {
 pub fn set_server(app: tauri::AppHandle, value: String) -> Result<(), String> {
     let value = validated_server(&value)?;
     let state = app.state::<Mutex<Session>>();
-    let session = state.lock().map_err(|_| "session_unavailable")?;
-    if server(&app).ok().as_ref() != Some(&value) && !session.is_locked() {
-        return Err("lock_before_changing_server".into());
+    let mut session = state.lock().map_err(|_| "session_unavailable")?;
+    if server(&app).ok().as_ref() != Some(&value) {
+        session.prepare_server_change().map_err(str::to_owned)?;
     }
     write(&app, "server.txt", value.as_bytes())
 }
@@ -224,6 +224,11 @@ pub async fn biometric_unlock(app: tauri::AppHandle) -> Result<Value, String> {
 }
 
 #[tauri::command]
+pub fn biometric_enabled(app: tauri::AppHandle) -> bool {
+    location(&app, "biometric.enc").is_ok_and(|path| path.exists())
+}
+
+#[tauri::command]
 pub fn biometric_disable(app: tauri::AppHandle) -> Result<(), String> {
     let scope = format!("{}/biometric", server(&app)?);
     if passwords::delete_generic_password_options(options(&scope))
@@ -234,6 +239,43 @@ pub fn biometric_disable(app: tauri::AppHandle) -> Result<(), String> {
     let path = location(&app, "biometric.enc")?;
     if path.exists() {
         fs::remove_file(path).map_err(|_| "storage_unavailable")?;
+    }
+    autofill_remove()
+}
+
+#[cfg(not(target_os = "ios"))]
+fn autofill_remove() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(target_os = "ios")]
+fn autofill_remove() -> Result<(), String> {
+    use objc2_foundation::{NSFileManager, NSString};
+    let group = "group.de.melonapp.shared";
+    let Some(url) = NSFileManager::defaultManager()
+        .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(group))
+    else {
+        return Ok(());
+    };
+    let directory = PathBuf::from(url.path().ok_or("app_group_unavailable")?.to_string());
+    let active = directory.join("active.txt");
+    let Ok(scope) = fs::read_to_string(&active) else {
+        return Ok(());
+    };
+    let mut config = PasswordOptions::new_generic_password("de.melonapp.autofill.v1", scope.trim());
+    config.use_protected_keychain();
+    config.set_access_group(group);
+    if passwords::delete_generic_password_options(config).is_err_and(|e| e.code() != -25300) {
+        return Err("autofill_unavailable".into());
+    }
+    for name in [
+        format!("{}.passwords.enc", scope.trim()),
+        "active.txt".to_owned(),
+    ] {
+        let path = directory.join(name);
+        if path.exists() {
+            fs::remove_file(path).map_err(|_| "storage_unavailable")?;
+        }
     }
     Ok(())
 }

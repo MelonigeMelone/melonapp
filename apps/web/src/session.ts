@@ -139,7 +139,10 @@ export async function recoverAccount(email: string, recoveryKey: string, newPass
 
 export async function lock(session: Session | null) {
   await cryptoCall('lock');
-  if (session && !nativePlatform()) await api.logout(session.token).catch(() => undefined);
+  if (!session) return;
+  const platform = nativePlatform();
+  if (platform && (await platform.biometricEnabled().catch(() => false))) return;
+  await api.logout(session.token).catch(() => undefined);
 }
 
 const messages: Record<string, string> = {
