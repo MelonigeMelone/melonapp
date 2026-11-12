@@ -1,6 +1,7 @@
 import { nativePlatform } from './platform';
 import { api, ApiError, authed, DEFAULT_KDF, NetworkError, type Kdf } from './api';
 import { cryptoCall } from './crypto/client';
+import { deviceName } from './device';
 import { newId } from './vault/item';
 import { VaultsManager } from './vault/manager';
 
@@ -27,7 +28,7 @@ export async function login(email: string, password: string): Promise<Session> {
   const pre = await api.prelogin(email);
   const authKey = await cryptoCall('derive', { password, salt: pre.salt, kdf: pre.kdf });
   try {
-    const res = await api.login({ email, auth_key: authKey });
+    const res = await api.login({ email, auth_key: authKey, device: deviceName() });
     await cryptoCall('unlock', {
       wrappedAccountKey: res.wrapped_account_key,
       encryptedPrivateKey: res.encrypted_private_key,
@@ -72,7 +73,7 @@ export async function register(email: string, password: string, inviteToken: str
       },
       invite_token: inviteToken,
     });
-    const res = await api.login({ email, auth_key: authKey });
+    const res = await api.login({ email, auth_key: authKey, device: deviceName() });
     return open(email, res.user_id, res.token, {
       kdf: DEFAULT_KDF,
       salt,
@@ -88,6 +89,18 @@ export async function register(email: string, password: string, inviteToken: str
 
 function reauth(session: Session, password: string) {
   return { password, salt: session.salt, kdf: session.kdf, wrappedAccountKey: session.wrappedAccountKey };
+}
+
+export function sealExport(session: Session, password: string, exportPassword: string, plaintext: string): Promise<string> {
+  return cryptoCall('sealExport', { ...reauth(session, password), exportPassword, plaintext });
+}
+
+export async function checkPassword(session: Session, password: string): Promise<void> {
+  await cryptoCall('checkPassword', reauth(session, password));
+}
+
+export function openExport(password: string, data: string): Promise<string> {
+  return cryptoCall('openExport', { password, data });
 }
 
 export async function setupRecovery(session: Session, password: string): Promise<{ recoveryKey: string; account: Partial<Account> }> {

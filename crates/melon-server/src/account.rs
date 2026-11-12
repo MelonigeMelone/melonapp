@@ -208,7 +208,7 @@ pub async fn recover_start(
         return Err(ApiError::Unauthorized);
     };
     state.attempt_succeeded(&limiter_key, ip_key.as_deref());
-    let token = create_session(&state, user_id, "recovery", RECOVERY_MINUTES).await?;
+    let token = create_session(&state, user_id, "recovery", RECOVERY_MINUTES, "").await?;
     Ok(Json(RecoverStarted {
         token,
         expires_in_seconds: i64::from(RECOVERY_MINUTES) * 60,

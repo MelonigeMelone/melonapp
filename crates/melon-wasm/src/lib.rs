@@ -272,6 +272,17 @@ impl Recovery {
     }
 }
 
+#[wasm_bindgen(js_name = sealExport)]
+pub fn seal_export(password: &str, plaintext: &str) -> Result<String, JsError> {
+    melon_crypto::seal_export(password, plaintext.as_bytes()).map_err(js_err)
+}
+
+#[wasm_bindgen(js_name = openExport)]
+pub fn open_export(password: &str, file: &str) -> Result<String, JsError> {
+    let plain = melon_crypto::open_export(password, file).map_err(js_err)?;
+    String::from_utf8(plain.to_vec()).map_err(js_err)
+}
+
 #[wasm_bindgen]
 pub fn fingerprint(public_key: &str) -> Result<String, JsError> {
     let key = PublicKey::from_base64(public_key).map_err(js_err)?;

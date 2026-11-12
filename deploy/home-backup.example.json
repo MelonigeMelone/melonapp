@@ -1,0 +1,8 @@
+{
+  "Host": "u123456-sub2.your-storagebox.de",
+  "User": "u123456-sub2",
+  "Key": "C:\\Users\\DEIN-NAME\\.melonapp\\storagebox",
+  "Port": 23,
+  "IntervalDays": 30,
+  "Keep": 12
+}

@@ -29,13 +29,15 @@ CSP-Header von Caddy übernehmen ([ADR 0019](/melonapp/entscheidungen/0019-csp-n
 
 ## Einrichten
 
-1. Server anlegen (Ubuntu LTS), Docker installieren, Firewall nur für 22, 80 und 443 öffnen.
+1. Server anlegen (Ubuntu LTS), Nutzer `melon` in der Gruppe `docker`, Docker installieren,
+   Firewall nur für 22, 80 und 443 (TCP und UDP) öffnen.
 2. DNS-Eintrag (A/AAAA) für deine Domain auf den Server zeigen lassen.
-3. Den Ordner `deploy/` auf den Server kopieren und dort:
+3. Den Ordner `deploy/` nach `/home/melon/melonapp` kopieren und dort:
 
 ```sh
-cp .env.example .env
-docker compose up -d
+cp .env.example .env && chmod 600 .env
+chmod +x bin/*
+docker compose up -d --no-build
 ```
 
 ### `.env`
@@ -43,43 +45,159 @@ docker compose up -d
 | Variable | Wert |
 |---|---|
 | `MELON_DOMAIN` | z. B. `vault.example.com` |
-| `POSTGRES_PASSWORD` | `openssl rand -base64 48` |
-| `MELON_SERVER_SECRET` | `openssl rand -base64 48` |
+| `POSTGRES_PASSWORD` | `openssl rand -hex 32`. **Hex, nicht base64**: Das Passwort steht in einer Verbindungs-URL, `/` und `+` würden sie zerbrechen. Nach dem ersten Start nie mehr ändern, Postgres liest es nur beim Anlegen der Datenbank. |
+| `MELON_SERVER_SECRET` | `openssl rand -hex 32` |
 | `MELON_ALLOW_REGISTRATION` | zum Anlegen der Konten `true`, danach `false` und `docker compose up -d` |
 | `MELON_CORS_ORIGINS` | nur für die Browser-Erweiterung (M4) nötig. Die Web-App läuft auf derselben Domain. |
-| `MELON_IMAGE` | `ghcr.io/melonigemelone/melonapp-server:latest` |
-| `MELON_WEB_IMAGE` | `ghcr.io/melonigemelone/melonapp-web:latest` (Caddy + Web-App) |
+| `MELON_IMAGE` | `ghcr.io/melonigemelone/melonapp-server:latest`, ab dem ersten Update eine feste Version (setzt `bin/melon-update`) |
+| `MELON_WEB_IMAGE` | `ghcr.io/melonigemelone/melonapp-web:latest` (Caddy + Web-App), ebenso |
 
 Alle Variablen des Servers: [Konfiguration](/melonapp/server/konfiguration/).
 
 Danach `https://<deine-domain>` öffnen und unter **Konto erstellen** die Konten anlegen.
 Anschließend die Registrierung wieder ausschalten.
 
-## Updates
+## Updates: Version per Tag
 
-```sh
-docker compose pull && docker compose up -d
+Der Server läuft immer auf einer **festen Version**, nie auf `latest`
+([ADR 0020](/melonapp/entscheidungen/0020-deploy-per-tag/)). Ein Update ist ein Git-Tag:
+
+```text
+git tag v1.2.0 && git push origin v1.2.0
+   └─► Workflow „Images“ baut melonapp-server:1.2.0 und melonapp-web:1.2.0
+       └─► Job „Deploy“: ssh melon@server "deploy 1.2.0"
+           └─► bin/melon-deploy-ssh lässt nur genau diesen Befehl zu
+               └─► bin/melon-update 1.2.0
 ```
 
-Für einen festen, geprüften Stand die Images in der `.env` auf einen Commit festlegen statt
-`latest` zu ziehen. Jeder Build auf `main` bekommt einen Tag `sha-<kurzer Commit>`:
+`bin/melon-update <x.y.z>` macht auf dem Server:
 
-```sh
-MELON_IMAGE=ghcr.io/melonigemelone/melonapp-server:sha-4a66521
-MELON_WEB_IMAGE=ghcr.io/melonigemelone/melonapp-web:sha-4a66521
-```
+1. `docker-compose.yml`, `Caddyfile` und `bin/*` **von genau diesem Tag** holen. Schlägt das
+   fehl, bleibt alles unverändert.
+2. Backup (`bin/melon-backup`).
+3. Die Images in `.env` auf `:<x.y.z>` festlegen, `docker compose pull` und `up -d`.
+4. Bis zu 60 Sekunden auf `/health` warten.
+5. Klappt etwas nicht: alte Dateien und alte `.env` zurück, alte Version wieder starten, der
+   Workflow wird rot. Hat die neue Version die Datenbank schon migriert, das Backup aus
+   Schritt 2 mit `bin/melon-restore` einspielen.
 
-Ein Update ist dann bewusst: Tag ändern, `docker compose up -d`.
+Ein zweites Update gleichzeitig wird abgelehnt (`flock`). Von Hand geht dasselbe mit
+`bin/melon-update 1.2.0` auf dem Server. Vorabversionen (`v1.2.0-rc1`) bauen nur Images.
+
+**Wer deployen darf:** Ein Tag startet Code mit Root-Rechten auf dem Server. Deshalb:
+
+- Ein Repo-Ruleset erlaubt nur Admins, `v*`-Tags anzulegen, zu ändern oder zu löschen.
+- Das Environment `production` gibt seine Secrets nur an Läufe für `v*`-Tags.
+- Der Job prüft vor dem SSH-Aufruf, dass der getaggte Commit auf `main` liegt
+  (`git merge-base --is-ancestor`). Ein Tag auf einen ungemergten Branch deployt nichts.
+- Wer den Deploy-Schlüssel stiehlt, kann jede vorhandene Version einspielen, auch eine ältere,
+  aber keine eigenen Befehle ausführen.
+
+### Deploy-Zugang einrichten (einmal)
+
+1. Auf dem eigenen Rechner einen Schlüssel nur für das Deployment erzeugen:
+   `ssh-keygen -t ed25519 -N "" -C github-deploy -f melon-deploy`
+2. Auf dem Server in `/home/melon/.ssh/authorized_keys` eine Zeile anhängen, die den Schlüssel
+   auf den einen Befehl festlegt:
+   `command="/home/melon/melonapp/bin/melon-deploy-ssh",restrict ssh-ed25519 AAAA… github-deploy`
+3. In GitHub ein Environment `production` mit drei Secrets anlegen:
+
+   ```sh
+   gh secret set DEPLOY_SSH_KEY --env production < melon-deploy
+   gh secret set DEPLOY_HOST --env production --body app.example.com
+   ssh-keyscan app.example.com | gh secret set DEPLOY_KNOWN_HOSTS --env production
+   ```
+
+   `ssh-keyscan` unter Windows (OpenSSH 9.5) bricht bei aktuellen Servern mit `unsupported KEX
+   method` ab und liefert nichts, das Secret ist dann leer und der erste Deploy scheitert mit
+   `Host key verification failed`. Dann den Befehl in Git Bash oder auf dem Server ausführen und
+   den Fingerabdruck mit `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` auf dem Server vergleichen.
+4. Die lokale Datei `melon-deploy` löschen.
+5. Port 22 muss für GitHub erreichbar sein. Steht in der Firewall nur die eigene IP, kommt der
+   Workflow nicht durch. Port 22 für alle ist in Ordnung, solange nur SSH-Schlüssel erlaubt sind.
+
+Ohne `DEPLOY_HOST` baut ein Tag nur die Images und deployt nichts.
 
 ## Backups
 
-Nächtlich per `pg_dump` auf eine Hetzner Storage Box. Die Inhalte sind ohnehin
-Ende-zu-Ende verschlüsselt. Ohne Master-Passwort oder Recovery-Key ist ein Backup wertlos,
-für einen Dieb ebenso wie für dich.
+Die Einträge sind Ende-zu-Ende verschlüsselt, ohne Master-Passwort oder Recovery-Key sind sie
+auch im Backup nicht lesbar. **Trotzdem ist ein Dump schützenswert:** Er enthält E-Mail-Adressen,
+Salts und die Argon2-Hashes der Login-Schlüssel. Wer ihn hat, kann offline Master-Passwörter
+raten, gebremst nur durch Argon2. Ein Backup ist also so sicher wie das schwächste
+Master-Passwort darin. Deshalb: starke Master-Passwörter und die Backups nicht offen ablegen.
+
+| Was | Wann | Wo |
+|---|---|---|
+| `bin/melon-backup`: `pg_dump` im Custom-Format, danach mit `pg_restore --list` geprüft | nächtlich 03:30 (systemd-Timer) und vor jedem Update | `backups/` auf dem Server (`chmod 700`), 14 Tage |
+| Kopie per `rsync` (ohne `--delete`) | nächtlich, wenn `backup.env` existiert. Vor Updates nur lokal, damit ein Ausfall der Storage Box kein Deployment blockiert. | Hetzner Storage Box. Dort wird nichts gelöscht, auch nicht von einem übernommenen Server aus. |
+| Hetzner-Backups (Server-Snapshot) | täglich, 7 Tage | Hetzner, Schutz gegen „Server kaputt“ |
+| Kopie zu Hause (`scripts/home-backup.ps1`) | wenn das letzte Mal 30 Tage her ist, geprüft bei jeder Anmeldung und täglich um 12 Uhr | eigener Windows-Rechner, die 12 neuesten, Schutz gegen „Hetzner-Konto weg“ |
+
+**Timer einrichten (einmal):**
 
 ```sh
-docker compose exec -T db pg_dump -U melon melon | gzip > melon-$(date +%F).sql.gz
+sudo cp systemd/melon-backup.* /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now melon-backup.timer
+systemctl list-timers melon-backup.timer
 ```
+
+**Storage Box (optional, empfohlen):**
+
+1. Storage Box bestellen, darin einen **Sub-Account** nur für den Ordner `melonapp/` anlegen und
+   SSH dafür einschalten.
+2. In der Storage Box **automatische Snapshots** einschalten. Die kann der Server nicht löschen,
+   auch nicht mit seinem Schlüssel.
+3. Auf dem Server einen Schlüssel ohne Passphrase erzeugen (`ssh-keygen -t ed25519 -N "" -f ~/.ssh/storagebox`)
+   und beim Sub-Account hinterlegen.
+4. Den Host-Schlüssel der Box festhalten und den Fingerabdruck mit der Hetzner-Doku vergleichen:
+   `ssh-keyscan -p 23 <box>.your-storagebox.de >> ~/.ssh/known_hosts`
+5. `backup.env.example` nach `backup.env` kopieren (`chmod 600`) und ausfüllen. Ein Lauf von
+   `bin/melon-backup` zeigt danach `copied to …`.
+
+Lokal hält `bin/melon-backup` höchstens 14 Tage und höchstens 60 Dumps.
+
+**Kopie zu Hause (Windows, optional):** Der eigene Rechner holt sich alle 30 Tage den neuesten
+Dump von der Storage Box. Er braucht dafür einen **eigenen, nur lesenden** Zugang, damit ein
+befallener Rechner dort nichts löschen kann.
+
+1. In der Storage Box einen zweiten Sub-Account für `melonapp/` anlegen, SSH an, noch **nicht**
+   schreibgeschützt.
+2. In PowerShell einen Schlüssel erzeugen und hinterlegen (fragt einmal nach dem Passwort des
+   Sub-Accounts). Beim ersten Verbinden den Fingerabdruck mit der Hetzner-Doku vergleichen und mit
+   `yes` bestätigen, dann steht der Host-Schlüssel in `~\.ssh\known_hosts`:
+
+   ```powershell
+   New-Item -ItemType Directory -Force $HOME\.melonapp | Out-Null
+   ssh-keygen -t ed25519 -N '""' -C melon-home -f $HOME\.melonapp\storagebox
+   Get-Content $HOME\.melonapp\storagebox.pub | ssh -p 23 u123456-sub2@u123456-sub2.your-storagebox.de install-ssh-key
+   ```
+
+3. Jetzt den Sub-Account in der Hetzner-Konsole auf **schreibgeschützt** stellen.
+4. `deploy/home-backup.example.json` nach `~\.melonapp\home-backup.json` kopieren und ausfüllen.
+   Optional: `Target` (Standard `~\MelonApp-Backups`), `IntervalDays` (30), `Keep` (12).
+5. Einmal von Hand holen, dann die geplante Aufgabe einrichten:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\home-backup.ps1 -Force
+   powershell -ExecutionPolicy Bypass -File scripts\home-backup.ps1 -Install
+   ```
+
+Das Skript lädt nur den neuesten Dump, prüft, dass er mit `PGDMP` beginnt (sonst wird er
+verworfen), behält die 12 neuesten und schreibt `home-backup.log` in den Zielordner. Läuft es als
+geplante Aufgabe und scheitert, erscheint ein Hinweisfenster. `-Uninstall` entfernt die Aufgabe.
+Der Dump ist schützenswert (siehe oben), der Zielordner gehört also nicht in einen geteilten
+Cloud-Ordner. Verschlüsselt wird er erst mit [#77](https://github.com/MelonigeMelone/melonapp/issues/77).
+
+**Wiederherstellen:**
+
+```sh
+bin/melon-restore backups/melon-20261112T033000Z.dump --yes
+```
+
+Das ersetzt die ganze Datenbank durch den Dump, stoppt dafür kurz den Server und startet ihn
+wieder. Nur eigene Dumps einspielen: Ein manipulierter Dump könnte als Datenbank-Superuser
+Befehle im Datenbank-Container ausführen. Die Wiederherstellung einmal auf einem Testserver (oder lokal) durchzuspielen gehört zur
+Einrichtung: Erst wenn man mit dem eingespielten Stand entsperren kann, ist ein Backup eines.
 
 ## Optional: nur über Tailscale
 

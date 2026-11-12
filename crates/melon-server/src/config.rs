@@ -22,7 +22,7 @@ impl Config {
             .parse()
             .context("MELON_BIND must be host:port")?;
         let server_secret = env::var("MELON_SERVER_SECRET")
-            .context("MELON_SERVER_SECRET is required (generate with: openssl rand -base64 48)")?
+            .context("MELON_SERVER_SECRET is required (generate with: openssl rand -hex 32)")?
             .into_bytes();
         if server_secret.len() < 32 {
             bail!("MELON_SERVER_SECRET must be at least 32 characters");

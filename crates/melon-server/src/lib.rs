@@ -5,6 +5,7 @@ pub mod client_ip;
 pub mod config;
 pub mod error;
 pub mod members;
+pub mod sessions;
 pub mod state;
 pub mod vaults;
 
@@ -38,6 +39,11 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/invites/preview", post(auth::invite_preview))
         .route("/auth/recover/start", post(account::recover_start))
         .route("/auth/recover/complete", post(account::recover_complete))
+        .route(
+            "/sessions",
+            get(sessions::list_sessions).delete(sessions::revoke_other_sessions),
+        )
+        .route("/sessions/{session_id}", delete(sessions::revoke_session))
         .route("/account/password", put(account::change_password))
         .route("/account/recovery", put(account::set_recovery))
         .route("/users/lookup", get(members::lookup_user))

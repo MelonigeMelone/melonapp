@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+command="${SSH_ORIGINAL_COMMAND:-}"
+if [[ ! "$command" =~ ^deploy\ v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+  echo "only 'deploy <x.y.z>' is allowed" >&2
+  exit 2
+fi
+exec "$(dirname "$(readlink -f "$0")")/melon-update" "${BASH_REMATCH[1]}"

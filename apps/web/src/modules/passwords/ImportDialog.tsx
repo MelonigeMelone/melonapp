@@ -15,10 +15,11 @@ import Typography from '@mui/material/Typography';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useMemo, useState } from 'react';
 import { entries } from '../../layout';
-import { describeError } from '../../session';
+import { describeError, openExport } from '../../session';
+import { parseMelonPayload } from './export/formats';
 import { TEMPLATES, type Item, type ItemType, type VaultItem } from '../../vault/item';
 import type { VaultsManager, VaultView } from '../../vault/manager';
-import { dedupeKey, ImportError, readExport, SOURCE_LABELS, type ImportResult } from './import/formats';
+import { dedupeKey, ImportError, NeedsPassword, readExport, SOURCE_LABELS, type ImportResult } from './import/formats';
 
 const HOWTO: [string, string][] = [
   ['Apple Passwörter', 'Mac: Passwörter-App → Ablage → Alle Passwörter exportieren. iPhone: Einstellungen → Apps → Passwörter → Exportieren.'],
@@ -26,14 +27,15 @@ const HOWTO: [string, string][] = [
   ['Chrome, Edge, Brave', 'Einstellungen → Passwörter → Exportieren (CSV).'],
   ['Firefox', 'about:logins → ⋯ → Zugangsdaten exportieren.'],
   ['Bitwarden', 'Tools → Tresor exportieren → .csv.'],
+  ['MelonApp', 'Eine mit „Exportieren“ erstellte verschlüsselte Datei (.melon.json). Du brauchst ihr Export-Passwort.'],
 ];
 
 const ERRORS: Record<string, string> = {
-  unknown_format: 'Dieses Format kennt MelonApp nicht. Unterstützt sind die Exporte aus Apple Passwörter, 1Password, Chrome, Firefox und Bitwarden.',
+  unknown_format: 'Dieses Format kennt MelonApp nicht. Unterstützt sind die Exporte aus Apple Passwörter, 1Password, Chrome, Firefox, Bitwarden und MelonApp.',
   unreadable_1pux: 'Die 1PUX-Datei lässt sich nicht lesen. Exportiere sie in 1Password noch einmal.',
 };
 
-type Phase = { kind: 'choose' } | { kind: 'preview'; result: ImportResult } | { kind: 'running'; done: number; total: number } | { kind: 'finished'; imported: number; failed: number };
+type Phase = { kind: 'choose' } | { kind: 'password'; data: string } | { kind: 'preview'; result: ImportResult } | { kind: 'running'; done: number; total: number } | { kind: 'finished'; imported: number; failed: number };
 
 export function ImportDialog({
   manager,
@@ -55,6 +57,8 @@ export function ImportDialog({
   const [phase, setPhase] = useState<Phase>({ kind: 'choose' });
   const [skipDuplicates, setSkipDuplicates] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportPassword, setExportPassword] = useState('');
+  const [opening, setOpening] = useState(false);
 
   const existingKeys = useMemo(
     () => new Set(existing.filter((e) => e.vaultId === target).map((e) => dedupeKey(e.item))),
@@ -75,7 +79,32 @@ export function ImportDialog({
     try {
       setPhase({ kind: 'preview', result: await readExport(file) });
     } catch (e) {
+      if (e instanceof NeedsPassword) {
+        setPhase({ kind: 'password', data: e.data });
+        return;
+      }
       setError(e instanceof ImportError ? (ERRORS[e.message] ?? e.message) : 'Die Datei lässt sich nicht lesen.');
+    }
+  };
+
+  const unlock = async (data: string) => {
+    setOpening(true);
+    setError(null);
+    try {
+      const items = parseMelonPayload(await openExport(exportPassword, data));
+      setExportPassword('');
+      setPhase({ kind: 'preview', result: { source: 'melonapp', items, skippedArchived: 0 } });
+    } catch (e) {
+      const m = e instanceof Error ? e.message : '';
+      setError(
+        /decryption failed|wrong_export_password/.test(m)
+          ? 'Das Export-Passwort stimmt nicht.'
+          : /unsupported/.test(m)
+            ? 'Diese Export-Datei stammt aus einer neueren MelonApp-Version.'
+            : 'Die Export-Datei ist beschädigt.',
+      );
+    } finally {
+      setOpening(false);
     }
   };
 
@@ -121,12 +150,36 @@ export function ImportDialog({
                 <input
                   hidden
                   type="file"
-                  accept=".csv,.1pux,text/csv"
+                  accept=".csv,.1pux,.json,text/csv,application/json"
                   aria-label="Export-Datei"
                   onChange={(e) => void choose(e.target.files?.[0])}
                 />
               </Button>
             </>
+          )}
+
+          {phase.kind === 'password' && (
+            <Stack
+              component="form"
+              spacing={2}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void unlock(phase.data);
+              }}
+            >
+              <Typography>Das ist eine verschlüsselte MelonApp-Export-Datei. Gib ihr Export-Passwort ein.</Typography>
+              <TextField
+                label="Export-Passwort"
+                type="password"
+                autoComplete="off"
+                autoFocus
+                value={exportPassword}
+                onChange={(e) => setExportPassword(e.target.value)}
+              />
+              <Button type="submit" variant="contained" disabled={!exportPassword || opening} sx={{ alignSelf: 'flex-start' }}>
+                {opening ? 'Wird geöffnet …' : 'Öffnen'}
+              </Button>
+            </Stack>
           )}
 
           {preview && (
@@ -182,9 +235,11 @@ export function ImportDialog({
               <Alert severity={phase.failed ? 'warning' : 'success'}>
                 {entries(phase.imported)} importiert.{phase.failed > 0 && ` ${entries(phase.failed)} ließen sich nicht speichern.`}
               </Alert>
-              <Alert severity="warning">
-                Lösche jetzt die Export-Datei und leere den Papierkorb. Sie enthält deine Passwörter unverschlüsselt.
-              </Alert>
+              {preview?.source !== 'melonapp' && (
+                <Alert severity="warning">
+                  Lösche jetzt die Export-Datei und leere den Papierkorb. Sie enthält deine Passwörter unverschlüsselt.
+                </Alert>
+              )}
             </>
           )}
 
