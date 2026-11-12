@@ -26,8 +26,8 @@ optional und darf nur mit Keychain-Zugriffskontrolle für den aktuell registrier
 biometrischen Satz funktionieren; kein stiller ungeschützter Ersatz. Native Fristen
 und Sperren bei Hintergrundwechsel ergänzen den UI-Timer.
 
-Bundle-IDs: `de.melonapp.app`, `de.melonapp.app.autofill`; App Group:
-`group.de.melonapp.shared`. Eine App Group ersetzt keine Verschlüsselung.
+Bundle-IDs: `de.melonigemelone.app`, `de.melonigemelone.app.autofill`; App Group:
+`group.de.melonigemelone.app`. Eine App Group ersetzt keine Verschlüsselung.
 UniFFI stellt Swift dieselbe native Logik bereit. Generierte FFI-Bindings sind eine
 technische Grenze; handgeschriebener Rust-Code behält `unsafe_code = forbid`.
 

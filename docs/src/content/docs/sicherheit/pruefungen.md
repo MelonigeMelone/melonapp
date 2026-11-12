@@ -121,3 +121,7 @@ Der Passkey-Test rekonstruiert den öffentlichen Schlüssel direkt aus dem ausge
 COSE-Objekt der Registrierung und prüft damit die Assertion. Er greift für diesen
 Nachweis nicht auf den verschlüsselten privaten Schlüssel zurück; falsche COSE-Labels,
 Kurvenparameter oder Koordinaten fallen damit im Interoperabilitätstest auf.
+
+Die Swift-Tests gegen UniFFI lehnen zusätzlich einen fremden Cache-Kontext und
+abgeschnittenen Chiffretext ab. Die tatsächlich provisionierte App-Group-Grenze
+bleibt Teil der Hardware-Abnahme in #23 und #27.

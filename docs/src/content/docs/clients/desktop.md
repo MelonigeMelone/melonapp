@@ -117,3 +117,17 @@ werden nicht eingecheckt. Nach einem frischen Checkout zunächst `build-apple-ff
 ausführen, bevor XcodeGen das Projekt neu erzeugt. Das Skript legt auch die leeren,
 nicht versionierten Tauri-Verzeichnisse `Externals` und `assets` an; XcodeGen benötigt
 sie bereits vor dem ersten Tauri-iOS-Build.
+
+## Registrierte Apple-Identifier
+
+Die registrierten Bundle-IDs sind `de.melonigemelone.app` und
+`de.melonigemelone.app.autofill`; beide Targets verwenden die App Group
+`group.de.melonigemelone.app`. App Groups und AutoFill Credential Provider müssen
+für beide App-IDs aktiviert sein. Auch das Host-App-Entitlement enthält den
+AutoFill Credential Provider, wie von Apple vorgeschrieben.
+
+Der Wechsel von den ursprünglichen Entwicklungs-IDs erzeugt eine neue App-Identität:
+vorhandene lokale Einstellungen, Keychain-Einträge und App-Group-Caches werden nicht
+ungefragt übernommen. Biometrisches Entsperren und der AutoFill-Snapshot sind unter
+der neuen Identität erneut einzurichten. Der interne Keychain-Service-Name für
+AutoFill bleibt unverändert; die neue Zugriffsgruppe trennt die Daten trotzdem.

@@ -10,7 +10,7 @@ use std::{fs, path::PathBuf, sync::Mutex};
 use tauri::Manager;
 use zeroize::Zeroizing;
 
-const SERVICE: &str = "de.melonapp.app.biometric.v1";
+const SERVICE: &str = "de.melonigemelone.app.biometric.v1";
 
 fn sha256_hex(input: &[u8]) -> String {
     Sha256::digest(input)
@@ -271,7 +271,7 @@ fn autofill_remove() -> Result<(), String> {
 #[cfg(target_os = "ios")]
 fn autofill_remove() -> Result<(), String> {
     use objc2_foundation::{NSFileManager, NSString};
-    let group = "group.de.melonapp.shared";
+    let group = "group.de.melonigemelone.app";
     let Some(url) = NSFileManager::defaultManager()
         .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(group))
     else {
@@ -374,7 +374,7 @@ pub async fn autofill_publish(
     {
         tauri::async_runtime::spawn_blocking(move || {
             use objc2_foundation::{NSFileManager, NSString};
-            let group = "group.de.melonapp.shared";
+            let group = "group.de.melonigemelone.app";
             let url = NSFileManager::defaultManager()
                 .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(group))
                 .ok_or("app_group_unavailable")?;
