@@ -1,0 +1,4 @@
+name: MelonApp
+paths-ignore:
+  - crates/*/tests
+  - apps/*/e2e

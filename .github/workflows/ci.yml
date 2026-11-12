@@ -34,11 +34,12 @@ jobs:
       MELON_TEST_DATABASE_URL: postgres://melon:melon@localhost:5432/melon_test
       MELON_REQUIRE_DB: "1"
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
+          toolchain: stable
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
@@ -47,13 +48,14 @@ jobs:
     name: Web app (WASM, tests, build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
+          toolchain: stable
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: bash scripts/build-wasm.sh
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -62,7 +64,7 @@ jobs:
       - run: npm run build -w web
       - run: npm test -w extension
       - run: npm run build -w extension
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: melonapp-extension
           path: apps/extension/build
@@ -74,8 +76,8 @@ jobs:
     env:
       COMPOSE: docker compose -p melon-e2e --env-file apps/web/e2e/e2e.env -f deploy/docker-compose.yml -f apps/web/e2e/compose.override.yml
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - run: $COMPOSE build
       - run: $COMPOSE up -d --wait
       - name: Wait for the API
@@ -86,7 +88,7 @@ jobs:
           -v "$PWD/apps/web/e2e:/e2e" -v "$RUNNER_TEMP:/out" -w /work
           mcr.microsoft.com/playwright:v1.65.0-noble
           bash -c "npm init -y >/dev/null && npm i --no-audit --no-fund playwright@1.65.0 >/dev/null && cp /e2e/vault.e2e.mjs . && node vault.e2e.mjs"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: melonapp-extension
           path: extension-build
@@ -101,7 +103,7 @@ jobs:
           hits=$(docker exec melon-e2e-db-1 psql -U melon -d melon -tAc "SELECT count(*) FROM items JOIN vaults ON vaults.id = items.vault_id WHERE data ILIKE '%github%' OR data ILIKE '%melone%' OR data ILIKE '%wlan-geheim%' OR data ILIKE '%recovery-code%' OR encrypted_meta ILIKE '%familie%'")
           test "$hits" = "0"
       - if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-screenshots
           path: ${{ runner.temp }}/*.png
@@ -112,7 +114,9 @@ jobs:
     name: Minimum Rust version (1.87)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.87
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: '1.87'
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo check --workspace --locked
