@@ -19,7 +19,6 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 |---|---|
 | Login-Limits liegen im Speicher | Ein Neustart setzt die Zähler pro Konto und pro Adresse zurück. Das ist akzeptiert. Wer mehr will, ergänzt fail2ban auf die `failed login`-Logzeilen. |
 | Eingeladene werden ohne vorherigen Code-Vergleich freigeschaltet | Code danach im Tresor-Dialog prüfen ([ADR 0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/)). Später optional: Freigabe erst nach Bestätigung. |
-| Geprüfte Sicherheitscodes werden nicht gespeichert | später: „verifiziert“-Markierung pro Mitglied → [#42](https://github.com/MelonigeMelone/melonapp/issues/42) |
 | Mitgliederliste zeigt allen Mitgliedern die E-Mails | gewollt für Familie/Freunde |
 | Kein Wechsel des eigenen Schlüsselpaars | nach M4 → [#43](https://github.com/MelonigeMelone/melonapp/issues/43) |
 | Kein externes Krypto-Review | vor dem Umzug der echten Passwörter → [#37](https://github.com/MelonigeMelone/melonapp/issues/37) |

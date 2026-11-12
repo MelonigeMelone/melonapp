@@ -19,10 +19,13 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import { useCallback, useEffect, useState, useSyncExternalStore, type FormEvent } from 'react';
 import type { InviteInfo, Role } from '../api';
 import { describeError } from '../session';
 import type { FoundUser, VaultsManager, VaultView } from '../vault/manager';
+import { verifyState } from '../vault/verified';
 import { monoFont } from '../theme';
 
 export const ROLE_LABELS: Record<Role, string> = { owner: 'Besitzer', editor: 'Bearbeiter', viewer: 'Betrachter' };
@@ -116,7 +119,9 @@ export function SpaceDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmUser, setConfirmUser] = useState<FoundUser | null>(null);
-  const [codeFor, setCodeFor] = useState<{ email: string; code: string } | null>(null);
+  const [codeFor, setCodeFor] = useState<{ userId: string; email: string; publicKey: string; code: string } | null>(null);
+  const { verified, verifiedReady } = useSyncExternalStore(manager.subscribe, manager.getSnapshot);
+  const [adopt, setAdopt] = useState(false);
   const [confirm, setConfirm] = useState<{ kind: 'remove'; userId: string; email: string } | { kind: 'leave' } | { kind: 'delete' } | null>(null);
 
   const loadInvites = useCallback(async () => {
@@ -164,6 +169,8 @@ export function SpaceDialog({
   };
 
   const owners = vault.members.filter((m) => m.role === 'owner' && m.has_key).length;
+  const codeState = codeFor ? verifyState(verified, codeFor.userId, codeFor.publicKey) : 'unverified';
+  const confirmState = confirmUser ? verifyState(verified, confirmUser.user_id, confirmUser.public_key) : 'unverified';
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm" aria-labelledby="space-dialog-title">
@@ -195,6 +202,20 @@ export function SpaceDialog({
             <Typography variant="h3" sx={{ fontSize: '1.125rem', mb: 1 }}>
               Mitglieder
             </Typography>
+            {!verifiedReady && (
+              <Alert
+                severity="warning"
+                sx={{ mb: 1.5 }}
+                action={
+                  <Button color="inherit" size="small" onClick={() => setAdopt(true)}>
+                    Stand übernehmen
+                  </Button>
+                }
+              >
+                Deine geprüften Sicherheitscodes fehlen oder sind älter als zuletzt auf diesem Gerät. Bis das geklärt ist, gibt die App
+                keine Bereichs-Schlüssel weiter.
+              </Alert>
+            )}
             <List disablePadding>
               {vault.members.map((m) => (
                 <ListItem
@@ -205,7 +226,11 @@ export function SpaceDialog({
                       <Tooltip title="Sicherheitscode">
                         <IconButton
                           aria-label={`Sicherheitscode von ${m.email}`}
-                          onClick={() => void manager.fingerprint(m.public_key).then((code) => setCodeFor({ email: m.email, code }))}
+                          onClick={() =>
+                            void manager
+                              .fingerprint(m.public_key)
+                              .then((code) => setCodeFor({ userId: m.user_id, email: m.email, publicKey: m.public_key, code }))
+                          }
                         >
                           <FingerprintIcon />
                         </IconButton>
@@ -226,6 +251,12 @@ export function SpaceDialog({
                     secondary={m.has_key ? undefined : 'Wartet auf Freigabe durch einen Besitzer'}
                     slotProps={{ primary: { sx: { overflowWrap: 'anywhere' } } }}
                   />
+                  {m.user_id !== me && verifyState(verified, m.user_id, m.public_key) === 'verified' && (
+                    <Chip size="small" color="success" variant="outlined" icon={<VerifiedUserOutlinedIcon />} label="Code geprüft" />
+                  )}
+                  {m.user_id !== me && verifyState(verified, m.user_id, m.public_key) === 'changed' && (
+                    <Chip size="small" color="warning" icon={<WarningAmberIcon />} label="Code geändert" />
+                  )}
                   {vault.isOwner && m.user_id !== me ? (
                     <TextField
                       select
@@ -337,6 +368,12 @@ export function SpaceDialog({
             ob ihr Code genauso aussieht, am besten am Telefon oder persönlich.
           </Typography>
           {confirmUser && <SecurityCode code={confirmUser.fingerprint} />}
+          {confirmState === 'changed' && (
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              Das ist nicht mehr der Code, den du für {confirmUser?.email} geprüft hast. Vergleiche ihn neu, bevor du hinzufügst. Hat
+              die Person ihren Schlüssel nicht gewechselt, füge sie nicht hinzu.
+            </Alert>
+          )}
           <Typography color="text.secondary" variant="body2">
             Stimmt er nicht, könnte jemand den Schlüssel auf dem Server ausgetauscht haben. Dann nicht hinzufügen.
           </Typography>
@@ -349,6 +386,7 @@ export function SpaceDialog({
             onClick={() =>
               void run('confirm-add', async () => {
                 if (!confirmUser) return;
+                await manager.setVerified(confirmUser.user_id, confirmUser.public_key);
                 await manager.addKnownMember(vault.id, confirmUser, role);
                 setNotice(`${confirmUser.email} hat jetzt Zugriff.`);
                 setConfirmUser(null);
@@ -356,7 +394,36 @@ export function SpaceDialog({
               })
             }
           >
-            Code stimmt, hinzufügen
+            {confirmState === 'changed' ? 'Neuer Code stimmt, hinzufügen' : 'Code stimmt, hinzufügen'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={adopt} onClose={() => setAdopt(false)} maxWidth="xs" aria-labelledby="adopt-title">
+        <DialogTitle id="adopt-title">Gespeicherten Stand übernehmen?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Das passiert zu Recht, wenn der Server aus einem Backup wiederhergestellt wurde. Sonst kann es heißen, dass jemand auf dem
+            Server deine Markierungen zurückgedreht hat.
+          </Typography>
+          <Typography sx={{ mt: 1.5 }} color="text.secondary">
+            Übernimmst du den Stand, gelten nur die Markierungen, die jetzt auf dem Server liegen. Prüfe danach die Codes der Mitglieder
+            neu, bei denen „Code geprüft“ fehlt.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setAdopt(false)}>Abbrechen</Button>
+          <Button
+            variant="contained"
+            loading={busy === 'adopt'}
+            onClick={() =>
+              void run('adopt', async () => {
+                await manager.adoptStoredMarks();
+                setAdopt(false);
+              })
+            }
+          >
+            Übernehmen
           </Button>
         </DialogActions>
       </Dialog>
@@ -365,12 +432,42 @@ export function SpaceDialog({
         <DialogTitle id="code-title">Sicherheitscode von {codeFor?.email}</DialogTitle>
         <DialogContent>
           {codeFor && <SecurityCode code={codeFor.code} />}
+          {codeFor && codeState === 'changed' && (
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              Dieser Code ist nicht mehr der, den du geprüft hast. Entweder hat {codeFor.email} das Konto wiederhergestellt oder den
+              Schlüssel gewechselt, oder jemand hat den Schlüssel auf dem Server ausgetauscht. Frag nach, bevor du weiter teilst.
+            </Alert>
+          )}
+          {codeFor && codeState === 'verified' && (
+            <Alert severity="success" sx={{ mb: 1.5 }}>
+              Du hast diesen Code geprüft.
+            </Alert>
+          )}
           <Typography color="text.secondary" variant="body2">
-            Vergleiche ihn mit dem Code, den diese Person unter „Konto“ sieht. Weicht er ab, entferne sie aus dem Bereich.
+            Vergleiche ihn mit dem Code, den diese Person unter „Konto“ sieht, am besten am Telefon oder persönlich. Weicht er ab,
+            entferne sie aus dem Bereich.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          {codeFor && codeFor.userId !== me && codeState === 'verified' && (
+            <Button
+              color="inherit"
+              loading={busy === 'unverify'}
+              onClick={() => void run('unverify', () => manager.setVerified(codeFor.userId, null))}
+            >
+              Markierung entfernen
+            </Button>
+          )}
           <Button onClick={() => setCodeFor(null)}>Schließen</Button>
+          {codeFor && codeFor.userId !== me && codeState !== 'verified' && (
+            <Button
+              variant="contained"
+              loading={busy === 'verify'}
+              onClick={() => void run('verify', () => manager.setVerified(codeFor.userId, codeFor.publicKey))}
+            >
+              Code stimmt überein
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

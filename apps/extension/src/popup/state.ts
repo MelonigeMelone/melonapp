@@ -69,7 +69,7 @@ export async function restore(): Promise<Unlocked | null> {
   if (!stored) return null;
   setApiBase(stored.server);
   await cryptoCall('importVaultKeys', { keys: stored.keys });
-  const manager = new VaultsManager(stored.userId, authed(stored.token), cryptoCall);
+  const manager = new VaultsManager(stored.userId, authed(stored.token), cryptoCall, undefined, undefined, false);
   await manager.sync();
   const snapshot = await capture(stored, manager);
   return { snapshot, manager };

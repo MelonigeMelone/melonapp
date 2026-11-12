@@ -6,9 +6,9 @@ use unicode_normalization::UnicodeNormalization;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
-    EncString, KdfParams, KeyPair, PasswordOptions, PublicKey, RecoveryKey, SealedKey,
-    SymmetricKey, VaultKeyContext, derive_master_key, item_aad, seal_vault_key, unwrap_account_key,
-    vault_meta_aad, wrap_account_key,
+    EncString, KdfParams, KeyPair, PasswordOptions, PrivateDataKey, PublicKey, RecoveryKey,
+    SealedKey, SymmetricKey, VaultKeyContext, derive_master_key, item_aad, seal_vault_key,
+    unwrap_account_key, vault_meta_aad, wrap_account_key,
 };
 use serde_json::{Value, json};
 use zeroize::{Zeroize, Zeroizing};
@@ -444,6 +444,30 @@ impl Session {
             )),
             "encryptMeta" | "decryptMeta" | "encryptItem" | "decryptItems" | "sealFor"
             | "rotate" => self.vault_call(method, a),
+            "sealPrivate" => {
+                let key = PrivateDataKey::derive(self.require_account()?);
+                Ok(json!(
+                    key.seal(
+                        text(a, "userId")?,
+                        text(a, "purpose")?,
+                        text(a, "plaintext")?.as_bytes()
+                    )
+                    .to_string()
+                ))
+            }
+            "openPrivate" => {
+                let key = PrivateDataKey::derive(self.require_account()?);
+                let plain = key
+                    .open(
+                        text(a, "userId")?,
+                        text(a, "purpose")?,
+                        &parse(text(a, "data")?)?,
+                    )
+                    .map_err(|_| "decrypt_failed")?;
+                Ok(json!(
+                    String::from_utf8(plain.to_vec()).map_err(|_| "decrypt_failed")?
+                ))
+            }
             "fingerprint" => Ok(json!(melon_crypto::fingerprint(
                 &PublicKey::from_base64(text(a, "publicKey")?).map_err(|_| "invalid_public_key")?
             ))),
@@ -605,6 +629,33 @@ mod tests {
             )
             .unwrap();
         (session, created)
+    }
+
+    #[test]
+    fn private_data_is_bound_to_the_account_user_and_purpose() {
+        let (mut session, _) = account();
+        let (mut other, _) = account();
+        let sealed = session
+            .call(
+                "sealPrivate",
+                json!({"userId":"user","purpose":"verified-codes","plaintext":"marks"}),
+            )
+            .unwrap();
+        let open = |s: &mut Session, user: &str, purpose: &str| {
+            s.call(
+                "openPrivate",
+                json!({"userId":user,"purpose":purpose,"data":sealed.clone()}),
+            )
+        };
+        assert_eq!(
+            open(&mut session, "user", "verified-codes"),
+            Ok(json!("marks"))
+        );
+        assert!(open(&mut session, "other", "verified-codes").is_err());
+        assert!(open(&mut session, "user", "export").is_err());
+        assert!(open(&mut other, "user", "verified-codes").is_err());
+        session.lock();
+        assert_eq!(open(&mut session, "user", "verified-codes"), Err("locked"));
     }
 
     #[test]

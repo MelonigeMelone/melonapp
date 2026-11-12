@@ -48,6 +48,34 @@ Telefon vorlesen.
 - Beim Hinzufügen eines bestehenden Kontos zeigt die App den Code und fragt, ob er mit dem der
   anderen Person übereinstimmt.
 - Jedes Mitglied hat im Tresor-Dialog einen Code-Knopf. Den eigenen Code zeigt „Konto“.
+- **Geprüfte Codes werden gemerkt** ([#42](https://github.com/MelonigeMelone/melonapp/issues/42)):
+  „Code stimmt überein“ bzw. „Code stimmt, hinzufügen“ speichert pro Person den geprüften
+  öffentlichen Schlüssel. Die Liste `{ counter, marks: { <userId>: { publicKey, at } } }` wird
+  mit dem **Private-Data-Key** verschlüsselt (aus dem Konto-Schlüssel abgeleitet, nur die
+  Person selbst hat ihn) und liegt als Feld `verified` im `encrypted_meta` des persönlichen
+  Tresors. So ist sie auf allen eigenen Geräten da, und weder der Server noch jemand mit Zugriff
+  auf einen anderen Tresor kann sie lesen oder fälschen. Im Tresor-Dialog steht „Code geprüft“.
+- **Gebunden an den Schlüssel:** Liefert der Server später einen anderen öffentlichen Schlüssel
+  für diese Person, zeigt die App „Code geändert“ und gibt ihr keinen Tresor-Schlüssel mehr
+  (Freigabe nach Einladung, Hinzufügen, Schlüsselwechsel brechen mit `key_changed` ab), bis man
+  den neuen Code geprüft hat. Ungeprüfte Personen verhalten sich wie bisher.
+- **Im Zweifel nichts weitergeben:** Die Liste wird bei jedem Sync geladen, **bevor** Schlüssel
+  verteilt werden. Als persönlich zählt nur ein Tresor, in dem man allein Besitzer ist, und nur
+  wenn es genau einen solchen gibt. Fehlt die Liste, obwohl dieses Gerät schon eine gesehen hat,
+  lässt sie sich nicht öffnen, oder ist ihr `counter` kleiner als der höchste auf diesem Gerät
+  gesehene (zurückgespielt), verteilt die App gar keine Tresor-Schlüssel
+  (`verifications_unavailable`). Den höchsten Zähler merkt sich jedes Gerät wie bei der
+  [Rollback-Erkennung](/melonapp/clients/web/#rollback-erkennung).
+- **Ändern nur mit frischem Stand:** Markieren lädt die Liste zuerst neu und bricht ab, wenn das
+  nicht klappt. Der neue Zähler ist höher als alles, was dieses Gerät kennt. So bleibt kein Gerät
+  hängen, weil ein anderes mit altem Stand geschrieben hat.
+- **Server aus Backup wiederhergestellt:** Dann ist die Liste älter als auf den Geräten, und die
+  App gibt nichts weiter. Im Bereichs-Dialog steht ein Hinweis mit „Stand übernehmen“. Nach
+  Bestätigung gilt die Liste vom Server mit neuem Zähler. Da das auch ein zurückgedrehter Stand
+  sein kann, entscheidet das die Person bewusst.
+- **Die Erweiterung gibt keine Tresor-Schlüssel weiter.** Ihr Popup hat nach dem Entsperren nur
+  die Bereichs-Schlüssel, nicht den Konto-Schlüssel, und lässt Freigaben und Schlüsselwechsel der
+  Web-App oder den Apps.
 
 ## Alternativen
 
@@ -60,6 +88,14 @@ Telefon vorlesen.
   mehr Platz auf dem Ausdruck.
 
 ## Folgen
+
+- Gleichzeitiges Markieren auf zwei Geräten: Wer zuletzt speichert, gewinnt, eine Markierung kann
+  dabei verloren gehen. Dann fehlt nur das „geprüft“.
+- Ein **neues Gerät** kennt noch keinen Zähler. Unterschlägt der Server dort die Liste ganz, sieht
+  es alle als ungeprüft. Das gleiche Restrisiko hat die Rollback-Erkennung, vollständig lösbar nur
+  mit einem signierten Gesamtstand.
+- Der Private-Data-Key hängt am Konto-Schlüssel, nicht am Schlüsselpaar. Master-Passwort ändern
+  und Recovery behalten die Liste.
 
 - Wer Recovery-Key **und** E-Mail hat, kann das Konto übernehmen. Deshalb gehört das Kit offline
   aufbewahrt, und die Wiederherstellung ist wie der Login gegen Durchprobieren gesperrt.

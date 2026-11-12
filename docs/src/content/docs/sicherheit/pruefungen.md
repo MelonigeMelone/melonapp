@@ -48,6 +48,8 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Recovery: falscher Key und unbekannte E-Mail sehen gleich aus, Recovery-Sitzung liest nichts, ist einmalig, danach alle Sitzungen weg | `api::recovering_with_the_recovery_key` |
 | Recovery-Key: Tippfehler werden erkannt, Groß-/Kleinschreibung und Trennzeichen egal | `recovery::tests` |
 | Sicherheitscode beider Seiten stimmt überein | CI-Job `e2e`, Schritt „security code“ |
+| Geprüfter Code ist an den Schlüssel gebunden: ausgetauschter Schlüssel bekommt keinen Tresor-Schlüssel (Freigabe, Hinzufügen, Schlüsselwechsel), auch wenn der Server die Reihenfolge ändert, den persönlichen Tresor versteckt, einen fremden als persönlich ausgibt oder die Liste zurückspielt; nach erneuter Prüfung wieder | `manager.test.ts`, `verified.test.ts`, E2E-Schritt „re-adding bob shows his security code first“ |
+| Private Daten öffnet nur dasselbe Konto mit derselben User-ID und demselben Zweck; alte Daten bleiben lesbar | `private::tests` in `melon-crypto`, `private_data_from_older_versions_still_opens`, `melon-native`: `private_data_is_bound_to_the_account_user_and_purpose` |
 | Server speichert keinen Klartext | `api::personal_vault_flow` |
 | Login-Sperre nach Fehlversuchen | `api::wrong_password_and_lockout` |
 | Geräte: nur eigene Sitzungen sichtbar und abmeldbar, abgemeldete verlieren sofort den Zugriff | `api::devices_can_be_listed_and_signed_out_but_only_your_own`, E2E-Schritt „devices: see the other device and sign it out“ |
