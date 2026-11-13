@@ -148,6 +148,28 @@ Bei jedem Sync erledigt die App eines Besitzers, was nur ein Besitzer kann:
    Schlüssel. Fehlt sie danach oder ist ihr `seq` älter als zuletzt gesehen, verteilt die App in
    dem Tresor keine Schlüssel (`members_unavailable`).
 
+### Tresor-Schlüssel annehmen
+
+Bevor die App eine Schlüssel-Kopie vom Server übernimmt, prüft sie, von wem sie stammt
+([ADR 0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/)):
+
+- Der Sync öffnet zuerst den persönlichen Tresor. Dessen Kopie muss mit dem eigenen
+  Schlüsselpaar aus dem Worker erzeugt sein (`ownPublicKey`).
+- Eine alte Kopie ohne Absender (`h1`) nimmt die App dort nur an, solange dieses Gerät noch keine
+  eigene gesehen hat (`#personal-key`). Dann wechselt sie sofort den Schlüssel des persönlichen
+  Tresors und synchronisiert noch einmal. Bis dahin ist der Tresor schreibgeschützt
+  (`vault_key_pending`), und Schlüsselbund und geprüfte Codes gelten als nicht geladen.
+- Danach lädt sie den Schlüsselbund aus dem Meta-Feld `keys` des persönlichen Tresors
+  (`vault/keyring.ts`, Zweck `vault-keys`, Merkwert `#keys`).
+- Geteilte Tresore öffnet sie nach den Regeln aus dem ADR: bekannte Version nur mit dem
+  gemerkten Schlüssel, neue Version nur von einem bekannten oder geprüften Mitglied, ältere nie.
+  Neue Tresore und Versionen landen im Schlüsselbund. Neue Mitglieder aus der verschlüsselten
+  Liste werden erlaubte Absender nur mit geprüftem Code; den öffentlichen Schlüssel vom Server
+  übernimmt die App nur beim ersten Annehmen des Tresors.
+- Schlägt das Öffnen eines Tresors fehl, bleibt nur dieser Tresor zu. Die anderen synchronisieren
+  weiter, der Fehler erscheint danach (`vault_key_changed`, `vault_key_unauthenticated`,
+  `vault_key_rolled_back`, `vault_keys_unavailable`, `decrypt_failed`).
+
 ### Konflikte
 
 Antwortet der Server beim Speichern mit `409 revision_mismatch`, synchronisiert der Store und

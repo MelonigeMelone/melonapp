@@ -126,7 +126,7 @@ impl Person {
             "personal_vault": {
                 "id": pv,
                 "encrypted_meta": vault_key.encrypt(br#"{"name":"Privat"}"#, &vault_meta_aad(pv, 1)),
-                "encrypted_vault_key": seal_vault_key(self.keys.public_key(), &vault_key, &ctx(pv, &self.id, 1)).to_string(),
+                "encrypted_vault_key": seal_vault_key(&self.keys, self.keys.public_key(), &vault_key, &ctx(pv, &self.id, 1)).to_string(),
             },
             "invite_token": invite,
         });
@@ -211,9 +211,16 @@ impl Person {
         let v = self.vault(app, id).await.expect("vault visible");
         let version = v["member_key_version"].as_u64().unwrap() as u32;
         let sealed = SealedKey::parse(v["encrypted_vault_key"].as_str().unwrap()).unwrap();
-        self.keys
-            .open_vault_key(&sealed, &ctx(id, &self.id, version))
+        let senders: Vec<PublicKey> = v["members"]
+            .as_array()
             .unwrap()
+            .iter()
+            .map(|m| PublicKey::from_base64(m["public_key"].as_str().unwrap()).unwrap())
+            .collect();
+        self.keys
+            .open_vault_key(&sealed, &ctx(id, &self.id, version), &senders)
+            .unwrap()
+            .0
     }
 }
 
@@ -228,7 +235,7 @@ async fn create_shared_vault(app: &Router, owner: &Person) -> (String, Symmetric
             json!({
                 "id": id,
                 "encrypted_meta": key.encrypt(br#"{"name":"Familie"}"#, &vault_meta_aad(&id, 1)),
-                "encrypted_vault_key": seal_vault_key(owner.keys.public_key(), &key, &ctx(&id, &owner.id, 1)).to_string(),
+                "encrypted_vault_key": seal_vault_key(&owner.keys, owner.keys.public_key(), &key, &ctx(&id, &owner.id, 1)).to_string(),
             }),
         )
         .await;
@@ -259,7 +266,7 @@ async fn add_member(
             json!({
                 "user_id": member.id,
                 "role": role,
-                "encrypted_vault_key": seal_vault_key(&public, key, &ctx(vault, &member.id, 1)).to_string(),
+                "encrypted_vault_key": seal_vault_key(&owner.keys, &public, key, &ctx(vault, &member.id, 1)).to_string(),
                 "key_version": 1,
             }),
         )
@@ -496,7 +503,7 @@ async fn sharing_respects_roles_and_isolation() {
     let (s, _) = alice.send(&app, "POST", &format!("/api/v1/vaults/{pv}/members"), json!({
         "user_id": eve.id,
         "role": "viewer",
-        "encrypted_vault_key": seal_vault_key(eve.keys.public_key(), &key, &ctx(&pv, &eve.id, 1)).to_string(),
+        "encrypted_vault_key": seal_vault_key(&alice.keys, eve.keys.public_key(), &key, &ctx(&pv, &eve.id, 1)).to_string(),
         "key_version": 1,
     })).await;
     assert_eq!(
@@ -609,7 +616,7 @@ async fn invite_link_registration_and_key_grant() {
     assert_eq!(carol_entry["has_key"], false);
     let carol_pub = PublicKey::from_base64(carol_entry["public_key"].as_str().unwrap()).unwrap();
     let (s, _) = alice.send(&closed, "PUT", &format!("/api/v1/vaults/{vault}/members/{}/key", carol.id), json!({
-        "encrypted_vault_key": seal_vault_key(&carol_pub, &key, &ctx(&vault, &carol.id, 1)).to_string(),
+        "encrypted_vault_key": seal_vault_key(&alice.keys, &carol_pub, &key, &ctx(&vault, &carol.id, 1)).to_string(),
         "key_version": 1,
     })).await;
     assert_eq!(s, StatusCode::NO_CONTENT);
@@ -635,6 +642,48 @@ async fn invite_link_registration_and_key_grant() {
         s,
         StatusCode::CONFLICT,
         "existing users are added directly, not invited"
+    );
+}
+
+#[tokio::test]
+async fn personal_vault_can_get_a_new_key_but_never_loses_its_owner() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    alice.register(&app, None).await;
+    alice.login(&app).await;
+    let vault = alice.personal_vault.clone();
+    let key = alice.vault_key(&app, &vault).await;
+    let item = Uuid::new_v4().to_string();
+    let (_, r) = put_item(&app, &alice, (&vault, &key, 1), &item, b"alt", Value::Null).await;
+    let new_key = SymmetricKey::generate();
+    let body = |remove: Value| {
+        json!({
+            "key_version": 2,
+            "encrypted_meta": new_key.encrypt(br#"{"name":"Privat"}"#, &vault_meta_aad(&vault, 2)),
+            "members": [{
+                "user_id": alice.id,
+                "encrypted_vault_key": seal_vault_key(&alice.keys, alice.keys.public_key(), &new_key, &ctx(&vault, &alice.id, 2)).to_string(),
+            }],
+            "items": [{ "id": item, "data": new_key.encrypt(b"neu", &item_aad(&vault, &item, 2)), "base_revision": r["revision"] }],
+            "remove_user_ids": remove,
+        })
+    };
+    let uri = format!("/api/v1/vaults/{vault}/rotate");
+    let (s, r) = alice
+        .send(&app, "POST", &uri, body(json!([alice.id])))
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("personal_vault"))
+    );
+    let (s, _) = alice.send(&app, "POST", &uri, body(json!([]))).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let v = alice.vault(&app, &vault).await.unwrap();
+    assert_eq!(v["key_version"], 2);
+    assert_eq!(v["personal"], true);
+    assert_eq!(
+        alice.vault_key(&app, &vault).await.as_bytes(),
+        new_key.as_bytes()
     );
 }
 
@@ -677,7 +726,7 @@ async fn removing_a_member_rotates_the_key() {
     let seal_for = |p: &Person| {
         json!({
             "user_id": p.id,
-            "encrypted_vault_key": seal_vault_key(p.keys.public_key(), &new_key, &ctx(&vault, &p.id, 2)).to_string(),
+            "encrypted_vault_key": seal_vault_key(&alice.keys, p.keys.public_key(), &new_key, &ctx(&vault, &p.id, 2)).to_string(),
         })
     };
     let revisions = |page: &Value| -> HashMap<String, i64> {
@@ -1218,7 +1267,7 @@ async fn native_client_registers_unlocks_and_roundtrips_items() {
     native.call("unlock",json!({"wrappedAccountKey":login["wrapped_account_key"],"encryptedPrivateKey":login["encrypted_private_key"]})).unwrap();
     let (_, vaults) = call(&app, "GET", "/api/v1/vaults", Some(token), None).await;
     let remote = &vaults["vaults"][0];
-    native.call("openVault",json!({"vaultId":vault,"userId":user,"keyVersion":1,"sealed":remote["encrypted_vault_key"]})).unwrap();
+    native.call("openVault",json!({"vaultId":vault,"userId":user,"keyVersion":1,"sealed":remote["encrypted_vault_key"],"senders":[login["public_key"]]})).unwrap();
     let item = Uuid::new_v4().to_string();
     let encrypted = native
         .call(

@@ -40,7 +40,7 @@ Formate: `EncString` = `1.<base64url>` (XChaCha20-Poly1305), `SealedKey` = `h1.<
 | PUT | `/vaults/{id}/members/{user}` | Besitzer | Rolle ändern |
 | PUT | `/vaults/{id}/members/{user}/key` | Besitzer | Schlüssel für wartendes Mitglied hinterlegen |
 | DELETE | `/vaults/{id}/members/{user}` | selbst / Besitzer | verlassen bzw. wartendes Mitglied entfernen |
-| POST | `/vaults/{id}/rotate` | Besitzer | neuer Tresor-Schlüssel, optional Mitglieder entfernen |
+| POST | `/vaults/{id}/rotate` | Besitzer | neuer Tresor-Schlüssel, optional Mitglieder entfernen (persönlicher Tresor: nur neuer Schlüssel) |
 | GET/POST | `/vaults/{id}/invites` | Besitzer | Einladungen auflisten / erzeugen |
 | DELETE | `/vaults/{id}/invites/{invite}` | Besitzer | Einladung zurückziehen |
 
@@ -63,7 +63,7 @@ gibt. So verrät die API nicht, welche Tresore existieren.
   "wrapped_account_key": "1.<…>",
   "public_key": "<base64, 32 Byte X25519>",
   "encrypted_private_key": "1.<…>",
-  "personal_vault": { "id": "<uuid>", "encrypted_meta": "1.<…>", "encrypted_vault_key": "h1.<…>" },
+  "personal_vault": { "id": "<uuid>", "encrypted_meta": "1.<…>", "encrypted_vault_key": "h2.<…>" },
   "invite_token": null
 }
 ```
@@ -160,7 +160,7 @@ Der Token gilt 15 Minuten und **nur** für `recover/complete`. Alle anderen Endp
 { "vaults": [{
   "id": "…", "personal": false, "encrypted_meta": "1.<…>", "key_version": 2,
   "revision": 41, "rotation_needed": false,
-  "role": "owner", "encrypted_vault_key": "h1.<…>", "member_key_version": 2,
+  "role": "owner", "encrypted_vault_key": "h2.<…>", "member_key_version": 2,
   "members": [{ "user_id": "…", "email": "…", "role": "editor", "public_key": "…",
                 "has_key": true, "key_version": 2 }]
 }]}
@@ -218,7 +218,7 @@ Höchstens 1000 pro Antwort. `403 vault_key_pending` für wartende Mitglieder.
 {
   "key_version": 3,
   "encrypted_meta": "1.<…>",
-  "members": [{ "user_id": "…", "encrypted_vault_key": "h1.<…>" }],
+  "members": [{ "user_id": "…", "encrypted_vault_key": "h2.<…>" }],
   "items": [{ "id": "…", "data": "1.<…>", "base_revision": 41 }],
   "remove_user_ids": ["…"]
 }
@@ -227,6 +227,9 @@ Höchstens 1000 pro Antwort. `403 vault_key_pending` für wartende Mitglieder.
 → `204`. Der Server übernimmt alles in **einer** Transaktion, aber nur, wenn
 
 - `key_version` genau eins höher ist als bisher (`409 key_version_mismatch`),
+- beim persönlichen Tresor niemand entfernt wird (`400 personal_vault`). Die Apps wechseln dort
+  einmal den Schlüssel, um alte Kopien ohne Absender abzulösen
+  ([ADR 0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/)),
 - `members` genau alle verbleibenden Mitglieder mit Schlüssel enthält (`409 members_changed`),
 - `items` genau alle nicht gelöschten Einträge enthält, jeweils mit der Revision, die der Client
   neu verschlüsselt hat (`409 items_changed`).

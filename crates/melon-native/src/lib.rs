@@ -7,8 +7,8 @@ use unicode_normalization::UnicodeNormalization;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
     EncString, KdfParams, KeyPair, PasswordOptions, PrivateDataKey, PublicKey, RecoveryKey,
-    SealedKey, SymmetricKey, VaultKeyContext, derive_master_key, item_aad, seal_vault_key,
-    unwrap_account_key, vault_meta_aad, wrap_account_key,
+    SealOrigin, SealedKey, SymmetricKey, VaultKeyContext, derive_master_key, item_aad,
+    seal_vault_key, unwrap_account_key, vault_key_id, vault_meta_aad, wrap_account_key,
 };
 use serde_json::{Value, json};
 use zeroize::{Zeroize, Zeroizing};
@@ -95,6 +95,7 @@ fn context<'a>(vault_id: &'a str, user_id: &'a str, key_version: u32) -> VaultKe
 }
 
 fn sealed(
+    sender: &KeyPair,
     key: &SymmetricKey,
     public: &str,
     vault: &str,
@@ -102,7 +103,7 @@ fn sealed(
     version: u32,
 ) -> Result<String> {
     let public = PublicKey::from_base64(public).map_err(|_| "invalid_public_key")?;
-    Ok(seal_vault_key(&public, key, &context(vault, user, version)).to_string())
+    Ok(seal_vault_key(sender, &public, key, &context(vault, user, version)).to_string())
 }
 
 fn same_password(a: &str, b: &str) -> bool {
@@ -394,7 +395,7 @@ impl Session {
                 let identity = KeyPair::generate();
                 let key = SymmetricKey::generate();
                 let id = text(a, "personalVaultId")?;
-                let result = json!({"wrappedAccountKey": wrap_account_key(&wrapping, &account).to_string(), "publicKey": identity.public_key().to_base64(), "encryptedPrivateKey": identity.seal_with(&account).to_string(), "personalVault": {"encryptedMeta": key.encrypt(text(a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(), "encryptedVaultKey": sealed(&key,&identity.public_key().to_base64(), id,text(a,"userId")?,1)?}});
+                let result = json!({"wrappedAccountKey": wrap_account_key(&wrapping, &account).to_string(), "publicKey": identity.public_key().to_base64(), "encryptedPrivateKey": identity.seal_with(&account).to_string(), "personalVault": {"encryptedMeta": key.encrypt(text(a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(), "encryptedVaultKey": sealed(&identity,&key,&identity.public_key().to_base64(), id,text(a,"userId")?,1)?}});
                 self.account = Some(account);
                 self.identity = Some(identity);
                 self.vaults.insert(id.to_owned(), Vault { key, version: 1 });
@@ -417,27 +418,57 @@ impl Session {
                 self.require_account()?;
                 let id = text(a, "vaultId")?;
                 let version = number(a, "keyVersion")?;
-                let key = self
+                let senders = array(a, "senders")?
+                    .iter()
+                    .map(|s| {
+                        s.as_str()
+                            .and_then(|s| PublicKey::from_base64(s).ok())
+                            .ok_or("invalid_public_key")
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let (key, origin) = self
                     .identity
                     .as_ref()
                     .ok_or("locked")?
                     .open_vault_key(
                         &SealedKey::parse(text(a, "sealed")?).map_err(|_| "invalid_ciphertext")?,
                         &context(id, text(a, "userId")?, version),
+                        &senders,
                     )
                     .map_err(|_| "decrypt_failed")?;
+                let sender = match origin {
+                    SealOrigin::Legacy if a.get("legacy") == Some(&Value::Bool(true)) => {
+                        Value::Null
+                    }
+                    SealOrigin::Legacy => return Err("vault_key_unauthenticated"),
+                    SealOrigin::Sender(i) => json!(i),
+                };
+                let key_id = vault_key_id(&key, id, version);
+                match a.get("pinned") {
+                    None | Some(Value::Null) => {}
+                    Some(Value::String(pinned)) if *pinned == key_id => {}
+                    Some(Value::String(_)) => return Err("vault_key_changed"),
+                    Some(_) => return Err("invalid_argument"),
+                }
                 self.vaults.insert(id.to_owned(), Vault { key, version });
-                Ok(Value::Null)
+                Ok(json!({"sender": sender, "keyId": key_id}))
             }
             "newVault" => {
                 self.require_account()?;
                 let identity = self.identity.as_ref().ok_or("locked")?;
                 let id = text(a, "vaultId")?;
                 let key = SymmetricKey::generate();
-                let result = json!({"encryptedMeta":key.encrypt(text(a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(),"encryptedVaultKey":sealed(&key,&identity.public_key().to_base64(),id,text(a,"userId")?,1)?});
+                let result = json!({"encryptedMeta":key.encrypt(text(a,"meta")?.as_bytes(), &vault_meta_aad(id,1)).to_string(),"encryptedVaultKey":sealed(identity,&key,&identity.public_key().to_base64(),id,text(a,"userId")?,1)?});
                 self.vaults.insert(id.to_owned(), Vault { key, version: 1 });
                 Ok(result)
             }
+            "ownPublicKey" => Ok(json!(
+                self.identity
+                    .as_ref()
+                    .ok_or("locked")?
+                    .public_key()
+                    .to_base64()
+            )),
             "hasVault" => Ok(json!(
                 self.vault(text(a, "vaultId")?)
                     .is_ok_and(|v| v.version == number(a, "keyVersion").unwrap_or(0))
@@ -550,6 +581,7 @@ impl Session {
     fn vault_call(&self, method: &str, a: &Value) -> Result<Value> {
         let id = text(a, "vaultId")?;
         let v = self.vault(id)?;
+        let identity = self.identity.as_ref().ok_or("locked")?;
         match method {
             "encryptMeta" => Ok(json!(
                 v.key
@@ -595,6 +627,7 @@ impl Session {
                 Ok(json!(results?))
             }
             "sealFor" => Ok(json!(sealed(
+                identity,
                 &v.key,
                 text(a, "publicKey")?,
                 id,
@@ -604,7 +637,7 @@ impl Session {
             "rotate" => {
                 let next = v.version.checked_add(1).ok_or("invalid_version")?;
                 let key = SymmetricKey::generate();
-                let members: Result<Vec<Value>> = array(a,"members")?.iter().map(|m| Ok(json!({"user_id":text(m,"userId")?,"encrypted_vault_key":sealed(&key,text(m,"publicKey")?,id,text(m,"userId")?,next)?}))).collect();
+                let members: Result<Vec<Value>> = array(a,"members")?.iter().map(|m| Ok(json!({"user_id":text(m,"userId")?,"encrypted_vault_key":sealed(identity,&key,text(m,"publicKey")?,id,text(m,"userId")?,next)?}))).collect();
                 let items: Result<Vec<Value>> = array(a,"items")?.iter().map(|i| Ok(json!({"id":text(i,"id")?,"data":key.encrypt(text(i,"plaintext")?.as_bytes(),&item_aad(id,text(i,"id")?,next)).to_string()}))).collect();
                 Ok(
                     json!({"encryptedMeta":key.encrypt(text(a,"meta")?.as_bytes(),&vault_meta_aad(id,next)).to_string(),"members":members?,"items":items?}),
@@ -618,6 +651,9 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const LEGACY_PRIVATE: &str = "1.le7Bu4FdIov-f-gIjgG54vWZGAcWp4tgm_6neURlCJpzZVYx8EeijJ_zbzUzKCICCGXaPT_4G_g-_wbsNIoBwW2IBAUIDhmz";
+    const LEGACY_SEALED: &str = "h1.LK_MzopzpzCIQGJ9fXY4pWjtDypDKFeZcQR3dMYTfzqSwWYOQdCf0j_PUAeOdxMD45jJ2PPFijVSoIKD60ejhpRWtq8S4bT26vXWWTBgcNQ";
 
     fn account() -> (Session, Value) {
         let mut session = Session::default();
@@ -724,8 +760,9 @@ mod tests {
 
     #[test]
     fn sharing_and_rotation_preserve_context_and_versions() {
-        let (mut owner, _) = account();
+        let (mut owner, owner_account) = account();
         let (mut guest, guest_account) = account();
+        let senders = json!([owner_account["publicKey"]]);
         let sealed = owner
             .call(
                 "sealFor",
@@ -736,16 +773,17 @@ mod tests {
             guest
                 .call(
                     "openVault",
-                    json!({"vaultId":"vault","userId":"attacker","keyVersion":1,"sealed":sealed})
+                    json!({"vaultId":"vault","userId":"attacker","keyVersion":1,"sealed":sealed,"senders":senders})
                 )
                 .is_err()
         );
-        guest
+        let opened = guest
             .call(
                 "openVault",
-                json!({"vaultId":"vault","userId":"guest","keyVersion":1,"sealed":sealed}),
+                json!({"vaultId":"vault","userId":"guest","keyVersion":1,"sealed":sealed,"senders":senders}),
             )
             .unwrap();
+        assert_eq!(opened["sender"], 0);
         let data = owner
             .call(
                 "encryptItem",
@@ -765,7 +803,7 @@ mod tests {
             guest.call("decryptItems", item.clone()).unwrap()[0]["error"],
             "key_version_mismatch"
         );
-        guest.call("openVault",json!({"vaultId":"vault","userId":"guest","keyVersion":2,"sealed":rotated["members"][0]["encrypted_vault_key"]})).unwrap();
+        guest.call("openVault",json!({"vaultId":"vault","userId":"guest","keyVersion":2,"sealed":rotated["members"][0]["encrypted_vault_key"],"senders":senders})).unwrap();
         assert_eq!(
             guest.call("decryptItems", item).unwrap()[0]["plaintext"],
             "rotated"
@@ -776,6 +814,102 @@ mod tests {
                 .unwrap(),
             true
         );
+    }
+
+    fn open_args(sealed: &Value, senders: Value, extra: Value) -> Value {
+        let mut args = json!({"vaultId":"vault","userId":"guest","keyVersion":1,"sealed":sealed,"senders":senders});
+        for (k, v) in extra.as_object().unwrap() {
+            args[k] = v.clone();
+        }
+        args
+    }
+
+    #[test]
+    fn vault_key_from_a_sender_outside_the_list_is_refused() {
+        let (mut server, server_account) = account();
+        let (mut guest, guest_account) = account();
+        let forged = server
+            .call(
+                "sealFor",
+                json!({"vaultId":"vault","publicKey":guest_account["publicKey"],"userId":"guest"}),
+            )
+            .unwrap();
+        let before = guest.vaults.get("vault").map(|v| v.key.as_bytes().to_vec());
+        assert_eq!(
+            guest
+                .call(
+                    "openVault",
+                    open_args(&forged, json!([guest_account["publicKey"]]), json!({}))
+                )
+                .err(),
+            Some("decrypt_failed")
+        );
+        assert_eq!(
+            guest.vaults.get("vault").map(|v| v.key.as_bytes().to_vec()),
+            before
+        );
+        let opened = guest
+            .call(
+                "openVault",
+                open_args(&forged, json!([server_account["publicKey"]]), json!({})),
+            )
+            .unwrap();
+        assert_eq!(opened["sender"], 0);
+    }
+
+    #[test]
+    fn vault_key_that_does_not_match_the_pinned_one_is_refused() {
+        let (mut owner, owner_account) = account();
+        let (mut guest, guest_account) = account();
+        let sealed = owner
+            .call(
+                "sealFor",
+                json!({"vaultId":"vault","publicKey":guest_account["publicKey"],"userId":"guest"}),
+            )
+            .unwrap();
+        let senders = json!([owner_account["publicKey"]]);
+        let before = guest.vaults.get("vault").map(|v| v.key.as_bytes().to_vec());
+        assert_eq!(
+            guest
+                .call(
+                    "openVault",
+                    open_args(&sealed, senders.clone(), json!({"pinned":"other"}))
+                )
+                .err(),
+            Some("vault_key_changed")
+        );
+        assert_eq!(
+            guest.vaults.get("vault").map(|v| v.key.as_bytes().to_vec()),
+            before
+        );
+        let first = guest
+            .call("openVault", open_args(&sealed, senders.clone(), json!({})))
+            .unwrap();
+        guest
+            .call(
+                "openVault",
+                open_args(&sealed, senders, json!({"pinned":first["keyId"]})),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn legacy_vault_key_opens_only_when_allowed() {
+        let mut session = Session::default();
+        let account = SymmetricKey::from_bytes([9u8; 32]);
+        session.identity =
+            Some(KeyPair::open_with(&account, &EncString::parse(LEGACY_PRIVATE).unwrap()).unwrap());
+        session.account = Some(account);
+        let args = json!({"vaultId":"vault-1","userId":"user-1","keyVersion":1,"sealed":LEGACY_SEALED,"senders":[]});
+        assert_eq!(
+            session.call("openVault", args.clone()).err(),
+            Some("vault_key_unauthenticated")
+        );
+        assert!(session.vaults.is_empty());
+        let mut allowed = args;
+        allowed["legacy"] = json!(true);
+        let opened = session.call("openVault", allowed).unwrap();
+        assert_eq!(opened["sender"], Value::Null);
     }
 
     #[test]

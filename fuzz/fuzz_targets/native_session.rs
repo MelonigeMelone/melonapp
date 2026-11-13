@@ -14,6 +14,7 @@ const METHODS: &[&str] = &[
     "openVault",
     "newVault",
     "hasVault",
+    "ownPublicKey",
     "fingerprint",
     "encryptMeta",
     "decryptMeta",

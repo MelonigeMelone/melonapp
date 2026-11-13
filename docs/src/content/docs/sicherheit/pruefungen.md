@@ -35,7 +35,9 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Chiffretext lässt sich nicht in anderen Eintrag/Tresor/Schlüsselversion verschieben | `sharing::tests::item_aad_separates_contexts`, `api::personal_vault_flow` |
 | Geteilter Tresor-Schlüssel ist an Tresor, Person und Version gebunden | `sharing::tests::sealed_key_is_bound_to_vault_user_and_version` |
 | Nur der Empfänger öffnet seine Schlüssel-Kopie | `sharing::tests::other_person_cannot_open` |
-| Server kann KDF nicht abschwächen | `kdf::tests::weak_or_absurd_params_are_rejected` |
+| Schlüssel-Kopien tragen ihren Absender: fremde Absender scheitern, alte Kopien werden als „ohne Absender“ erkannt, umetikettierte auch | `sharing::tests::copy_from_a_sender_outside_the_list_is_rejected`, `copy_without_sender_is_reported_as_legacy`, `relabelling_a_legacy_copy_as_authenticated_fails`, `melon-native`: `vault_key_from_a_sender_outside_the_list_is_refused`, `vault_key_that_does_not_match_the_pinned_one_is_refused`, `legacy_vault_key_opens_only_when_allowed` |
+| Server kann keinen eigenen Tresor-Schlüssel unterschieben: persönlicher Tresor nur mit eigener Kopie und einmaligem Wechsel weg von alten Kopien; bekannte Tresore nur mit gemerktem Schlüssel; neue Versionen nur von bekannten oder geprüften Mitgliedern, nicht von ausgetauschten Schlüsseln, vom Server ergänzten Mitgliedern (auch mit zurückgespielter Mitgliederliste) oder ehemaligen Mitgliedern; mit altem persönlichem Schlüssel wird nichts geschrieben; ältere Versionen und versteckter Schlüsselbund stoppen | `manager.test.ts` (`authenticated vault keys in the vaults manager`), `api::personal_vault_can_get_a_new_key_but_never_loses_its_owner` |
+| Server kann KDF nicht unter die Mindestwerte abschwächen | `kdf::tests::weak_or_absurd_params_are_rejected` |
 | Gleiches Passwort auf allen Plattformen | `kdf::tests::unicode_is_normalized` |
 | Fremde sehen keine Tresore, persönliche Tresore sind nicht teilbar | `api::sharing_respects_roles_and_isolation` |
 | Betrachter können nicht schreiben, Bearbeiter keine Mitglieder verwalten | `api::sharing_respects_roles_and_isolation` |

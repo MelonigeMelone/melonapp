@@ -30,6 +30,7 @@ Tresor-Schlüssel (zufällig, je Tresor) ─► Einträge und Tresor-Name
 - **Tresor-Schlüssel je Tresor:** zufällig, 256 bit. Für jedes Mitglied einzeln per **HPKE**
   (RFC 9180, `DHKEM(X25519, HKDF-SHA256)`, `HKDF-SHA256`, `ChaCha20Poly1305`, Base-Modus)
   verschlüsselt. Auch der persönliche Tresor funktioniert so, als Tresor mit einem Mitglied.
+  Seit [ADR 0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/) im Auth-Modus mit dem Schlüsselpaar des Absenders.
 - **AAD** bindet jeden Chiffretext an seinen Platz:
   - Eintrag: `melon/v2/item\0<tresor-id>\0<eintrag-id>\0<schlüsselversion>`
   - Tresor-Name: `melon/v2/vault-meta\0<tresor-id>\0<schlüsselversion>`

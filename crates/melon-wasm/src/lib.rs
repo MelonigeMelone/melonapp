@@ -1,8 +1,8 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
     EncString, KdfParams, KeyPair, PasswordOptions, PrivateDataKey, PublicKey, RecoveryKey,
-    SealedKey, SymmetricKey, VaultKeyContext, derive_master_key, item_aad, unwrap_account_key,
-    vault_meta_aad, wrap_account_key,
+    SealOrigin, SealedKey, SymmetricKey, VaultKeyContext, derive_master_key, item_aad,
+    unwrap_account_key, vault_key_id, vault_meta_aad, wrap_account_key,
 };
 use wasm_bindgen::prelude::*;
 
@@ -130,30 +130,65 @@ impl Identity {
         vault_id: &str,
         user_id: &str,
         key_version: u32,
-    ) -> Result<VaultKey, JsError> {
+        senders: Vec<String>,
+    ) -> Result<OpenedVaultKey, JsError> {
         let sealed = SealedKey::parse(sealed).map_err(js_err)?;
-        self.0
-            .open_vault_key(&sealed, &context(vault_id, user_id, key_version))
-            .map(VaultKey)
-            .map_err(js_err)
+        let senders = senders
+            .iter()
+            .map(|s| PublicKey::from_base64(s))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(js_err)?;
+        let (key, origin) = self
+            .0
+            .open_vault_key(&sealed, &context(vault_id, user_id, key_version), &senders)
+            .map_err(js_err)?;
+        let sender = match origin {
+            SealOrigin::Legacy => -1,
+            SealOrigin::Sender(i) => i32::try_from(i).map_err(js_err)?,
+        };
+        Ok(OpenedVaultKey {
+            key: VaultKey(key),
+            sender,
+        })
+    }
+
+    #[wasm_bindgen(js_name = sealVaultKey)]
+    pub fn seal_vault_key(
+        &self,
+        public_key: &str,
+        vault_key: &VaultKey,
+        vault_id: &str,
+        user_id: &str,
+        key_version: u32,
+    ) -> Result<String, JsError> {
+        let recipient = PublicKey::from_base64(public_key).map_err(js_err)?;
+        Ok(melon_crypto::seal_vault_key(
+            &self.0,
+            &recipient,
+            &vault_key.0,
+            &context(vault_id, user_id, key_version),
+        )
+        .to_string())
     }
 }
 
-#[wasm_bindgen(js_name = sealVaultKey)]
-pub fn seal_vault_key(
-    public_key: &str,
-    vault_key: &VaultKey,
-    vault_id: &str,
-    user_id: &str,
-    key_version: u32,
-) -> Result<String, JsError> {
-    let recipient = PublicKey::from_base64(public_key).map_err(js_err)?;
-    Ok(melon_crypto::seal_vault_key(
-        &recipient,
-        &vault_key.0,
-        &context(vault_id, user_id, key_version),
-    )
-    .to_string())
+#[wasm_bindgen]
+pub struct OpenedVaultKey {
+    key: VaultKey,
+    sender: i32,
+}
+
+#[wasm_bindgen]
+impl OpenedVaultKey {
+    #[wasm_bindgen(getter)]
+    pub fn sender(&self) -> i32 {
+        self.sender
+    }
+
+    #[wasm_bindgen(js_name = intoKey)]
+    pub fn into_key(self) -> VaultKey {
+        self.key
+    }
 }
 
 #[wasm_bindgen]
@@ -169,6 +204,10 @@ fn decrypt_str(key: &SymmetricKey, data: &str, aad: &[u8]) -> Result<String, JsE
 impl VaultKey {
     pub fn generate() -> VaultKey {
         VaultKey(SymmetricKey::generate())
+    }
+
+    pub fn id(&self, vault_id: &str, key_version: u32) -> String {
+        vault_key_id(&self.0, vault_id, key_version)
     }
 
     #[wasm_bindgen(js_name = exportRaw)]

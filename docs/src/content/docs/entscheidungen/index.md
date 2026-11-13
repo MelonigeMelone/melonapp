@@ -38,5 +38,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0024](/melonapp/entscheidungen/0024-apple-verteilung/) | Apple-Apps über Developer ID und TestFlight verteilen | angenommen |
 | [0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/) | Verschlüsselte Mitgliederliste für Schlüssel-Freigaben | angenommen |
 | [0026](/melonapp/entscheidungen/0026-safari-erweiterung-nur-mac/) | Safari-Erweiterung nur auf dem Mac, eingebettet in die Mac-App | angenommen |
+| [0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/) | Authentisierte Tresor-Schlüssel | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.

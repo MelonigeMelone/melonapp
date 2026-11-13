@@ -58,6 +58,7 @@ Schlüsselversion). Folgendes kann er aber:
 | **Änderungen zurückhalten** oder Einträge ausblenden | Geräte sehen unterschiedliche Stände | nicht erkennbar, steht in den [offenen Punkten](/melonapp/sicherheit/offene-punkte/) |
 | **Manipulierte Web-App ausliefern** (die Web-App kommt vom selben Server) | beim nächsten Entsperren im Browser liest sie das Master-Passwort mit | Browser-Erweiterung und künftige Desktop-/iPhone-App laden ihren Code **nicht** vom Server. Für sensible Nutzung diese bevorzugen. |
 | Öffentliche Schlüssel austauschen | Tresor-Schlüssel abfangen | Sicherheitscode vergleichen (unten) |
+| Eigenen Tresor-Schlüssel unterschieben | neue Einträge landen unter einem Schlüssel, den der Server kennt | **Verhindert:** Kopien tragen ihren Absender, der persönliche Tresor nimmt nur eigene an, bekannte Tresore nur den gemerkten Schlüssel oder einen neuen von einem bekannten Mitglied ([ADR 0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/)). Bei einem **neuen** geteilten Tresor bleibt erstes Vertrauen. |
 
 Der Server ist also **für die Vertraulichkeit nicht vertrauenswürdig nötig**, solange die App
 nicht von ihm kommt. Für Verfügbarkeit und Aktualität muss man ihm vertrauen.

@@ -32,7 +32,7 @@ Jede Antwort trägt:
 | `Cross-Origin-Resource-Policy` | `same-origin` | |
 | `Strict-Transport-Security` | 2 Jahre, setzt Caddy | nur HTTPS |
 
-Zusätzlich gilt ein Body-Limit von 1 MiB pro Anfrage und 64 KiB pro Item.
+Zusätzlich gilt ein Body-Limit von 1 MiB pro Anfrage und 64 KiB pro Item und pro Tresor-Meta.
 
 Fehler mit dem Status `500` erscheinen nach außen nur als `internal`. Die Ursache steht
 im Log. Bodies, Tokens und Schlüssel werden nie geloggt.

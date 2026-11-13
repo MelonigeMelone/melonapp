@@ -36,11 +36,25 @@ export interface Reauth {
   wrappedAccountKey: string;
 }
 
+export interface OpenedVault {
+  sender: number | null;
+  keyId: string;
+}
+
 export interface CryptoMethods {
   derive(a: { password: string; salt: string; kdf: Kdf }): string;
   createAccount(a: { userId: string; personalVaultId: string; meta: string }): NewAccount;
   unlock(a: { wrappedAccountKey: string; encryptedPrivateKey: string }): string;
-  openVault(a: { vaultId: string; userId: string; keyVersion: number; sealed: string }): void;
+  ownPublicKey(): string;
+  openVault(a: {
+    vaultId: string;
+    userId: string;
+    keyVersion: number;
+    sealed: string;
+    senders: string[];
+    legacy: boolean;
+    pinned: string | null;
+  }): OpenedVault;
   newVault(a: { vaultId: string; userId: string; meta: string }): { encryptedMeta: string; encryptedVaultKey: string };
   hasVault(a: { vaultId: string; keyVersion: number }): boolean;
   encryptMeta(a: { vaultId: string; plaintext: string }): string;

@@ -95,7 +95,7 @@ Konto-Schlüssel verschlüsselt gespeichert, der öffentliche liegt im Klartext 
 ### Tresor-Schlüssel verteilen: HPKE
 
 Tresor-Schlüssel werden mit **HPKE** (RFC 9180) für den öffentlichen Schlüssel jedes Mitglieds
-verschlüsselt: Base-Modus, `DHKEM(X25519, HKDF-SHA256)`, `HKDF-SHA256`, `ChaCha20Poly1305`,
+verschlüsselt: Auth-Modus, `DHKEM(X25519, HKDF-SHA256)`, `HKDF-SHA256`, `ChaCha20Poly1305`,
 Crate `hpke` 0.15. HPKE ist der IETF-Standard für „verschlüssle für einen öffentlichen
 Schlüssel“. Eine eigene Konstruktion aus X25519 + HKDF wäre selbst gebaute Kryptografie.
 
@@ -108,8 +108,17 @@ melon/v2/vault-key\0<tresor-id>\0<nutzer-id>\0<schlüsselversion>
 Eine Kopie für Bob lässt sich also weder einer anderen Person noch einem anderen Tresor oder
 einer anderen Schlüsselversion unterschieben.
 
-Format `SealedKey`: `h1.<base64url(encapped_key[32] ‖ ciphertext[32] ‖ tag[16])>`, genau 80 Byte.
-Der Server prüft beim Speichern nur dieses Format.
+Im Auth-Modus fließt der private Schlüssel des Absenders mit ein. Öffnen gelingt nur mit dem
+passenden öffentlichen Schlüssel des Absenders. `open_vault_key` bekommt eine Liste erlaubter
+Absender und meldet, welcher es war (`SealOrigin`). Wer welche Kopie annimmt, steht in
+[ADR 0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/).
+
+Format `SealedKey`: `h2.<base64url(encapped_key[32] ‖ ciphertext[32] ‖ tag[16])>`, genau 80 Byte.
+`h1` ist dasselbe Format im Base-Modus ohne Absender. Solche Kopien bleiben lesbar und werden als
+`SealOrigin::Legacy` gemeldet. Der Server prüft beim Speichern nur das Format.
+
+`vault_key_id` ist `base64url(SHA-256("melon/v2/vault-key-id\0" ‖ tresor-id ‖ 0 ‖ version ‖ 0 ‖ schlüssel))`.
+Die App merkt sich damit im Schlüsselbund, welcher Schlüssel zu welcher Tresor-Version gehört.
 
 ### Zufall
 

@@ -88,13 +88,14 @@ fn stored_key_pair_and_shared_vault_keys_still_open() {
         key_version: 1,
     };
     let sealed = SealedKey::parse(SEALED_VAULT_KEY).unwrap();
-    let vault_key = kp.open_vault_key(&sealed, &ctx).unwrap();
+    let (vault_key, origin) = kp.open_vault_key(&sealed, &ctx, &[]).unwrap();
     assert_eq!(vault_key.as_bytes(), &[5u8; 32]);
+    assert_eq!(origin, SealOrigin::Legacy);
     let other = VaultKeyContext {
         key_version: 2,
         ..ctx
     };
-    assert!(kp.open_vault_key(&sealed, &other).is_err());
+    assert!(kp.open_vault_key(&sealed, &other, &[]).is_err());
 }
 
 #[test]

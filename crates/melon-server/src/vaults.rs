@@ -16,7 +16,7 @@ use crate::{
     state::AppState,
 };
 
-pub const MAX_META_LEN: usize = 4 * 1024;
+pub const MAX_META_LEN: usize = 64 * 1024;
 pub const MAX_ITEM_LEN: usize = 64 * 1024;
 const PAGE_SIZE: i64 = 1000;
 

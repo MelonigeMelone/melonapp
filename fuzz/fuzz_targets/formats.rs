@@ -26,7 +26,7 @@ fuzz_target!(|data: &[u8]| {
             user_id: "user",
             key_version: 1,
         };
-        let _ = pair.open_vault_key(&sealed, &context);
+        let _ = pair.open_vault_key(&sealed, &context, &[pair.public_key().clone()]);
     }
     if let Ok(recovery) = RecoveryKey::parse(&text) {
         assert!(RecoveryKey::parse(&recovery.display()).is_ok());

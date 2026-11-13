@@ -9,7 +9,6 @@ import init, {
   PrivateData,
   Recovery,
   sealExport,
-  sealVaultKey,
   VaultKey,
   type DerivedKeys,
 } from '@melon/wasm';
@@ -88,7 +87,7 @@ const handlers: CryptoMethods = {
         encryptedPrivateKey: fresh.seal(account),
         personalVault: {
           encryptedMeta: vaultKey.encryptMeta(personalVaultId, 1, meta),
-          encryptedVaultKey: sealVaultKey(fresh.publicKey, vaultKey, personalVaultId, userId, 1),
+          encryptedVaultKey: fresh.sealVaultKey(fresh.publicKey, vaultKey, personalVaultId, userId, 1),
         },
       };
       identity?.free();
@@ -113,15 +112,28 @@ const handlers: CryptoMethods = {
       dropDerived();
     }
   },
-  openVault({ vaultId, userId, keyVersion, sealed }) {
-    setVault(vaultId, requireIdentity().openVaultKey(sealed, vaultId, userId, keyVersion), keyVersion);
+  ownPublicKey() {
+    return requireIdentity().publicKey;
+  },
+  openVault({ vaultId, userId, keyVersion, sealed, senders, legacy, pinned }) {
+    const opened = requireIdentity().openVaultKey(sealed, vaultId, userId, keyVersion, senders);
+    const sender = opened.sender;
+    const key = opened.intoKey();
+    const keyId = key.id(vaultId, keyVersion);
+    const problem = sender < 0 && !legacy ? 'vault_key_unauthenticated' : pinned !== null && pinned !== keyId ? 'vault_key_changed' : null;
+    if (problem) {
+      key.free();
+      fail(problem);
+    }
+    setVault(vaultId, key, keyVersion);
+    return { sender: sender < 0 ? null : sender, keyId };
   },
   newVault({ vaultId, userId, meta }) {
     const me = requireIdentity();
     const key = VaultKey.generate();
     const result = {
       encryptedMeta: key.encryptMeta(vaultId, 1, meta),
-      encryptedVaultKey: sealVaultKey(me.publicKey, key, vaultId, userId, 1),
+      encryptedVaultKey: me.sealVaultKey(me.publicKey, key, vaultId, userId, 1),
     };
     setVault(vaultId, key, 1);
     return result;
@@ -154,17 +166,18 @@ const handlers: CryptoMethods = {
   },
   sealFor({ vaultId, publicKey, userId }) {
     const v = requireVault(vaultId);
-    return sealVaultKey(publicKey, v.key, vaultId, userId, v.version);
+    return requireIdentity().sealVaultKey(publicKey, v.key, vaultId, userId, v.version);
   },
   rotate({ vaultId, meta, members, items }) {
     const next = requireVault(vaultId).version + 1;
+    const me = requireIdentity();
     const key = VaultKey.generate();
     try {
       return {
         encryptedMeta: key.encryptMeta(vaultId, next, meta),
         members: members.map((m) => ({
           user_id: m.userId,
-          encrypted_vault_key: sealVaultKey(m.publicKey, key, vaultId, m.userId, next),
+          encrypted_vault_key: me.sealVaultKey(m.publicKey, key, vaultId, m.userId, next),
         })),
         items: items.map((i) => ({ id: i.id, data: key.encryptItem(vaultId, i.id, next, i.plaintext) })),
       };

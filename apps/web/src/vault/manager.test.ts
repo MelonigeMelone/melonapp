@@ -30,7 +30,7 @@ class FakeServer {
   sealedFor: string[] = [];
   rotations = 0;
   vaults: RemoteVault[] = [
-    vault('personal', true, '', [member(ME, 'ME-KEY')]),
+    { ...vault('personal', true, '', [member(ME, 'ME-KEY')]), encrypted_vault_key: 'seal:ME-KEY:personal-1' },
     vault('family', false, 'Familie', [member(ME, 'ME-KEY'), member(MIA, 'MIA-KEY')]),
   ];
 
@@ -62,12 +62,18 @@ class FakeServer {
       addMember: async (_id: string, body: { user_id: string }) => {
         this.sealedFor.push(body.user_id);
       },
-      rotate: async (id: string, body: { encrypted_meta: string; members: { user_id: string }[] }) => {
+      rotate: async (id: string, body: { key_version: number; encrypted_meta: string; members: { user_id: string; encrypted_vault_key: string }[] }) => {
         this.rotations += 1;
         this.sealedFor.push(...body.members.map((m) => m.user_id));
         const v = this.vault(id);
         v.rotation_needed = false;
         v.encrypted_meta = body.encrypted_meta;
+        v.key_version = body.key_version;
+        const mine = body.members.find((m) => m.user_id === ME);
+        if (mine) {
+          v.encrypted_vault_key = mine.encrypted_vault_key;
+          v.member_key_version = body.key_version;
+        }
       },
       createInvite: async () => ({ id: 'inv-1', token: 'token', expires_in_days: 7 }),
       listInvites: async () => ({ invites: [{ id: 'inv-1', email: 'eve@example.test', role: 'editor', expires_in_hours: 100 }] }),
@@ -76,12 +82,32 @@ class FakeServer {
   }
 }
 
-function setup(seen: SeenLog = memoryLog(), shareKeys = true) {
-  const server = new FakeServer();
+function openFake(args: Record<string, unknown>) {
+  const sealed = String(args.sealed);
+  const parts = sealed.split(':');
+  const legacy = parts[0] !== 'seal';
+  const keyId = legacy ? `${sealed}@${String(args.keyVersion)}` : String(parts[2]);
+  if (legacy && !args.legacy) throw new Error('vault_key_unauthenticated');
+  const sender = legacy ? null : (args.senders as string[]).indexOf(String(parts[1]));
+  if (sender === -1) throw new Error('decrypt_failed');
+  if (args.pinned !== null && args.pinned !== keyId) throw new Error('vault_key_changed');
+  return { sender, keyId };
+}
+
+function setup(seen: SeenLog = memoryLog(), shareKeys = true, server = new FakeServer()) {
+  const opened = new Map<string, number>();
+  let rotations = 0;
   const crypto = (async (method: string, args: Record<string, unknown>) => {
     switch (method) {
+      case 'ownPublicKey':
+        return 'ME-KEY';
       case 'hasVault':
-        return true;
+        return opened.get(String(args.vaultId)) === args.keyVersion;
+      case 'openVault': {
+        const result = openFake(args);
+        opened.set(String(args.vaultId), Number(args.keyVersion));
+        return result;
+      }
       case 'decryptMeta':
         return args.data;
       case 'encryptMeta':
@@ -99,9 +125,10 @@ function setup(seen: SeenLog = memoryLog(), shareKeys = true) {
         return data.slice(prefix.length);
       }
       case 'rotate':
+        rotations += 1;
         return {
           encryptedMeta: args.meta,
-          members: (args.members as { userId: string }[]).map((m) => ({ user_id: m.userId, encrypted_vault_key: 'k2' })),
+          members: (args.members as { userId: string }[]).map((m) => ({ user_id: m.userId, encrypted_vault_key: `seal:ME-KEY:rotated-${rotations}` })),
           items: [],
         };
       default:
@@ -291,7 +318,11 @@ describe('verified security codes in the vaults manager', () => {
     server.vault('eves').encrypted_meta = forged;
     swapMiasKey(server);
     miaWaitsForKey(server);
-    await expect(manager.sync()).rejects.toMatchObject({ code: 'key_changed' });
+    await expect(manager.sync()).rejects.toThrow('vault_key_unauthenticated');
+    expect(server.sealedFor).not.toContain(MIA);
+    server.vault('eves').encrypted_vault_key = 'seal:EVE-KEY:eves';
+    await expect(manager.sync()).rejects.toThrow('decrypt_failed');
+    expect(server.sealedFor).not.toContain(MIA);
     server.vaults = server.vaults.filter((v) => v.id !== 'eves');
     server.vault('personal').encrypted_meta = forged;
     await expect(manager.sync()).rejects.toMatchObject({ code: 'verifications_unavailable' });
@@ -398,5 +429,153 @@ describe('verified security codes in the vaults manager', () => {
     miaWaitsForKey(popup.server);
     await popup.manager.sync();
     expect(popup.server.sealedFor).toEqual([]);
+  });
+});
+
+describe('authenticated vault keys in the vaults manager', () => {
+  function errorOf(promise: Promise<unknown>) {
+    return promise.then(
+      () => null,
+      (e: unknown) => (e instanceof Error ? e.message : String(e)),
+    );
+  }
+
+  function newDevice(server: FakeServer, seen: SeenLog = memoryLog()) {
+    return setup(seen, true, server);
+  }
+
+  it('refuses a personal vault key the account did not seal itself', async () => {
+    const { server, manager } = setup();
+    server.vault('personal').encrypted_vault_key = 'seal:SERVER-KEY:forged';
+    expect(await errorOf(manager.sync())).toBe('decrypt_failed');
+    expect(manager.getSnapshot().vaults.find((v) => v.id === 'personal')?.itemCount).toBe(0);
+    expect(server.vault('personal').encrypted_meta).toBe(JSON.stringify({ name: '' }));
+  });
+
+  it('moves an old personal vault to a key only the account can produce', async () => {
+    const seen = memoryLog();
+    const { server, manager } = setup(seen);
+    server.vault('personal').encrypted_vault_key = 'k';
+    await manager.sync();
+    expect(server.vault('personal').key_version).toBe(2);
+    expect(server.vault('personal').encrypted_vault_key).toMatch(/^seal:ME-KEY:/);
+    server.vault('personal').encrypted_vault_key = 'k';
+    server.vault('personal').member_key_version = 3;
+    server.vault('personal').key_version = 3;
+    expect(await errorOf(newDevice(server, seen).manager.sync())).toBe('vault_key_unauthenticated');
+  });
+
+  it('remembers shared vault keys and refuses a different one for the same version', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    const keys = JSON.parse(server.vault('personal').encrypted_meta).keys as string;
+    expect(keys).toMatch(/^private:me:vault-keys:/);
+    server.family().encrypted_vault_key = 'seal:MIA-KEY:forged';
+    expect(await errorOf(newDevice(server).manager.sync())).toBe('vault_key_changed');
+  });
+
+  it('accepts a new key version only from someone already in the vault', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    server.family().members.push(member(EVE, 'EVE-KEY', true));
+    Object.assign(server.family(), { key_version: 2, member_key_version: 2, encrypted_vault_key: 'seal:EVE-KEY:forged' });
+    expect(await errorOf(newDevice(server).manager.sync())).toBe('decrypt_failed');
+    expect(await errorOf(manager.sync())).toBe('decrypt_failed');
+    server.family().encrypted_vault_key = 'k';
+    expect(await errorOf(manager.sync())).toBe('vault_key_unauthenticated');
+    server.family().encrypted_vault_key = 'seal:MIA-KEY:rotated-by-mia';
+    expect(await errorOf(manager.sync())).toBeNull();
+  });
+
+  it('a new key version from someone the server swapped in under a known name is refused', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    swapMiasKey(server);
+    Object.assign(server.family(), { key_version: 2, member_key_version: 2, encrypted_vault_key: 'seal:ATTACKER-KEY:forged' });
+    expect(await errorOf(newDevice(server).manager.sync())).toBe('decrypt_failed');
+  });
+
+  it('accepts a new key version from a member whose code was checked', async () => {
+    const { server, manager } = await verifiedSetup();
+    server.family().members.push(member(EVE, 'EVE-KEY', true));
+    await manager.setVerified(EVE, 'EVE-KEY');
+    Object.assign(server.family(), { key_version: 2, member_key_version: 2, encrypted_vault_key: 'seal:EVE-KEY:rotated-by-eve' });
+    expect(await errorOf(manager.sync())).toBeNull();
+  });
+
+  it('refuses an older key version than the one it knows', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    Object.assign(server.family(), { key_version: 2, member_key_version: 2, encrypted_vault_key: 'seal:MIA-KEY:v2' });
+    await manager.sync();
+    Object.assign(server.family(), { key_version: 1, member_key_version: 1, encrypted_vault_key: 'k' });
+    expect(await errorOf(newDevice(server).manager.sync())).toBe('vault_key_rolled_back');
+  });
+
+  it('opens no shared vault when the server hides the remembered keys', async () => {
+    const seen = memoryLog();
+    const { server, manager } = setup(seen);
+    const before = server.vault('personal').encrypted_meta;
+    await manager.sync();
+    server.vault('personal').encrypted_meta = before;
+    expect(await errorOf(newDevice(server, seen).manager.sync())).toBe('vault_keys_unavailable');
+  });
+
+  it('a member the server adds to a known vault cannot hand out a new key, even with an old member list replayed', async () => {
+    const { server, manager } = setup();
+    const before = server.family().encrypted_meta;
+    await manager.sync();
+    server.family().encrypted_meta = before;
+    server.family().members.push(member(EVE, 'SERVER-KEY', true));
+    await manager.sync().catch(() => undefined);
+    Object.assign(server.family(), { key_version: 2, member_key_version: 2, encrypted_vault_key: 'seal:SERVER-KEY:forged' });
+    expect(await errorOf(newDevice(server).manager.sync())).toBe('decrypt_failed');
+    expect(await errorOf(manager.sync())).toBe('decrypt_failed');
+  });
+
+  it('a new member in the list counts as sender only with the key that was checked, not the one the server shows', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    const meta = JSON.parse(server.family().encrypted_meta);
+    meta.trust = { ...meta.trust, seq: meta.trust.seq + 1, members: [...meta.trust.members, EVE] };
+    server.family().encrypted_meta = JSON.stringify(meta);
+    server.family().members.push(member(EVE, 'SERVER-KEY', true));
+    await manager.sync().catch(() => undefined);
+    Object.assign(server.family(), { key_version: 2, member_key_version: 2, encrypted_vault_key: 'seal:SERVER-KEY:forged' });
+    expect(await errorOf(manager.sync())).toBe('decrypt_failed');
+    Object.assign(server.family(), { encrypted_vault_key: 'seal:EVE-KEY:rotated-by-eve' });
+    server.family().members = server.family().members.map((m) => (m.user_id === EVE ? { ...m, public_key: 'EVE-KEY' } : m));
+    expect(await errorOf(manager.sync())).toBe('decrypt_failed');
+    await manager.setVerified(EVE, 'EVE-KEY').catch(() => undefined);
+    expect(await errorOf(manager.sync())).toBeNull();
+  });
+
+  it('writes nothing with an old personal key until the new one is in place', async () => {
+    const { server, manager } = setup();
+    server.vault('personal').encrypted_vault_key = 'k';
+    const api = (manager as unknown as { api: Api }).api;
+    (manager as unknown as { api: Api }).api = { ...api, rotate: async () => Promise.reject(new ApiError(500, 'server_error')) } as Api;
+    expect(await errorOf(manager.sync())).not.toBeNull();
+    expect(manager.vault('personal')?.canWrite).toBe(false);
+    const item = { type: 'login', title: 'Neu', fields: [], sections: [] } as unknown as Parameters<VaultsManager['saveItem']>[2];
+    expect(await errorOf(manager.saveItem('personal', null, item))).toBe('vault_key_pending');
+    expect(await errorOf(manager.renameVault('personal', 'Lesbar'))).toBe('vault_key_pending');
+    (manager as unknown as { api: Api }).api = api;
+    await manager.sync();
+    expect(server.vault('personal').key_version).toBe(2);
+    expect(manager.vault('personal')?.canWrite).toBe(true);
+  });
+
+  it('a member that left can no longer hand out a new key', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    await manager.removeMember('family', MIA);
+    Object.assign(server.family(), {
+      key_version: 3,
+      member_key_version: 3,
+      encrypted_vault_key: 'seal:MIA-KEY:forged',
+      members: [member(ME, 'ME-KEY'), member(MIA, 'MIA-KEY')],
+    });
+    expect(await errorOf(manager.sync())).toBe('decrypt_failed');
   });
 });

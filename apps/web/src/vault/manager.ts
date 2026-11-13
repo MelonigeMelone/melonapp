@@ -1,6 +1,7 @@
 import { ApiError, type Api, type InviteInfo, type RemoteMember, type RemoteVault, type Role } from '../api';
 import type { CryptoMethods } from '../crypto/protocol';
 import { newId, type Item, type VaultItem } from './item';
+import { emptyKeyring, KEYRING_PURPOSE, parseKeyring, sameGranters, type Keyring } from './keyring';
 import { storedLog, type SeenLog } from './seen';
 import { isConflict, VaultStore } from './store';
 import { expired, fromTrash, isTrashed, toTrash } from './trash';
@@ -45,10 +46,13 @@ interface Entry {
   remote: RemoteVault;
   meta: Meta;
   store: VaultStore | null;
+  oldPersonalKey?: boolean;
 }
 
 const PERSONAL_NAME = 'Persönlich';
 const MARKS_SEEN = '#verified';
+const KEYRING_SEEN = '#keys';
+const PERSONAL_KEY_SEEN = '#personal-key';
 const trustSeen = (vaultId: string) => `#trust:${vaultId}`;
 
 export class VaultsManager {
@@ -58,6 +62,9 @@ export class VaultsManager {
   private running: Promise<void> | null = null;
   private marks: Marks | null = null;
   private marksLoads = 0;
+  private keyring: Keyring | null = null;
+  private keyringDirty = false;
+  private ownKey: string | null = null;
 
   constructor(
     readonly userId: string,
@@ -78,14 +85,14 @@ export class VaultsManager {
   getSnapshot = () => this.snapshot;
 
   private emit = () => {
-    const views: VaultView[] = [...this.vaults.values()].map(({ remote, meta, store }) => ({
+    const views: VaultView[] = [...this.vaults.values()].map(({ remote, meta, store, oldPersonalKey }) => ({
       id: remote.id,
       name: remote.personal ? metaName(meta) || PERSONAL_NAME : metaName(meta) || 'Bereich',
       personal: remote.personal,
       role: remote.role,
       members: remote.members,
       waitingForKey: remote.encrypted_vault_key === null,
-      canWrite: remote.encrypted_vault_key !== null && remote.role !== 'viewer',
+      canWrite: remote.encrypted_vault_key !== null && remote.role !== 'viewer' && !oldPersonalKey,
       isOwner: remote.role === 'owner',
       itemCount: store?.list().filter((v) => !isTrashed(v.item)).length ?? 0,
       unreadable: store?.unreadableCount ?? 0,
@@ -119,39 +126,46 @@ export class VaultsManager {
   }
 
   private async pull() {
+    if (await this.pullOnce()) await this.pullOnce();
+  }
+
+  private async pullOnce(): Promise<boolean> {
     const { vaults } = await this.api.listVaults();
     let failure: unknown;
     const seen = new Set(vaults.map((v) => v.id));
     for (const id of this.vaults.keys()) if (!seen.has(id)) this.vaults.delete(id);
-
-    for (const remote of vaults) {
-      const entry: Entry = this.vaults.get(remote.id) ?? { remote, meta: {}, store: null };
-      const rotated = entry.remote.key_version !== remote.key_version;
-      entry.remote = remote;
-      this.vaults.set(remote.id, entry);
-      if (remote.encrypted_vault_key === null || remote.member_key_version === null) {
-        entry.store = null;
-        continue;
+    const ordered = [...vaults.filter((v) => v.personal), ...vaults.filter((v) => !v.personal)];
+    let loaded = false;
+    for (const remote of ordered) {
+      if (!remote.personal && !loaded) {
+        await this.loadPrivate();
+        loaded = true;
       }
-      const ready = await this.crypto('hasVault', { vaultId: remote.id, keyVersion: remote.member_key_version });
-      if (!ready) {
-        await this.crypto('openVault', {
-          vaultId: remote.id,
-          userId: this.userId,
-          keyVersion: remote.member_key_version,
-          sealed: remote.encrypted_vault_key,
-        });
+      try {
+        await this.syncVault(remote);
+      } catch (e) {
+        failure ??= e;
       }
-      entry.meta = parseMeta(await this.crypto('decryptMeta', { vaultId: remote.id, data: remote.encrypted_meta }));
-      if (rotated) entry.store?.reset();
-      entry.store ??= this.makeStore(remote.id);
-      await entry.store.sync();
-      if (remote.role !== 'viewer') await this.purge(entry.store);
     }
-    this.marks = await this.loadMarks();
+    if (!loaded) await this.loadPrivate();
     this.marksLoads += 1;
+    let again = false;
+    try {
+      await this.saveKeyring();
+    } catch (e) {
+      failure ??= e;
+    }
     for (const entry of this.vaults.values()) {
-      if (!this.shareKeys || !entry.store || entry.remote.role !== 'owner') continue;
+      if (!entry.oldPersonalKey) continue;
+      try {
+        await this.newPersonalKey(entry);
+        again = true;
+      } catch (e) {
+        failure ??= e;
+      }
+    }
+    for (const entry of this.vaults.values()) {
+      if (!this.shareKeys || !entry.store || entry.oldPersonalKey || entry.remote.role !== 'owner') continue;
       try {
         await this.ownerDuties(entry);
       } catch (e) {
@@ -159,7 +173,155 @@ export class VaultsManager {
       }
     }
     this.emit();
-    if (failure !== undefined) throw failure;
+    if (failure !== undefined && !again) throw failure;
+    return again;
+  }
+
+  private async syncVault(remote: RemoteVault) {
+    const entry: Entry = this.vaults.get(remote.id) ?? { remote, meta: {}, store: null };
+    const rotated = entry.remote.key_version !== remote.key_version;
+    entry.remote = remote;
+    this.vaults.set(remote.id, entry);
+    if (remote.encrypted_vault_key === null || remote.member_key_version === null) {
+      entry.store = null;
+      return;
+    }
+    const version = remote.member_key_version;
+    let fresh = false;
+    if (!(await this.crypto('hasVault', { vaultId: remote.id, keyVersion: version }))) {
+      try {
+        fresh = await this.openKey(entry, version, remote.encrypted_vault_key);
+      } catch (e) {
+        entry.store = null;
+        throw e;
+      }
+    }
+    entry.meta = parseMeta(await this.crypto('decryptMeta', { vaultId: remote.id, data: remote.encrypted_meta }));
+    if (!remote.personal) this.noteGranters(entry, fresh);
+    if (rotated) entry.store?.reset();
+    entry.store ??= this.makeStore(remote.id);
+    await entry.store.sync();
+    if (remote.role !== 'viewer' && !entry.oldPersonalKey) await this.purge(entry.store);
+  }
+
+  private async myKey(): Promise<string> {
+    this.ownKey ??= await this.crypto('ownPublicKey');
+    return this.ownKey;
+  }
+
+  private async openKey(entry: Entry, version: number, sealed: string): Promise<boolean> {
+    const { remote } = entry;
+    const own = await this.myKey();
+    const args = { vaultId: remote.id, userId: this.userId, keyVersion: version, sealed };
+    if (remote.personal) {
+      const legacy = this.seen.get(PERSONAL_KEY_SEEN) === 0;
+      const opened = await this.crypto('openVault', { ...args, senders: [own], legacy, pinned: null });
+      entry.oldPersonalKey = opened.sender === null;
+      if (!entry.oldPersonalKey) this.seen.raise(PERSONAL_KEY_SEEN, 1);
+      return false;
+    }
+    const keyring = this.keyring;
+    if (!keyring) throw new ApiError(409, 'vault_keys_unavailable');
+    const known = keyring.vaults[remote.id];
+    if (known && version < known.version) throw new ApiError(409, 'vault_key_rolled_back');
+    const members = remote.members.filter((m) => m.user_id !== this.userId).map((m) => m.public_key);
+    const knownSenders = Object.values(known?.granters ?? {});
+    let options: { senders: string[]; legacy: boolean; pinned: string | null };
+    if (!known) {
+      options = { senders: [own, ...members], legacy: true, pinned: null };
+    } else if (known.version === version) {
+      options = { senders: [own, ...knownSenders, ...members], legacy: true, pinned: known.keyId };
+    } else {
+      const verified = remote.members.filter((m) => m.user_id !== this.userId && this.isVerified(m)).map((m) => m.public_key);
+      options = { senders: [own, ...knownSenders, ...verified], legacy: false, pinned: null };
+    }
+    const senders = [...new Set(options.senders)];
+    const opened = await this.crypto('openVault', { ...args, ...options, senders });
+    const granters = { ...(known?.granters ?? {}) } as Record<string, string>;
+    const senderKey = opened.sender === null ? undefined : senders[opened.sender];
+    const sender = senderKey === undefined || senderKey === own ? undefined : remote.members.find((m) => m.public_key === senderKey);
+    if (sender && granters[sender.user_id] === undefined) granters[sender.user_id] = senderKey as string;
+    if (known?.version === version && known.keyId === opened.keyId && sameGranters(granters, known.granters)) return false;
+    keyring.vaults[remote.id] = { version, keyId: opened.keyId, granters };
+    this.keyringDirty = true;
+    return !known;
+  }
+
+  private noteGranters(entry: Entry, fresh: boolean) {
+    const known = this.keyring?.vaults[entry.remote.id];
+    if (!known) return;
+    const trust = this.loadTrust(entry);
+    if (trust === null || (trust === 'legacy' && !fresh)) return;
+    const ids = trust === 'legacy' ? entry.remote.members.filter((m) => m.has_key).map((m) => m.user_id) : trust.members;
+    const serverKeys = new Map(entry.remote.members.map((m) => [m.user_id, m.public_key]));
+    const next = Object.create(null) as Record<string, string>;
+    for (const id of ids) {
+      if (id === this.userId) continue;
+      const key = known.granters[id] ?? this.marks?.marks[id]?.publicKey ?? (fresh ? serverKeys.get(id) : undefined);
+      if (key) next[id] = key;
+    }
+    if (sameGranters(next, known.granters)) return;
+    known.granters = next;
+    this.keyringDirty = true;
+  }
+
+  private async loadPrivate() {
+    this.marks = await this.loadMarks();
+    this.keyring = await this.loadKeyring();
+  }
+
+  private async loadKeyring(): Promise<Keyring | null> {
+    const personal = this.personalEntry();
+    if (!personal) return null;
+    const sealed = personal.meta.keys;
+    const highest = this.seen.get(KEYRING_SEEN);
+    if (sealed === undefined) return highest === 0 ? emptyKeyring() : null;
+    if (typeof sealed !== 'string') return null;
+    let keyring: Keyring | null;
+    try {
+      keyring = parseKeyring(await this.crypto('openPrivate', { userId: this.userId, purpose: KEYRING_PURPOSE, data: sealed }));
+    } catch {
+      return null;
+    }
+    if (!keyring || keyring.counter < highest) return null;
+    this.seen.raise(KEYRING_SEEN, keyring.counter);
+    return keyring;
+  }
+
+  private async saveKeyring() {
+    const personal = this.personalEntry();
+    if (!this.keyringDirty || !this.keyring || !personal) return;
+    const next: Keyring = { ...this.keyring, counter: Math.max(this.keyring.counter, this.seen.get(KEYRING_SEEN)) + 1 };
+    const sealed = await this.crypto('sealPrivate', { userId: this.userId, purpose: KEYRING_PURPOSE, plaintext: JSON.stringify(next) });
+    const meta = { ...personal.meta, keys: sealed };
+    const encrypted = await this.crypto('encryptMeta', { vaultId: personal.remote.id, plaintext: JSON.stringify(meta) });
+    await this.api.updateVault(personal.remote.id, { encrypted_meta: encrypted, key_version: personal.remote.key_version });
+    personal.meta = meta;
+    this.keyring = next;
+    this.keyringDirty = false;
+    this.seen.raise(KEYRING_SEEN, next.counter);
+  }
+
+  private async newPersonalKey(entry: Entry) {
+    if (!entry.store || entry.remote.member_key_version !== entry.remote.key_version) return;
+    await entry.store.sync();
+    const own = await this.myKey();
+    const current = entry.store.rotationItems();
+    const revisions = new Map(current.map((v) => [v.id, v.revision]));
+    const rotated = await this.crypto('rotate', {
+      vaultId: entry.remote.id,
+      meta: JSON.stringify(entry.meta),
+      members: [{ userId: this.userId, publicKey: own }],
+      items: current.map(({ id, plaintext }) => ({ id, plaintext })),
+    });
+    await this.api.rotate(entry.remote.id, {
+      key_version: entry.remote.key_version + 1,
+      encrypted_meta: rotated.encryptedMeta,
+      members: rotated.members,
+      items: rotated.items.map((i) => ({ ...i, base_revision: revisions.get(i.id) ?? 0 })),
+      remove_user_ids: [],
+    });
+    this.seen.raise(PERSONAL_KEY_SEEN, 1);
   }
 
   private makeStore(vaultId: string): VaultStore {
@@ -304,12 +466,13 @@ export class VaultsManager {
       trustSeq,
       this.now(),
     );
+    const own = await this.myKey();
     const current = entry.store.rotationItems();
     const revisions = new Map(current.map((v) => [v.id, v.revision]));
     const rotated = await this.crypto('rotate', {
       vaultId,
       meta: JSON.stringify(meta),
-      members: keep.map((m) => ({ userId: m.user_id, publicKey: m.public_key })),
+      members: keep.map((m) => ({ userId: m.user_id, publicKey: m.user_id === this.userId ? own : m.public_key })),
       items: current.map(({ id, plaintext }) => ({ id, plaintext })),
     });
     try {
@@ -338,9 +501,9 @@ export class VaultsManager {
   }
 
   private store(vaultId: string): VaultStore {
-    const store = this.requireEntry(vaultId).store;
-    if (!store) throw new ApiError(403, 'vault_key_pending');
-    return store;
+    const entry = this.requireEntry(vaultId);
+    if (!entry.store || entry.oldPersonalKey) throw new ApiError(403, 'vault_key_pending');
+    return entry.store;
   }
 
   async saveItem(vaultId: string, id: string | null, item: Item, fromVaultId?: string): Promise<string> {
@@ -383,6 +546,7 @@ export class VaultsManager {
   private async writeMeta(vaultId: string, change: (meta: Meta) => Meta) {
     await this.sync().catch(() => undefined);
     const entry = this.requireEntry(vaultId);
+    if (entry.oldPersonalKey) throw new ApiError(403, 'vault_key_pending');
     const meta = change(entry.meta);
     const encrypted = await this.crypto('encryptMeta', { vaultId, plaintext: JSON.stringify(meta) });
     await this.api.updateVault(vaultId, { encrypted_meta: encrypted, key_version: entry.remote.key_version });
@@ -400,6 +564,7 @@ export class VaultsManager {
         e.remote.personal &&
         e.remote.role === 'owner' &&
         e.store !== null &&
+        !e.oldPersonalKey &&
         e.remote.members.length === 1 &&
         e.remote.members[0]?.user_id === this.userId,
     );

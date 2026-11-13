@@ -247,7 +247,9 @@ pub async fn rotate(
     let mut tx = state.db.begin().await?;
     lock_vault(&mut tx, vault_id).await?;
     let a = access(&mut *tx, vault_id, user.user_id).await?;
-    a.require_shared()?;
+    if a.personal && !req.remove_user_ids.is_empty() {
+        return Err(ApiError::BadRequest("personal_vault"));
+    }
     a.require_owner()?;
     a.require_key()?;
     if req.key_version != a.vault_key_version + 1 {
