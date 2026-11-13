@@ -46,8 +46,8 @@ Repo, das prüft gitleaks.
 
 ## Apple-Apps
 
-`apple.yml` baut auf `macos-15` die macOS-App und das ARM64-iOS-Simulator-Bundle
-inklusive Credential Provider Extension. Vorher laufen Rust-Angriffstests,
+`apple.yml` baut auf `macos-15` die macOS-App, die unsignierte Safari-Extension und das
+ARM64-iOS-Simulator-Bundle inklusive Credential Provider Extension. Vorher laufen Rust-Angriffstests,
 Tauri-Lint/Tests sowie Swift-Tests gegen die tatsächlich erzeugten UniFFI-Bindings.
 XcodeGen erzeugt das Projekt aus der versionierten `project.yml`. Die Artefakte sind
 unsignierte Entwicklungsstände; Hardware-Biometrie, Provisioning und App-Store-
@@ -70,7 +70,10 @@ getrennten Tauri-Workspace.
 (Actions → Apple release → Run workflow) für einen TestFlight-Build ohne Release; dort
 lässt sich mit `platform` auch nur macOS oder nur iOS bauen.
 
-- **macOS:** `scripts/apple-keychain.sh` legt die Developer-ID-Identität in einen
+- **macOS:** Der Job baut mit Xcode 26 zuerst WASM und die Erweiterung, dann mit
+  `scripts/build-safari-extension.sh` die signierte Safari-Extension
+  ([ADR 0025](/melonapp/entscheidungen/0025-safari-erweiterung-nur-mac/)), die in die App eingebettet
+  wird. `scripts/apple-keychain.sh` legt die Developer-ID-Identität in einen
   temporären Schlüsselbund. `scripts/build-macos-signed.sh --bundles app` signiert und bettet
   das Profil ein. `scripts/apple-notarize.sh` reicht die App bei Apple ein, fragt den Status
   minütlich ab und übersteht dabei Netzwerkabbrüche (bis zu vier Stunden; die erste

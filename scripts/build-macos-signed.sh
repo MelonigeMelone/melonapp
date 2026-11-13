@@ -18,7 +18,11 @@ if 'OSX' not in data.get('Platform', []) or team not in data.get('TeamIdentifier
     raise SystemExit('Provisioning profile does not match this macOS app and team, or has expired')
 entitlements = root / 'Entitlements.plist'
 entitlements.write_bytes(plistlib.dumps({'com.apple.application-identifier': team + '.de.melonigemelone.app', 'com.apple.developer.team-identifier': team}))
-(root / 'config.json').write_text(json.dumps({'bundle': {'macOS': {'entitlements': str(entitlements), 'signingIdentity': os.environ['APPLE_SIGNING_IDENTITY'], 'files': {'embedded.provisionprofile': str(profile)}}}}))
+files = {'embedded.provisionprofile': str(profile)}
+safari = os.environ.get('MELON_SAFARI_APPEX')
+if safari:
+    files['PlugIns/MelonSafari.appex'] = str(pathlib.Path(safari).resolve(strict=True))
+(root / 'config.json').write_text(json.dumps({'bundle': {'macOS': {'entitlements': str(entitlements), 'signingIdentity': os.environ['APPLE_SIGNING_IDENTITY'], 'files': files}}}))
 PY
 npm run tauri -w desktop -- build --config "$MELON_SIGNING_TEMP/config.json" "$@"
 app=apps/desktop/src-tauri/target/release/bundle/macos/MelonApp.app
@@ -26,3 +30,7 @@ codesign --verify --deep --strict "$app"
 entitlements=$(codesign -d --entitlements :- "$app" 2>/dev/null)
 grep -q "$APPLE_DEVELOPMENT_TEAM.de.melonigemelone.app" <<<"$entitlements"
 test -f "$app/Contents/embedded.provisionprofile"
+if [ -n "${MELON_SAFARI_APPEX:-}" ]; then
+  codesign --verify --strict "$app/Contents/PlugIns/MelonSafari.appex"
+  test -f "$app/Contents/PlugIns/MelonSafari.appex/Contents/Resources/manifest.json"
+fi

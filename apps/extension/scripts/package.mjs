@@ -53,6 +53,12 @@ const targets = {
     minimum_chrome_version: '120',
     web_accessible_resources: [{ resources: exposed, matches: ['http://*/*', 'https://*/*'], use_dynamic_url: true }],
   },
+  safari: {
+    ...base,
+    background: { service_worker: 'background.js' },
+    web_accessible_resources: [{ resources: exposed, matches: ['http://*/*', 'https://*/*'] }],
+    browser_specific_settings: { safari: { strict_min_version: '18.0' } },
+  },
   firefox: {
     ...base,
     background: { scripts: ['background.js'] },

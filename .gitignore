@@ -11,3 +11,5 @@ dist/
 /apps/desktop/src-tauri/gen/schemas
 /apps/desktop/src-tauri/gen/apple/build
 /apps/desktop/apple/Bindings
+/apps/desktop/apple/Safari/build
+/apps/desktop/apple/Safari/MelonSafari.xcodeproj
