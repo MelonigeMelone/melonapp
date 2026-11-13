@@ -92,6 +92,12 @@ Daten manipuliert oder der Kontext falsch war. So verrät der Fehler einem Angre
 Jede Person hat ein **X25519-Schlüsselpaar** (`KeyPair`). Der private Schlüssel wird mit dem
 Konto-Schlüssel verschlüsselt gespeichert, der öffentliche liegt im Klartext auf dem Server.
 
+`PublicKey::from_base64` lehnt Punkte kleiner Ordnung ab (etwa 32 Null-Bytes). Für sie ergibt
+X25519 immer null, HPKE kann nicht für sie verschlüsseln. Geprüft wird mit einem Probe-Verschlüsseln.
+Der Server lehnt solche Schlüssel bei der Registrierung ab (`400 invalid_public_key`).
+`seal_vault_key` gibt einen Fehler zurück, statt abzustürzen. Beim Öffnen überspringen die Apps
+unbrauchbare Absender-Schlüssel.
+
 ### Tresor-Schlüssel verteilen: HPKE
 
 Tresor-Schlüssel werden mit **HPKE** (RFC 9180) für den öffentlichen Schlüssel jedes Mitglieds

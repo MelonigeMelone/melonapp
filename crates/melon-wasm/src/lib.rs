@@ -133,18 +133,18 @@ impl Identity {
         senders: Vec<String>,
     ) -> Result<OpenedVaultKey, JsError> {
         let sealed = SealedKey::parse(sealed).map_err(js_err)?;
-        let senders = senders
+        let (positions, senders): (Vec<usize>, Vec<PublicKey>) = senders
             .iter()
-            .map(|s| PublicKey::from_base64(s))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(js_err)?;
+            .enumerate()
+            .filter_map(|(i, s)| Some((i, PublicKey::from_base64(s).ok()?)))
+            .unzip();
         let (key, origin) = self
             .0
             .open_vault_key(&sealed, &context(vault_id, user_id, key_version), &senders)
             .map_err(js_err)?;
         let sender = match origin {
             SealOrigin::Legacy => -1,
-            SealOrigin::Sender(i) => i32::try_from(i).map_err(js_err)?,
+            SealOrigin::Sender(i) => i32::try_from(positions[i]).map_err(js_err)?,
         };
         Ok(OpenedVaultKey {
             key: VaultKey(key),
@@ -162,13 +162,14 @@ impl Identity {
         key_version: u32,
     ) -> Result<String, JsError> {
         let recipient = PublicKey::from_base64(public_key).map_err(js_err)?;
-        Ok(melon_crypto::seal_vault_key(
+        melon_crypto::seal_vault_key(
             &self.0,
             &recipient,
             &vault_key.0,
             &context(vault_id, user_id, key_version),
         )
-        .to_string())
+        .map(|sealed| sealed.to_string())
+        .map_err(js_err)
     }
 }
 

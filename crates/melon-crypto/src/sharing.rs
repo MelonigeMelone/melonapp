@@ -28,9 +28,17 @@ pub struct PublicKey(PublicKeyInner);
 impl PublicKey {
     pub fn from_base64(b64: &str) -> Result<Self, CryptoError> {
         let bytes = STANDARD.decode(b64).map_err(|_| CryptoError::InvalidKey)?;
-        PublicKeyInner::from_bytes(&bytes)
-            .map(Self)
-            .map_err(|_| CryptoError::InvalidKey)
+        let key = PublicKeyInner::from_bytes(&bytes).map_err(|_| CryptoError::InvalidKey)?;
+        hpke::single_shot_seal_with_rng::<ChaCha20Poly1305, HkdfSha256, Kem>(
+            &OpModeS::Base,
+            &key,
+            b"melon/v2/public-key-check",
+            b"",
+            b"",
+            &mut os_rng(),
+        )
+        .map_err(|_| CryptoError::InvalidKey)?;
+        Ok(Self(key))
     }
 
     pub fn to_base64(&self) -> String {
@@ -200,7 +208,7 @@ pub fn seal_vault_key(
     recipient: &PublicKey,
     vault_key: &SymmetricKey,
     context: &VaultKeyContext,
-) -> SealedKey {
+) -> Result<SealedKey, CryptoError> {
     let mode = OpModeS::Auth((sender.private.clone(), sender.public.0.clone()));
     let (encapped, ct) = hpke::single_shot_seal_with_rng::<ChaCha20Poly1305, HkdfSha256, Kem>(
         &mode,
@@ -210,10 +218,10 @@ pub fn seal_vault_key(
         b"",
         &mut os_rng(),
     )
-    .expect("HPKE sealing with a valid public key cannot fail");
+    .map_err(|_| CryptoError::InvalidKey)?;
     let mut raw = encapped.to_bytes().to_vec();
     raw.extend_from_slice(&ct);
-    SealedKey { auth: true, raw }
+    Ok(SealedKey { auth: true, raw })
 }
 
 pub fn vault_key_id(vault_key: &SymmetricKey, vault_id: &str, key_version: u32) -> String {
@@ -301,7 +309,8 @@ mod tests {
         let alice = KeyPair::generate();
         let bob = KeyPair::generate();
         let vault_key = SymmetricKey::generate();
-        let sealed = seal_vault_key(&alice, bob.public_key(), &vault_key, &ctx("v", "bob", 1));
+        let sealed =
+            seal_vault_key(&alice, bob.public_key(), &vault_key, &ctx("v", "bob", 1)).unwrap();
         let parsed = SealedKey::parse(&sealed.to_string()).unwrap();
         assert!(parsed.is_authenticated());
         let (opened, origin) = bob
@@ -321,7 +330,8 @@ mod tests {
             bob.public_key(),
             &SymmetricKey::generate(),
             &ctx("v", "bob", 1),
-        );
+        )
+        .unwrap();
         assert_eq!(
             bob.open_vault_key(&forged, &ctx("v", "bob", 1), &keys(&[&alice, &bob]))
                 .err(),
@@ -379,7 +389,8 @@ mod tests {
             bob.public_key(),
             &SymmetricKey::generate(),
             &ctx("v", "bob", 1),
-        );
+        )
+        .unwrap();
         assert_eq!(
             eve.open_vault_key(&sealed, &ctx("v", "bob", 1), &keys(&[&bob]))
                 .err(),
@@ -395,7 +406,8 @@ mod tests {
             bob.public_key(),
             &SymmetricKey::generate(),
             &ctx("v", "bob", 1),
-        );
+        )
+        .unwrap();
         for wrong in [ctx("w", "bob", 1), ctx("v", "eve", 1), ctx("v", "bob", 2)] {
             assert_eq!(
                 bob.open_vault_key(&sealed, &wrong, &keys(&[&bob])).err(),
@@ -412,7 +424,8 @@ mod tests {
             bob.public_key(),
             &SymmetricKey::generate(),
             &ctx("v", "bob", 1),
-        );
+        )
+        .unwrap();
         let last = sealed.raw.len() - 1;
         sealed.raw[last] ^= 1;
         assert!(
@@ -441,6 +454,29 @@ mod tests {
             account.as_bytes()
         );
         assert!(unwrap_account_key(&SymmetricKey::generate(), &wrapped).is_err());
+    }
+
+    #[test]
+    fn low_order_public_keys_are_rejected_and_sealing_to_them_fails_cleanly() {
+        let mut one = [0u8; 32];
+        one[0] = 1;
+        for bytes in [[0u8; 32], one] {
+            assert_eq!(
+                PublicKey::from_base64(&STANDARD.encode(bytes)).err(),
+                Some(CryptoError::InvalidKey)
+            );
+            let weak = PublicKey(PublicKeyInner::from_bytes(&bytes).unwrap());
+            assert_eq!(
+                seal_vault_key(
+                    &KeyPair::generate(),
+                    &weak,
+                    &SymmetricKey::generate(),
+                    &ctx("v", "eve", 1)
+                )
+                .err(),
+                Some(CryptoError::InvalidKey)
+            );
+        }
     }
 
     #[test]

@@ -2,8 +2,17 @@
 mod passkeys;
 mod platform;
 use melon_native::Session;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use tauri::{Emitter, Manager};
+
+fn session(state: &Mutex<Session>) -> MutexGuard<'_, Session> {
+    state.lock().unwrap_or_else(|poisoned| {
+        state.clear_poison();
+        let mut session = poisoned.into_inner();
+        session.lock();
+        session
+    })
+}
 
 #[tauri::command]
 async fn crypto_call(
@@ -12,9 +21,7 @@ async fn crypto_call(
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        app.state::<Mutex<Session>>()
-            .lock()
-            .map_err(|_| "session_unavailable".to_owned())?
+        session(&app.state::<Mutex<Session>>())
             .call(&method, args)
             .map_err(str::to_owned)
     })
@@ -47,11 +54,7 @@ pub fn run() {
             std::thread::spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(1));
-                    let expired = handle
-                        .state::<Mutex<Session>>()
-                        .lock()
-                        .map(|mut session| session.expire())
-                        .unwrap_or(true);
+                    let expired = session(&handle.state::<Mutex<Session>>()).expire();
                     if expired {
                         let _ = handle.emit("melon-locked", ());
                     }
@@ -70,9 +73,7 @@ pub fn run() {
                 _ => None,
             };
             if let Some(active) = active {
-                if let Ok(mut session) = window.state::<Mutex<Session>>().lock() {
-                    session.set_active(active);
-                }
+                session(&window.state::<Mutex<Session>>()).set_active(active);
                 if !active {
                     let _ = window.emit("melon-locked", ());
                 }

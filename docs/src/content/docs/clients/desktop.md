@@ -25,7 +25,9 @@ Recovery-Key bleibt als Notfall-Kit für die Person sichtbar.
 ## Sperren und Cache
 
 Rust sperrt nach fünf Minuten ohne gemeldete Eingabe, zusätzlich zum vorhandenen
-UI-Timer. Fokusverlust sperrt sofort. `⌘⇧M` bringt auf macOS das Fenster nach vorn,
+UI-Timer. Bricht ein Aufruf mit einem Absturz ab, ist die Sitzungssperre in Rust „vergiftet“.
+Der nächste Zugriff löscht dann alle Schlüssel und arbeitet gesperrt weiter, statt die Sitzung
+unerreichbar mit Schlüsseln im Speicher stehen zu lassen. Fokusverlust sperrt sofort. `⌘⇧M` bringt auf macOS das Fenster nach vorn,
 entsperrt es aber nicht. Hintergrund-Sperren werden als Ereignis an React gemeldet.
 
 Der Face-ID-Dialog macht die iOS-App kurz inaktiv (`sceneWillResignActive`), was wie jeder

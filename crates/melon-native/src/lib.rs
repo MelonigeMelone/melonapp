@@ -103,7 +103,9 @@ fn sealed(
     version: u32,
 ) -> Result<String> {
     let public = PublicKey::from_base64(public).map_err(|_| "invalid_public_key")?;
-    Ok(seal_vault_key(sender, &public, key, &context(vault, user, version)).to_string())
+    seal_vault_key(sender, &public, key, &context(vault, user, version))
+        .map(|sealed| sealed.to_string())
+        .map_err(|_| "invalid_public_key")
 }
 
 fn same_password(a: &str, b: &str) -> bool {
@@ -418,14 +420,11 @@ impl Session {
                 self.require_account()?;
                 let id = text(a, "vaultId")?;
                 let version = number(a, "keyVersion")?;
-                let senders = array(a, "senders")?
+                let (positions, senders): (Vec<usize>, Vec<PublicKey>) = array(a, "senders")?
                     .iter()
-                    .map(|s| {
-                        s.as_str()
-                            .and_then(|s| PublicKey::from_base64(s).ok())
-                            .ok_or("invalid_public_key")
-                    })
-                    .collect::<Result<Vec<_>>>()?;
+                    .enumerate()
+                    .filter_map(|(i, s)| Some((i, PublicKey::from_base64(s.as_str()?).ok()?)))
+                    .unzip();
                 let (key, origin) = self
                     .identity
                     .as_ref()
@@ -441,7 +440,7 @@ impl Session {
                         Value::Null
                     }
                     SealOrigin::Legacy => return Err("vault_key_unauthenticated"),
-                    SealOrigin::Sender(i) => json!(i),
+                    SealOrigin::Sender(i) => json!(positions[i]),
                 };
                 let key_id = vault_key_id(&key, id, version);
                 match a.get("pinned") {
@@ -891,6 +890,54 @@ mod tests {
                 open_args(&sealed, senders, json!({"pinned":first["keyId"]})),
             )
             .unwrap();
+    }
+
+    #[test]
+    fn sealing_for_a_weak_public_key_fails_without_breaking_the_session() {
+        let (mut owner, _) = account();
+        let zero = STANDARD.encode([0u8; 32]);
+        assert_eq!(
+            owner
+                .call(
+                    "sealFor",
+                    json!({"vaultId":"vault","publicKey":zero,"userId":"eve"})
+                )
+                .err(),
+            Some("invalid_public_key")
+        );
+        assert_eq!(
+            owner.call("rotate", json!({"vaultId":"vault","meta":"m","members":[{"userId":"eve","publicKey":zero}],"items":[]})).err(),
+            Some("invalid_public_key")
+        );
+        assert!(
+            owner
+                .call(
+                    "encryptMeta",
+                    json!({"vaultId":"vault","plaintext":"still works"})
+                )
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn an_unusable_sender_key_is_skipped_and_positions_stay_right() {
+        let (mut owner, owner_account) = account();
+        let (mut guest, guest_account) = account();
+        let sealed = owner
+            .call(
+                "sealFor",
+                json!({"vaultId":"vault","publicKey":guest_account["publicKey"],"userId":"guest"}),
+            )
+            .unwrap();
+        let senders = json!([
+            "kaputt",
+            STANDARD.encode([0u8; 32]),
+            owner_account["publicKey"]
+        ]);
+        let opened = guest
+            .call("openVault", open_args(&sealed, senders, json!({})))
+            .unwrap();
+        assert_eq!(opened["sender"], 2);
     }
 
     #[test]

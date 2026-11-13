@@ -73,7 +73,7 @@ gibt. So verrät die API nicht, welche Tresore existieren.
 ```
 
 → `201 { "user_id" }` · `403 registration_disabled` · `409 email_taken` ·
-`400 invalid_invite | invite_email_mismatch | invalid_*`
+`400 invalid_invite | invite_email_mismatch | invalid_public_key | invalid_*`. `invalid_public_key` auch für Punkte kleiner Ordnung, für die niemand verschlüsseln kann.
 
 Die Nutzer-ID kommt vom Client, weil der Tresor-Schlüssel des persönlichen Tresors schon
 bei der Registrierung an sie gebunden wird. Mit Einladungs-Token wird die Person zusätzlich
