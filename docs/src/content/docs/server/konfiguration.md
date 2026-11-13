@@ -10,7 +10,7 @@ sidebar:
 | Variable | Pflicht | Standard | Bedeutung |
 |---|---|---|---|
 | `MELON_DATABASE_URL` | ✓ | – | PostgreSQL-URL |
-| `MELON_SERVER_SECRET` | ✓ | – | mind. 32 Zeichen, erzeugt die Fake-Salts. Erzeugen mit `openssl rand -base64 48`. Ändert es sich, ändern sich die Fake-Salts, das ist unkritisch. |
+| `MELON_SERVER_SECRET` | ✓ | – | mind. 32 Zeichen, erzeugt die Fake-Salts. Erzeugen mit `openssl rand -base64 48`. Ändert es sich, ändern sich die Fake-Salts. Wer vorher und nachher `prelogin` abfragt, erkennt dann echte Konten. Deshalb nur wechseln, wenn es bekannt geworden ist. |
 | `MELON_BIND` | | `0.0.0.0:8080` | Adresse und Port |
 | `MELON_ALLOW_REGISTRATION` | | `false` | `true`/`1`/`yes` öffnet die Registrierung. Danach wieder ausschalten. |
 | `MELON_SESSION_TTL_HOURS` | | `336` (14 Tage) | Lebensdauer einer Sitzung, 1–8760 |

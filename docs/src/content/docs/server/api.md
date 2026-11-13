@@ -149,8 +149,9 @@ Ersetzt einen vorhandenen Recovery-Key.
 ```
 
 `401 unauthorized` bei falschem Key, unbekannter E-Mail oder fehlendem Recovery-Key. Die drei
-Fälle sehen gleich aus und dauern gleich lang. `429` nach 10 Fehlversuchen für diese E-Mail
-oder 30 Fehlversuchen von derselben Adresse.
+Fälle sehen gleich aus und dauern gleich lang. `429` nach 10 Fehlversuchen für diese E-Mail von
+derselben Adresse, 50 für diese E-Mail insgesamt oder 30 Fehlversuchen von derselben Adresse,
+außerdem, wenn zu viele Prüfungen gleichzeitig laufen.
 
 Der Token gilt 15 Minuten und **nur** für `recover/complete`. Alle anderen Endpunkte lehnen ihn ab.
 

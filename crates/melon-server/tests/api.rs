@@ -1476,16 +1476,38 @@ async fn recovering_with_the_recovery_key() {
         alice.account_key.as_bytes()
     );
 
-    let new_password = "nach-dem-vergessen-lang-genug";
-    let (s, _) = call(
-        &app,
-        "POST",
-        "/api/v1/auth/recover/complete",
-        Some(&recovery_token),
-        Some(alice.new_credentials(new_password)),
-    )
-    .await;
-    assert_eq!(s, StatusCode::NO_CONTENT);
+    let first_password = "nach-dem-vergessen-lang-genug";
+    let second_password = "gleichzeitig-auch-lang-genug";
+    let (first, second) = tokio::join!(
+        call(
+            &app,
+            "POST",
+            "/api/v1/auth/recover/complete",
+            Some(&recovery_token),
+            Some(alice.new_credentials(first_password)),
+        ),
+        call(
+            &app,
+            "POST",
+            "/api/v1/auth/recover/complete",
+            Some(&recovery_token),
+            Some(alice.new_credentials(second_password)),
+        ),
+    );
+    let statuses = [first.0, second.0];
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|s| **s == StatusCode::NO_CONTENT)
+            .count(),
+        1,
+        "two requests at the same time cannot both use the recovery session: {statuses:?}"
+    );
+    let new_password = if first.0 == StatusCode::NO_CONTENT {
+        first_password
+    } else {
+        second_password
+    };
     let (s, _) = alice.get(&app, "/api/v1/vaults").await;
     assert_eq!(
         s,
@@ -1663,6 +1685,84 @@ async fn many_failed_logins_from_one_address_are_blocked_across_accounts() {
             "without a trusted proxy the header is ignored"
         );
     }
+}
+
+#[tokio::test]
+async fn one_address_cannot_lock_an_account_for_everyone() {
+    let Some(app) = app_with(true, true).await else {
+        return;
+    };
+    let alice = Person::new("alice");
+    assert_eq!(alice.register(&app, None).await, StatusCode::CREATED);
+    for _ in 0..10 {
+        assert_eq!(
+            login_from(&app, "203.0.113.50", &alice.email).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    assert_eq!(
+        login_from(&app, "203.0.113.50", &alice.email).await,
+        StatusCode::TOO_MANY_REQUESTS
+    );
+    assert_eq!(
+        login_from(&app, "198.51.100.20", &alice.email).await,
+        StatusCode::UNAUTHORIZED,
+        "the owner's own address still reaches the password check"
+    );
+    for n in 1..=4 {
+        for _ in 0..10 {
+            login_from(&app, &format!("192.0.2.{n}"), &alice.email).await;
+        }
+    }
+    assert_eq!(
+        login_from(&app, "192.0.2.99", &alice.email).await,
+        StatusCode::TOO_MANY_REQUESTS,
+        "the whole account still has a limit across addresses"
+    );
+}
+
+#[tokio::test]
+async fn login_and_recovery_limits_do_not_share_counters() {
+    let Some(app) = app(true).await else { return };
+    let alice = Person::new("alice");
+    assert_eq!(alice.register(&app, None).await, StatusCode::CREATED);
+    let disguised = format!("recover:{}", alice.email);
+    for _ in 0..12 {
+        call(
+            &app,
+            "POST",
+            "/api/v1/auth/login",
+            None,
+            Some(json!({ "email": disguised, "auth_key": STANDARD.encode([1u8; 32]) })),
+        )
+        .await;
+    }
+    let (s, _) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/recover/start",
+        None,
+        Some(json!({ "email": alice.email, "recovery_auth_key": STANDARD.encode([1u8; 32]) })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn an_account_keeps_only_its_newest_sessions() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    assert_eq!(alice.register(&app, None).await, StatusCode::CREATED);
+    alice.login(&app).await;
+    let first = alice.token.clone();
+    for _ in 0..24 {
+        alice.login(&app).await;
+    }
+    let (s, list) = alice.get(&app, "/api/v1/sessions").await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(list["sessions"].as_array().unwrap().len(), 20);
+    let (s, _) = call(&app, "GET", "/api/v1/vaults", Some(&first), None).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "the oldest session ended");
 }
 
 #[tokio::test]

@@ -145,6 +145,7 @@ pub struct RegisterResponse {
 }
 
 const MAX_KEY_BLOB: usize = 512;
+const MAX_SESSIONS: i64 = 20;
 
 type InviteRow = (Uuid, String, Uuid, String);
 
@@ -195,9 +196,7 @@ pub async fn register(
         return Err(ApiError::BadRequest("invalid_key_material"));
     }
 
-    let auth_hash = tokio::task::spawn_blocking(move || hash_auth_key(&auth_key))
-        .await
-        .map_err(|e| anyhow!(e))??;
+    let auth_hash = state.argon(move || hash_auth_key(&auth_key)).await??;
 
     let user_id = req.user_id;
     let mut tx = state.db.begin().await?;
@@ -310,7 +309,8 @@ pub async fn login(
 ) -> ApiResult<Json<LoginResponse>> {
     let email = normalize_email(&req.email)?;
     let ip_key = ip.map(limiter_key);
-    if !state.begin_attempt(&email, ip_key.as_deref()) {
+    let limiter_key = format!("login:{email}");
+    if !state.begin_attempt(&limiter_key, ip_key.as_deref()) {
         return Err(ApiError::TooManyRequests);
     }
 
@@ -328,9 +328,9 @@ pub async fn login(
         .map_or_else(|| state.dummy_hash.clone(), |u| u.1.clone());
     let key = decode_auth_key(&req.auth_key);
     let key_for_check = key.unwrap_or([0u8; 32]);
-    let matches = tokio::task::spawn_blocking(move || verify_auth_key(&key_for_check, &phc))
-        .await
-        .map_err(|e| anyhow!(e))?;
+    let matches = state
+        .argon(move || verify_auth_key(&key_for_check, &phc))
+        .await?;
 
     let Some((user_id, _, wrapped_account_key, public_key, encrypted_private_key, has_recovery)) =
         user.filter(|_| matches && key.is_some())
@@ -338,7 +338,7 @@ pub async fn login(
         tracing::info!("failed login");
         return Err(ApiError::Unauthorized);
     };
-    state.attempt_succeeded(&email, ip_key.as_deref());
+    state.attempt_succeeded(&limiter_key, ip_key.as_deref());
 
     let ttl_hours = state.config.session_ttl_hours;
     let device = crate::sessions::device_label(&req.device);
@@ -397,6 +397,7 @@ pub struct AuthUser {
 
 pub struct RecoveryUser {
     pub user_id: Uuid,
+    pub token_hash: Vec<u8>,
 }
 
 async fn session(
@@ -447,8 +448,11 @@ impl FromRequestParts<AppState> for RecoveryUser {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
-        let (user_id, _, _) = session(parts, state, "recovery").await?;
-        Ok(Self { user_id })
+        let (user_id, token_hash, _) = session(parts, state, "recovery").await?;
+        Ok(Self {
+            user_id,
+            token_hash,
+        })
     }
 }
 
@@ -475,6 +479,16 @@ pub(crate) async fn create_session(
     .bind(scope)
     .bind(minutes)
     .bind(device)
+    .execute(&state.db)
+    .await?;
+    sqlx::query(
+        "DELETE FROM sessions WHERE token_hash IN (
+             SELECT token_hash FROM sessions WHERE user_id = $1 AND scope = $2
+             ORDER BY created_at DESC OFFSET $3)",
+    )
+    .bind(user_id)
+    .bind(scope)
+    .bind(MAX_SESSIONS)
     .execute(&state.db)
     .await?;
     Ok(token)

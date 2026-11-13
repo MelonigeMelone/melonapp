@@ -43,14 +43,24 @@ Dieses Salt ist für dieselbe E-Mail immer gleich. So lässt sich über `prelogi
 herausfinden, welche Konten existieren. Ein zufälliges Salt würde sich bei jeder Abfrage
 ändern und das Konto damit verraten.
 
+Grenzen: Wer `prelogin` vor und nach einem Wechsel von `MELON_SERVER_SECRET` abfragt, sieht,
+welche Salts gleich bleiben, also welche Konten es gibt. Ebenso fallen Konten auf, deren
+Parameter von den Standardwerten abweichen oder deren Salt sich nach einem Passwortwechsel
+ändert. Für eine private Instanz ist das akzeptiert. Das Secret deshalb nur wechseln, wenn es
+bekannt geworden ist.
+
 ## Login
 
 - **Gleiche Laufzeit:** Auch bei unbekanntem Konto oder kaputtem Auth-Key läuft genau eine
   Argon2-Prüfung, dann gegen einen Dummy-Hash, der beim Start erzeugt wird. Sonst würde
   die Antwortzeit verraten, ob das Konto existiert.
-- **Sperre pro Konto:** Nach 10 Fehlversuchen pro E-Mail innerhalb von 15 Minuten antwortet
-  der Server mit `429`, auch bei richtigem Passwort. Nach erfolgreichem Login wird der Zähler
-  gelöscht.
+- **Sperre pro Konto und Adresse:** Nach 10 Fehlversuchen für eine E-Mail von derselben Adresse
+  innerhalb von 15 Minuten antwortet der Server dieser Adresse mit `429`, auch bei richtigem
+  Passwort. Andere Adressen kommen weiter an die Passwortprüfung. Ein Angreifer kann ein Konto
+  also nicht von einer einzelnen Adresse aus für alle sperren.
+- **Sperre pro Konto:** Nach 50 Fehlversuchen pro E-Mail innerhalb von 15 Minuten, egal von wo,
+  antwortet der Server mit `429`. Das begrenzt verteiltes Raten. Ein erfolgreicher Login löscht
+  beide Konto-Zähler.
 - **Sperre pro Adresse:** Nach 30 Fehlversuchen (Login und Recovery zusammen) von derselben
   IP-Adresse innerhalb von 15 Minuten antwortet der Server für **alle** Konten mit `429`. Das
   bremst Angriffe, die viele E-Mails durchprobieren. IPv6-Adressen zählen je /64-Netz, sonst
@@ -62,14 +72,24 @@ herausfinden, welche Konten existieren. Ein zufälliges Salt würde sich bei jed
   die Adresse der TCP-Verbindung, und der Header wird ignoriert, weil ihn jeder setzen kann.
 - Jeder Versuch wird **vor** der langsamen Argon2-Prüfung gezählt, in einem Schritt mit der
   Prüfung auf Sperre. Viele gleichzeitige Anfragen kommen so nicht an den Limits vorbei. Ein
-  erfolgreicher Versuch gibt seinen Platz wieder frei.
+  erfolgreicher Versuch gibt seinen Platz wieder frei. Zuerst zählt die Adresse. Ist sie
+  gesperrt, legt der Server für die E-Mail gar keinen Zähler an.
+- Login, Recovery und Passwortbestätigung haben getrennte Zähler (`login:`, `recover:`,
+  `reauth:`). Eine E-Mail wie `recover:…` trifft also nicht den Recovery-Zähler eines anderen.
 - **Kehrseite:** Wer sich eine Adresse teilt (Büro, Familie, Mobilfunk-NAT), kann die anderen
   für 15 Minuten aussperren. Dasselbe gilt, wenn Docker die echten Adressen nicht durchreicht
   (rootless Docker oder IPv6 ohne IPv6 im Docker-Netz): Dann sehen alle Anfragen wie die
   Docker-Bridge aus. Im Zweifel in den Server-Logs prüfen, welche Adressen ankommen.
-- Die Zähler liegen im Speicher (höchstens 10 000 Einträge, alte werden aufgeräumt). Ein
-  Neustart setzt sie zurück.
-- Argon2 läuft in `spawn_blocking`, damit es den Async-Server nicht blockiert.
+- Die Zähler liegen im Speicher, höchstens 10 000 Einträge je Zähler. Abgelaufene fallen sofort
+  heraus. Ist der Speicher trotzdem voll, verdrängt ein neuer Eintrag nur einen mit höchstens
+  einem Versuch. Zähler, die schon mehr gezählt haben, bleiben, sonst könnte ein Angreifer mit
+  vielen erfundenen E-Mails die Sperre seines Ziels löschen. Findet sich unter den ältesten 64
+  Einträgen keiner, bekommt die neue Anfrage `429`. Kein Aufruf durchsucht die ganze Liste. Ein
+  Neustart setzt alle Zähler zurück.
+- Argon2 läuft in `spawn_blocking`, damit es den Async-Server nicht blockiert. Gleichzeitig
+  laufen höchstens so viele Prüfungen wie Prozessorkerne (2 bis 16). Wer länger als 5 Sekunden auf
+  einen Platz warten müsste, bekommt `429`. Das gilt für Login, Registrierung, Recovery und
+  Passwortbestätigung und begrenzt Speicher und Rechenzeit, auch bei richtigen Passwörtern.
 
 ## Master-Passwort ändern
 
@@ -90,7 +110,9 @@ Client                                         Server
   │ normaler Login mit neuem Passwort            │
 ```
 
-Die Recovery-Sitzung kann nichts lesen (Geltungsbereich `recovery`). Wer nur den Token abfängt,
+Die Recovery-Sitzung kann nichts lesen (Geltungsbereich `recovery`). `recover/complete` löscht sie in
+einem Schritt, bevor die neuen Zugangsdaten gespeichert werden. Zwei gleichzeitige Anfragen
+können sie also nicht beide nutzen. Wer nur den Token abfängt,
 kommt also nicht an Daten. Er könnte höchstens ein neues Passwort setzen, für das er den
 Konto-Schlüssel nicht hat.
 
@@ -101,6 +123,7 @@ Konto-Schlüssel nicht hat.
   benutzbaren Tokens. SHA-256 statt Argon2 genügt, weil das Token 256 bit Zufall hat.
 - Laufzeit: Standard 14 Tage (`MELON_SESSION_TTL_HOURS`, 1–8760).
 - Abgelaufene Sitzungen werden beim Login des Nutzers und stündlich global gelöscht.
+- Ein Konto hat höchstens 20 normale Sitzungen. Ein neuer Login beendet die älteste darüber.
 - Logout löscht die Sitzung sofort.
 - **Geräte:** Unter „Konto → Geräte“ sieht man alle eigenen Sitzungen mit Gerätename, Anmeldedatum
   und letzter Aktivität und kann einzelne oder alle anderen abmelden. Ein abgemeldetes Gerät
