@@ -17,7 +17,7 @@ import { entries } from '../../layout';
 import { checkPassword, sealExport, type Session } from '../../session';
 import type { VaultItem } from '../../vault/item';
 import type { VaultView } from '../../vault/manager';
-import { bitwardenCsv, download, fileName, melonPayload } from './export/formats';
+import { bitwardenCsv, fileName, melonPayload, saveExport } from './export/formats';
 
 const MIN_EXPORT_PASSWORD = 12;
 
@@ -26,6 +26,7 @@ function message(e: unknown): string {
   if (/wrong_password|decryption failed/.test(m)) return 'Das Master-Passwort stimmt nicht.';
   if (/export_password_is_master_password/.test(m)) return 'Nimm ein anderes Export-Passwort als dein Master-Passwort.';
   if (/weak_export_password|at least 12/.test(m)) return `Das Export-Passwort braucht mindestens ${MIN_EXPORT_PASSWORD} Zeichen.`;
+  if (/export_unsupported/.test(m)) return 'Auf diesem Gerät kann MelonApp noch keine Datei speichern. Exportiere in der Web-App oder am Mac.';
   return 'Der Export ist fehlgeschlagen. Versuche es noch einmal.';
 }
 
@@ -64,13 +65,13 @@ export function ExportDialog({
     try {
       if (kind === 'melon') {
         const file = await sealExport(session, master, exportPassword, melonPayload(items, vaultName));
-        const name = fileName('melon');
-        download(name, file, 'application/json');
+        const name = await saveExport(fileName('melon'), file, 'application/json');
+        if (!name) return;
         setSaved(name);
       } else {
         await checkPassword(session, master);
-        const name = fileName('csv');
-        download(name, bitwardenCsv(items, vaultName), 'text/csv');
+        const name = await saveExport(fileName('csv'), bitwardenCsv(items, vaultName), 'text/csv');
+        if (!name) return;
         setSaved(name);
       }
       setMaster('');

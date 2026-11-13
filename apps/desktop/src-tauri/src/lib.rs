@@ -1,3 +1,4 @@
+mod export;
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 mod passkeys;
 mod platform;
@@ -26,6 +27,7 @@ async fn crypto_call(
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(Mutex::new(Session::default()))
+        .manage(export::SaveDialog::default())
         .invoke_handler(tauri::generate_handler![
             crypto_call,
             platform::get_server,
@@ -40,7 +42,8 @@ pub fn run() {
             platform::autofill_active,
             platform::passkeys_pending,
             platform::passkeys_acknowledge,
-            platform::is_ios
+            platform::is_ios,
+            export::save_export
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -69,6 +72,8 @@ pub fn run() {
                 tauri::WindowEvent::Resumed => Some(true),
                 _ => None,
             };
+            let active =
+                active.filter(|active| *active || !window.state::<export::SaveDialog>().is_open());
             if let Some(active) = active {
                 if let Ok(mut session) = window.state::<Mutex<Session>>().lock() {
                     session.set_active(active);
@@ -94,6 +99,8 @@ pub fn run() {
             })
             .build(),
     );
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_dialog::init());
     builder
         .run(tauri::generate_context!())
         .expect("application failed");

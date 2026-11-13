@@ -227,9 +227,10 @@ Zugriff hat. Die Datei entsteht nur im Browser.
   bekommen neue IDs und beginnen bei `seq` 0.
 - Einträge, die sich nicht entschlüsseln ließen oder als älterer Stand verworfen wurden
   ([Rollback-Erkennung](#rollback-erkennung)), fehlen im Export. Der Dialog sagt das.
-- In der **Desktop-App** speichert der Browser-Download noch keine Datei, dafür fehlt ein nativer
-  Speichern-Dialog ([#81](https://github.com/MelonigeMelone/melonapp/issues/81)). Bis dahin im Browser
-  exportieren.
+- In der **Mac-App** öffnet „Exportieren“ den nativen Speichern-Dialog statt eines Downloads
+  ([Desktop → Export](/melonapp/clients/desktop/#export)). Abbrechen speichert nichts, die Eingaben
+  bleiben stehen. In der iOS-App geht Export noch nicht; dort erklärt der Dialog, dass man in
+  der Web-App oder am Mac exportiert.
 
 ## 2FA-Codes
 

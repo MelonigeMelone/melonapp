@@ -33,6 +33,9 @@ security-framework = { version = "3", features = ["OSX_10_15"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-plugin-global-shortcut = "2"
 
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+tauri-plugin-dialog = "2"
+
 [dev-dependencies]
 melon-crypto = { path = "../../../crates/melon-crypto" }
 

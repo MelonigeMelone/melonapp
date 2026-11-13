@@ -25,7 +25,8 @@ Recovery-Key bleibt als Notfall-Kit für die Person sichtbar.
 ## Sperren und Cache
 
 Rust sperrt nach fünf Minuten ohne gemeldete Eingabe, zusätzlich zum vorhandenen
-UI-Timer. Fokusverlust sperrt sofort. `⌘⇧M` bringt auf macOS das Fenster nach vorn,
+UI-Timer. Fokusverlust sperrt sofort (einzige Ausnahme: der Speichern-Dialog beim
+[Export](#export)). `⌘⇧M` bringt auf macOS das Fenster nach vorn,
 entsperrt es aber nicht. Hintergrund-Sperren werden als Ereignis an React gemeldet.
 
 Der Face-ID-Dialog macht die iOS-App kurz inaktiv (`sceneWillResignActive`), was wie jeder
@@ -57,6 +58,20 @@ API-Pfad, Dateinamen sind SHA-256-Ableitungen dieses Kontextes. Temporäre Datei
 Modus 0600 und werden nach `sync_all` atomar umbenannt. Die erste Version verwendet
 bewusst keine automatische Offline-Antwort: Mitgliedschaftsentzug und gelöschte
 Einträge dürfen nicht unbemerkt durch veraltete Daten ersetzt werden.
+
+## Export
+
+Der Export ([Web-App → Export](/melonapp/clients/web/)) übergibt Dateiname und fertigen Inhalt an
+den Befehl `save_export`. Rust prüft den Namen (`melonapp-export-…` mit `.melon.json` oder
+`-UNVERSCHLUESSELT.csv`, nur Buchstaben, Ziffern, `-` und `.`) und die Größe (höchstens
+128 MiB) und öffnet `tauri-plugin-dialog` als Sheet am Fenster. Einen Pfad aus JavaScript nimmt
+der Befehl nie an; geschrieben wird nur an die im Dialog bestätigte Stelle, mit Modus 0600 und
+`sync_all`. Für JavaScript sind weder Dialog- noch Dateisystem-Berechtigungen freigegeben.
+
+Das Sheet nimmt dem Fenster den Fokus. Solange es offen ist, sperrt dieser Fokusverlust nicht.
+Nach dem Schließen wartet der Befehl bis zu einer Sekunde auf den Fokus und sperrt sonst sofort,
+etwa wenn man währenddessen in eine andere App gewechselt ist. Der Fünf-Minuten-Timer läuft
+weiter. Auf iOS antwortet der Befehl mit `export_unsupported`.
 
 ## Touch ID und Face ID
 

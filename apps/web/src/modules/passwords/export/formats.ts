@@ -1,4 +1,5 @@
 import { allFields, parseItem, type Field, type Item, type VaultItem } from '../../../vault/item';
+import { nativePlatform, type NativePlatform } from '../../../platform';
 
 export interface ExportPayload {
   app: 'MelonApp';
@@ -77,6 +78,17 @@ export function bitwardenCsv(items: VaultItem[], vaultName: (id: string) => stri
 export function fileName(kind: 'melon' | 'csv', now = new Date()): string {
   const day = now.toISOString().slice(0, 10);
   return kind === 'melon' ? `melonapp-export-${day}.melon.json` : `melonapp-export-${day}-UNVERSCHLUESSELT.csv`;
+}
+
+export async function saveExport(
+  name: string,
+  content: string,
+  type: string,
+  platform: Pick<NativePlatform, 'saveExport'> | null = nativePlatform(),
+): Promise<string | null> {
+  if (platform) return platform.saveExport(name, content);
+  download(name, content, type);
+  return name;
 }
 
 export function download(name: string, content: string, type: string) {

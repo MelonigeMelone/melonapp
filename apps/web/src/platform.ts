@@ -12,6 +12,7 @@ export interface NativePlatform {
   disableBiometric(): Promise<void>;
   biometricKeepsToken(token: string): Promise<boolean>;
   onLock(callback: () => void): Promise<() => void>;
+  saveExport(name: string, content: string): Promise<string | null>;
 }
 
 let native: NativePlatform | null = null;

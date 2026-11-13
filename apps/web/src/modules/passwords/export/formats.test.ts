@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyItem, fieldValue, newId, passkeyItem, passkeyOf, type Item, type VaultItem } from '../../../vault/item';
 import { parseCsvExport } from '../import/formats';
-import { bitwardenCsv, fileName, melonPayload, parseMelonPayload } from './formats';
+import { bitwardenCsv, fileName, melonPayload, parseMelonPayload, saveExport } from './formats';
 
 function login(): Item {
   const item = emptyItem('login');
@@ -101,5 +101,33 @@ describe('CSV export', () => {
     const [back] = parseMelonPayload(melonPayload([vault(passkey)], names));
     expect(back?.type).toBe('passkey');
     expect(passkeyOf(back!)).toEqual(passkeyOf(passkey));
+  });
+});
+
+describe('saveExport', () => {
+  it('hands the file to the native save dialog instead of downloading', async () => {
+    const calls: [string, string][] = [];
+    const platform = {
+      saveExport: async (name: string, content: string) => {
+        calls.push([name, content]);
+        return 'gewaehlt.melon.json';
+      },
+    };
+    await expect(saveExport('melonapp-export-2026-11-13.melon.json', '{}', 'application/json', platform)).resolves.toBe('gewaehlt.melon.json');
+    expect(calls).toEqual([['melonapp-export-2026-11-13.melon.json', '{}']]);
+  });
+
+  it('reports a cancelled native dialog as nothing saved', async () => {
+    const platform = { saveExport: async () => null };
+    await expect(saveExport('melonapp-export-2026-11-13.melon.json', '{}', 'application/json', platform)).resolves.toBeNull();
+  });
+
+  it('passes native errors on', async () => {
+    const platform = {
+      saveExport: async () => {
+        throw new Error('export_unsupported');
+      },
+    };
+    await expect(saveExport('melonapp-export-2026-11-13.melon.json', '{}', 'application/json', platform)).rejects.toThrow('export_unsupported');
   });
 });

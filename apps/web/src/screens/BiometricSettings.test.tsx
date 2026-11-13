@@ -21,6 +21,7 @@ function platform(configured = false) {
     unlockBiometric: vi.fn(),
     biometricKeepsToken: vi.fn(),
     onLock: vi.fn(),
+    saveExport: vi.fn(),
   } satisfies NativePlatform;
 }
 
