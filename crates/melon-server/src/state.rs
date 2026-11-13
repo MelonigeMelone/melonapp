@@ -25,6 +25,7 @@ pub struct Inner {
     pub limiter: LoginLimiter,
     pub address_limiter: LoginLimiter,
     pub ip_limiter: LoginLimiter,
+    pub lookups: LoginLimiter,
     argon: Semaphore,
 }
 
@@ -38,6 +39,7 @@ impl AppState {
             limiter: LoginLimiter::with_max(MAX_FAILURES_PER_ACCOUNT),
             address_limiter: LoginLimiter::with_max(MAX_FAILURES_PER_ACCOUNT_AND_ADDRESS),
             ip_limiter: LoginLimiter::with_max(MAX_FAILURES_PER_IP),
+            lookups: LoginLimiter::with_max(MAX_LOOKUPS_PER_USER),
             argon: Semaphore::new(workers),
         })))
     }
@@ -98,6 +100,7 @@ impl Deref for AppState {
 const MAX_FAILURES_PER_ACCOUNT_AND_ADDRESS: u32 = 10;
 const MAX_FAILURES_PER_ACCOUNT: u32 = 50;
 const MAX_FAILURES_PER_IP: u32 = 30;
+const MAX_LOOKUPS_PER_USER: u32 = 30;
 const WINDOW: Duration = Duration::from_secs(15 * 60);
 const MAX_TRACKED: usize = 10_000;
 const ARGON_WAIT: Duration = Duration::from_secs(5);

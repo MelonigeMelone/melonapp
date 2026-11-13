@@ -29,14 +29,16 @@ Formate: `EncString` = `1.<base64url>` (XChaCha20-Poly1305), `SealedKey` = `h1.<
 | PUT | `/account/password` | angemeldet | Master-Passwort ändern |
 | PUT | `/account/recovery` | angemeldet | Recovery-Key setzen oder ersetzen |
 | GET | `/users/lookup?email=` | angemeldet | Nutzer-ID und öffentlicher Schlüssel |
-| GET | `/vaults` | angemeldet | eigene Tresore mit Mitgliedern |
+| GET | `/vaults` | angemeldet | eigene Tresore mit Mitgliedern, offene Angebote |
 | POST | `/vaults` | angemeldet | geteilten Tresor anlegen |
 | PUT | `/vaults/{id}` | Besitzer | Name ändern |
 | DELETE | `/vaults/{id}` | Besitzer | geteilten Tresor löschen |
 | GET | `/vaults/{id}/items?since=N` | Mitglied mit Schlüssel | Änderungen seit Revision N |
 | PUT | `/vaults/{id}/items/{item}` | Bearbeiter, Besitzer | Eintrag anlegen/ändern |
 | DELETE | `/vaults/{id}/items/{item}?base_revision=N` | Bearbeiter, Besitzer | Eintrag löschen |
-| POST | `/vaults/{id}/members` | Besitzer | bestehendes Konto hinzufügen |
+| POST | `/vaults/{id}/members` | Besitzer | bestehendem Konto den Tresor anbieten |
+| POST | `/vaults/{id}/accept` | Angebotene Person | Angebot annehmen |
+| POST | `/vaults/{id}/decline` | Angebotene Person | Angebot ablehnen |
 | PUT | `/vaults/{id}/members/{user}` | Besitzer | Rolle ändern |
 | PUT | `/vaults/{id}/members/{user}/key` | Besitzer | Schlüssel für wartendes Mitglied hinterlegen |
 | DELETE | `/vaults/{id}/members/{user}` | selbst / Besitzer | verlassen bzw. wartendes Mitglied entfernen |
@@ -50,8 +52,30 @@ Alle Besitzer-Aktionen (Tresor löschen, Rollen ändern, Mitglieder hinzufügen,
 freischalten, Einladungen, Schlüsselwechsel, Name ändern) verlangen zusätzlich, dass der Besitzer
 den Tresor-Schlüssel schon hat. Ein Besitzer, der noch wartet, bekommt `403 vault_key_pending`.
 
-Wer kein Mitglied ist, bekommt für einen Tresor immer `404 vault_not_found`, auch wenn es ihn
-gibt. So verrät die API nicht, welche Tresore existieren.
+Wer kein Mitglied ist oder ein Angebot noch nicht angenommen hat, bekommt für einen Tresor immer
+`404 vault_not_found`, auch wenn es ihn gibt. Eine Ausnahme ist `POST /vaults` mit einer schon
+vergebenen ID: `409 vault_exists`. Das hilft nur, wer die zufällige ID schon kennt, also etwa ein
+ehemaliges Mitglied.
+
+## Grenzen
+
+| Was | Höchstens | Fehler |
+|---|---|---|
+| Einträge je Tresor (nicht gelöscht) | 5.000 | `409 vault_full` |
+| Größe aller Einträge je Tresor | 24 MiB | `409 vault_full` |
+| Ein Eintrag | 64 KiB | `400 item_too_large` |
+| Mitglieder plus offene Einladungen je Tresor | 100 | `409 too_many_members` |
+| Geteilte Tresore je Konto (angenommen) | 100 | `409 too_many_vaults` |
+| Offene Angebote an ein Konto vom selben Absender | 3 | `409 too_many_offers` |
+| `users/lookup` und Einladungen je Konto | 30 in 15 Minuten | `429 too_many_requests` |
+
+Die Tresor-Grenzen sorgen dafür, dass ein Schlüsselwechsel mit allen Einträgen immer in eine
+Anfrage passt (32 MiB). Sonst könnte ein Bearbeiter den Tresor so füllen, dass niemand mehr
+entfernt werden kann. Ein Test beim Kompilieren prüft das Verhältnis. Die Tresor-Grenzen greifen
+nur, wenn eine Änderung den Tresor wachsen lässt. Kleiner machen und löschen geht immer.
+
+Die Grenze für `users/lookup` gilt, weil jedes angemeldete Konto damit prüfen kann, ob es zu einer
+E-Mail ein Konto gibt. Das ist für das Teilen nötig, aber nicht in beliebiger Menge.
 
 ## Auth
 
@@ -72,7 +96,7 @@ gibt. So verrät die API nicht, welche Tresore existieren.
 }
 ```
 
-→ `201 { "user_id" }` · `403 registration_disabled` · `409 email_taken` ·
+→ `201 { "user_id" }` · `403 registration_disabled` · `409 email_taken | user_id_taken` ·
 `400 invalid_invite | invite_email_mismatch | invalid_public_key | invalid_*`. `invalid_public_key` auch für Punkte kleiner Ordnung, für die niemand verschlüsseln kann.
 
 Die Nutzer-ID kommt vom Client, weil der Tresor-Schlüssel des persönlichen Tresors schon
@@ -170,15 +194,20 @@ Der Token gilt 15 Minuten und **nur** für `recover/complete`. Alle anderen Endp
   "revision": 41, "rotation_needed": false,
   "role": "owner", "encrypted_vault_key": "h2.<…>", "member_key_version": 2,
   "members": [{ "user_id": "…", "email": "…", "role": "editor", "public_key": "…",
-                "has_key": true, "key_version": 2 }]
-}]}
+                "has_key": true, "key_version": 2, "pending": false }]
+}],
+ "offers": [{ "vault_id": "…", "role": "editor", "from_email": "…" }] }
 ```
 
 `encrypted_vault_key: null` heißt: wartendes Mitglied, der Schlüssel fehlt noch.
+`pending: true` heißt: Die Person hat das Angebot noch nicht angenommen. `offers` sind Tresore,
+die jemand mir angeboten hat. Sie stehen nicht unter `vaults`, bis ich annehme
+([ADR 0028](/melonapp/entscheidungen/0028-bereiche-nur-mit-zustimmung/)).
 
 ### `POST /vaults`
 
-`{ "id", "encrypted_meta", "encrypted_vault_key" }` → `201 { "revision" }` · `409 vault_exists`
+`{ "id", "encrypted_meta", "encrypted_vault_key" }` → `201 { "revision" }` · `409 vault_exists` ·
+`409 too_many_vaults`
 
 ### `PUT /vaults/{id}`
 
@@ -200,14 +229,26 @@ Höchstens 1000 pro Antwort. `403 vault_key_pending` für wartende Mitglieder.
 `{ "data", "key_version", "base_revision": null | N }` → `200 { "revision" }`
 
 `409 revision_mismatch` (anderes Gerät war schneller) · `409 key_rotated` (Schlüssel veraltet) ·
-`403 read_only` (Betrachter) · `400 item_too_large` (über 64 KiB)
+`403 read_only` (Betrachter) · `400 item_too_large` (über 64 KiB) · `409 vault_full` (siehe Grenzen)
 
 ## Mitglieder
 
 ### `POST /vaults/{id}/members`
 
 `{ "user_id", "role", "encrypted_vault_key", "key_version" }` → `201`
-· `409 member_exists_or_unknown_user` · `400 personal_vault`
+· `409 member_exists_or_unknown_user | too_many_members | too_many_offers` · `400 personal_vault`
+
+Die Person ist danach nur **angeboten**. Sie sieht den Tresor erst nach `POST /vaults/{id}/accept`
+(`204`, `404 offer_not_found`, `409 too_many_vaults`). `POST /vaults/{id}/decline` (`204`)
+entfernt sie wieder und setzt `rotation_needed`, weil sie eine Kopie des Schlüssels hatte.
+
+### `PUT /vaults/{id}/members/{user}/key`
+
+`{ "encrypted_vault_key", "key_version" }` → `204` · `409 member_has_key` · `404 member_not_found`
+· `400 personal_vault`
+
+Nur für wartende Mitglieder ohne Schlüssel. Ein vorhandener Schlüssel wird nie überschrieben. Ein
+neuer Schlüssel für alle kommt nur über `rotate`.
 
 ### `PUT /vaults/{id}/members/{user}`
 
@@ -218,7 +259,8 @@ Höchstens 1000 pro Antwort. `403 vault_key_pending` für wartende Mitglieder.
 - **eigene ID:** Tresor verlassen. Setzt `rotation_needed`. `409 last_owner`, wenn man der
   letzte Besitzer ist.
 - **fremde ID:** nur für wartende Mitglieder ohne Schlüssel. Wer den Schlüssel hat, wird über
-  `rotate` entfernt: `409 rotation_required`.
+  `rotate` entfernt: `409 rotation_required`. Das gilt auch für Personen, die ein Angebot noch
+  nicht angenommen haben.
 
 ### `POST /vaults/{id}/rotate`
 
@@ -255,7 +297,8 @@ Schreiben rutschen.
 
 ### `POST /vaults/{id}/invites`
 
-`{ "email", "role" }` → `201 { "id", "token", "expires_in_days": 7 }` · `409 user_exists`
+`{ "email", "role" }` → `201 { "id", "token", "expires_in_days": 7 }` · `409 user_exists | too_many_members`
+· `429 too_many_requests` (zählt zusammen mit `users/lookup`)
 
 Der Token wird nur dieses eine Mal zurückgegeben. Gespeichert ist nur sein SHA-256-Hash.
 

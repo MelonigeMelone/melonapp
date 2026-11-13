@@ -40,6 +40,7 @@ pub struct Access {
     pub personal: bool,
     pub vault_key_version: i32,
     pub has_key: bool,
+    pub accepted: bool,
 }
 
 impl Access {
@@ -85,15 +86,28 @@ impl Access {
     }
 }
 
-type AccessRow = (String, bool, i32, bool);
+type AccessRow = (String, bool, i32, bool, bool);
 
 pub async fn access<'e>(
     db: impl PgExecutor<'e>,
     vault_id: Uuid,
     user_id: Uuid,
 ) -> ApiResult<Access> {
+    let a = membership(db, vault_id, user_id).await?;
+    if a.accepted {
+        Ok(a)
+    } else {
+        Err(ApiError::NotFound("vault_not_found"))
+    }
+}
+
+pub async fn membership<'e>(
+    db: impl PgExecutor<'e>,
+    vault_id: Uuid,
+    user_id: Uuid,
+) -> ApiResult<Access> {
     let row: Option<AccessRow> = sqlx::query_as(
-        "SELECT m.role, v.personal, v.key_version, m.encrypted_vault_key IS NOT NULL
+        "SELECT m.role, v.personal, v.key_version, m.encrypted_vault_key IS NOT NULL, m.accepted
          FROM vault_members m JOIN vaults v ON v.id = m.vault_id
          WHERE m.vault_id = $1 AND m.user_id = $2",
     )
@@ -101,13 +115,14 @@ pub async fn access<'e>(
     .bind(user_id)
     .fetch_optional(db)
     .await?;
-    let (role, personal, vault_key_version, has_key) =
+    let (role, personal, vault_key_version, has_key, accepted) =
         row.ok_or(ApiError::NotFound("vault_not_found"))?;
     Ok(Access {
         role: Role::parse(&role)?,
         personal,
         vault_key_version,
         has_key,
+        accepted,
     })
 }
 
@@ -130,7 +145,7 @@ pub async fn bump_vault<'e>(db: impl PgExecutor<'e>, vault_id: Uuid) -> ApiResul
 pub async fn owners_with_key<'e>(db: impl PgExecutor<'e>, vault_id: Uuid) -> ApiResult<i64> {
     let (n,): (i64,) = sqlx::query_as(
         "SELECT count(*) FROM vault_members
-         WHERE vault_id = $1 AND role = 'owner' AND encrypted_vault_key IS NOT NULL",
+         WHERE vault_id = $1 AND role = 'owner' AND encrypted_vault_key IS NOT NULL AND accepted",
     )
     .bind(vault_id)
     .fetch_one(db)

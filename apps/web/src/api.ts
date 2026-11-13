@@ -15,6 +15,13 @@ export interface RemoteMember {
   public_key: string;
   has_key: boolean;
   key_version: number | null;
+  pending?: boolean;
+}
+
+export interface Offer {
+  vault_id: string;
+  role: Role;
+  from_email: string | null;
 }
 
 export interface RemoteVault {
@@ -191,7 +198,9 @@ export function authed(token: string) {
     listSessions: () => request<{ sessions: DeviceSession[] }>('GET', '/sessions', o),
     revokeSession: (id: string) => request<void>('DELETE', `/sessions/${encodeURIComponent(id)}`, o),
     revokeOtherSessions: () => request<void>('DELETE', '/sessions', o),
-    listVaults: () => request<{ vaults: RemoteVault[] }>('GET', '/vaults', o),
+    listVaults: () => request<{ vaults: RemoteVault[]; offers?: Offer[] }>('GET', '/vaults', o),
+    acceptOffer: (id: string) => request<void>('POST', `${v(id)}/accept`, o),
+    declineOffer: (id: string) => request<void>('POST', `${v(id)}/decline`, o),
     createVault: (body: { id: string; encrypted_meta: string; encrypted_vault_key: string }) =>
       request<{ revision: number }>('POST', '/vaults', { ...o, body }),
     updateVault: (id: string, body: { encrypted_meta: string; key_version: number }) =>

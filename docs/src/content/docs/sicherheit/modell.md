@@ -66,7 +66,11 @@ nicht von ihm kommt. Für Verfügbarkeit und Aktualität muss man ihm vertrauen.
 ## Rechte
 
 Der Server prüft bei jeder Anfrage Mitgliedschaft, Rolle und Schlüsselversion
-([Rollen](/melonapp/konzept/tresore/#rollen)). Was er **nicht** verhindern kann: Ein Mitglied mit
+([Rollen](/melonapp/konzept/tresore/#rollen)). Niemand landet ohne eigene Zustimmung in einem
+fremden Bereich ([ADR 0028](/melonapp/entscheidungen/0028-bereiche-nur-mit-zustimmung/)). Grenzen je
+Tresor halten jeden Schlüsselwechsel klein genug, dass ein Bearbeiter das Entfernen nicht blockieren
+kann ([Grenzen](/melonapp/server/api/#grenzen)). Angemeldete Konten können begrenzt prüfen, ob es
+eine E-Mail als Konto gibt. Was er **nicht** verhindern kann: Ein Mitglied mit
 Leserecht kann gelesene Inhalte weitergeben. Deshalb werden beim Entfernen der Schlüssel
 gewechselt und die wichtigen Passwörter sollten geändert werden.
 

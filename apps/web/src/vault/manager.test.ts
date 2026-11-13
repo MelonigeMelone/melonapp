@@ -660,3 +660,28 @@ describe('authenticated vault keys in the vaults manager', () => {
     expect(await errorOf(manager.sync())).toBe('decrypt_failed');
   });
 });
+
+describe('shared vaults offered to me', () => {
+  it('lists an offer without opening it and accepts or declines it on request', async () => {
+    const { server, manager } = setup();
+    const calls: string[] = [];
+    const api = (manager as unknown as { api: Api }).api;
+    (manager as unknown as { api: Api }).api = {
+      ...api,
+      listVaults: async () => ({ ...(await api.listVaults()), offers: [{ vault_id: 'spam', role: 'viewer', from_email: 'mallory@example.test' }] }),
+      acceptOffer: async (id: string) => {
+        calls.push(`accept:${id}`);
+      },
+      declineOffer: async (id: string) => {
+        calls.push(`decline:${id}`);
+      },
+    } as Api;
+    await manager.sync();
+    expect(manager.getSnapshot().offers).toEqual([{ vault_id: 'spam', role: 'viewer', from_email: 'mallory@example.test' }]);
+    expect(manager.vault('spam')).toBeUndefined();
+    expect(server.sealedFor).toEqual([]);
+    await manager.declineOffer('spam');
+    await manager.acceptOffer('spam');
+    expect(calls).toEqual(['decline:spam', 'accept:spam']);
+  });
+});

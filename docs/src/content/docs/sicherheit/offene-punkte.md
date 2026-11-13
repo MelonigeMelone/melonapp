@@ -25,6 +25,9 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Neuer Schlüssel von einem später hinzugekommenen, ungeprüften Mitglied wird nicht angenommen | Code des Mitglieds prüfen, dann klappt es ([ADR 0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/)) |
 | Ehemaliges Mitglied plus Server können einen neuen Tresor-Schlüssel unterschieben | nur bis das Gerät die neue Mitgliederliste gesehen hat ([ADR 0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/)) |
 | Mitgliederliste zeigt allen Mitgliedern die E-Mails | gewollt für Familie/Freunde |
+| Angemeldete Konten können prüfen, ob es zu einer E-Mail ein Konto gibt | nötig fürs Teilen, 30 Abfragen je 15 Minuten und Konto |
+| Andere Geräte abmelden geht ohne Master-Passwort | ein gestohlenes Token kann so stören, aber nichts lesen; Passwort ändern beendet es |
+| Grenzen je Tresor und die Abfrage-Grenze liegen fest im Code | für eine Familien-Instanz großzügig; bei Bedarf als Einstellung |
 | Kein Wechsel des eigenen Schlüsselpaars | nach M4 → [#43](https://github.com/MelonigeMelone/melonapp/issues/43) |
 | Kein externes Krypto-Review | vor dem Umzug der echten Passwörter → [#37](https://github.com/MelonigeMelone/melonapp/issues/37) |
 | Entschlüsselte Einträge liegen im Haupt-Thread der Web-App | gewollt, siehe [ADR 0007](/melonapp/entscheidungen/0007-schluessel-im-worker/). Schutz durch CSP und Auto-Lock. |

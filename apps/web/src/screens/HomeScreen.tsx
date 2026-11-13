@@ -16,11 +16,27 @@ import { MODULES } from '../modules/registry';
 import type { ShellContext } from '../Shell';
 import { ROLE_LABELS } from './SpaceDialog';
 import { reducedMotion } from '../motion';
+import { describeError } from '../session';
+import { useState } from 'react';
 
 
 export function HomeScreen({ ctx }: { ctx: ShellContext }) {
   const { session, snapshot, syncError, navigate, openSpace, createSpace, openKit } = ctx;
-  const { vaults, items } = snapshot;
+  const { vaults, items, offers } = snapshot;
+  const [busy, setBusy] = useState<string | null>(null);
+  const [offerError, setOfferError] = useState<string | null>(null);
+  const answer = async (vaultId: string, accept: boolean) => {
+    setBusy(vaultId);
+    setOfferError(null);
+    try {
+      if (accept) await session.vaults.acceptOffer(vaultId);
+      else await session.vaults.declineOffer(vaultId);
+    } catch (e) {
+      setOfferError(describeError(e));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <Box component="main" sx={{ maxWidth: '64rem', mx: 'auto', px: { xs: 2, md: 4 }, py: { xs: 3, md: 6 } }}>
@@ -126,6 +142,31 @@ export function HomeScreen({ ctx }: { ctx: ShellContext }) {
           <Typography color="text.secondary" sx={{ mb: 2, maxWidth: '60ch' }}>
             Ein Bereich gilt für alle Module. Wer Mitglied ist, sieht darin alles, was du dort ablegst.
           </Typography>
+          {offers.length > 0 && (
+            <Stack spacing={1} sx={{ mb: 2 }} className="space-offers">
+              {offerError && <Alert severity="error">{offerError}</Alert>}
+              {offers.map((o) => (
+                <Alert
+                  key={o.vault_id}
+                  severity="info"
+                  icon={<GroupsOutlinedIcon />}
+                  action={
+                    <Stack direction="row" spacing={1}>
+                      <Button color="inherit" size="small" disabled={busy !== null} onClick={() => void answer(o.vault_id, false)}>
+                        Ablehnen
+                      </Button>
+                      <Button variant="contained" size="small" disabled={busy !== null} onClick={() => void answer(o.vault_id, true)}>
+                        Annehmen
+                      </Button>
+                    </Stack>
+                  }
+                >
+                  {o.from_email ?? 'Jemand'} möchte einen Bereich mit dir teilen ({ROLE_LABELS[o.role]}). Erst wenn du annimmst, erscheinen
+                  seine Einträge bei dir und beim Ausfüllen.
+                </Alert>
+              ))}
+            </Stack>
+          )}
           <Stack spacing={1}>
             {vaults.map((v) => {
               const Icon = v.waitingForKey ? HourglassEmptyOutlinedIcon : v.personal ? PersonOutlinedIcon : GroupsOutlinedIcon;

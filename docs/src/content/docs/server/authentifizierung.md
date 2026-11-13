@@ -49,6 +49,10 @@ Parameter von den Standardwerten abweichen oder deren Salt sich nach einem Passw
 ändert. Für eine private Instanz ist das akzeptiert. Das Secret deshalb nur wechseln, wenn es
 bekannt geworden ist.
 
+Wer **angemeldet** ist, kann über `users/lookup` und Einladungen erkennen, ob es zu einer E-Mail
+ein Konto gibt. Das braucht das Teilen. Der Server erlaubt das nur 30-mal je 15 Minuten und Konto.
+Bei offener Registrierung verrät auch `register` mit `email_taken`, dass es eine E-Mail schon gibt.
+
 **Prüfung in der App:** Die Apps legen Konten nur mit den Standardwerten an (64 MiB, 3 Durchläufe).
 Liefert `prelogin` weniger Speicher oder weniger Durchläufe, bricht die App ab, bevor sie den
 Auth-Key ableitet oder sendet (`weak_kdf`). Ein übernommener Server kann so keinen billiger zu
@@ -128,7 +132,9 @@ Konto-Schlüssel nicht hat.
 - Token: 32 Byte direkt aus dem Betriebssystem (`SysRng`), base64url-kodiert.
 - In der Datenbank liegt nur `SHA-256(token)`. Ein Datenbank-Leak liefert also keine
   benutzbaren Tokens. SHA-256 statt Argon2 genügt, weil das Token 256 bit Zufall hat.
-- Laufzeit: Standard 14 Tage (`MELON_SESSION_TTL_HOURS`, 1–8760).
+- Laufzeit: Standard 14 Tage (`MELON_SESSION_TTL_HOURS`, 1–8760). Eine Sitzung, die 7 Tage lang
+  nicht benutzt wurde, gilt nicht mehr, auch wenn die Laufzeit länger ist. Ein gestohlenes Token
+  eines vergessenen Geräts hilft also nicht lange.
 - Abgelaufene Sitzungen werden beim Login des Nutzers und stündlich global gelöscht.
 - Ein Konto hat höchstens 20 normale Sitzungen. Ein neuer Login beendet die älteste darüber.
 - Logout löscht die Sitzung sofort.
@@ -138,6 +144,9 @@ Konto-Schlüssel nicht hat.
 - Der Gerätename kommt vom Client (`device.ts`: Browser und Betriebssystem, „Erweiterung in …“,
   „MelonApp für Mac/iPhone“). Er hilft beim Wiedererkennen, beweist aber nichts.
 - Master-Passwort ändern und Wiederherstellen melden alle anderen Geräte ohnehin ab.
+- Andere Geräte abmelden verlangt kein Master-Passwort. Wer ein Token gestohlen hat, kann also
+  die echten Geräte abmelden. Lesen kann er damit nichts. Danach meldet man sich neu an, meldet das
+  fremde Gerät ab und ändert das Master-Passwort.
 - **Abmelden ist kein Schlüsselwechsel.** Ein Gerät, das gerade entsperrt war, behält, was es
   schon entschlüsselt im Speicher hat, bis es gesperrt wird. Neue Daten bekommt es nicht mehr. Bei
   einem verlorenen oder gestohlenen Gerät deshalb zusätzlich das Master-Passwort ändern.

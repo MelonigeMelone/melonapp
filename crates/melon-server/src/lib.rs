@@ -30,6 +30,14 @@ pub static MIGRATOR: Migrator = sqlx::migrate!();
 const BODY_LIMIT: usize = 1024 * 1024;
 const ROTATE_BODY_LIMIT: usize = 32 * 1024 * 1024;
 
+const _: () = assert!(
+    vaults::MAX_VAULT_BYTES as usize
+        + vaults::MAX_ITEMS_PER_VAULT as usize * 256
+        + vaults::MAX_MEMBERS_PER_VAULT as usize * 1024
+        + 2 * vaults::MAX_META_LEN
+        < ROTATE_BODY_LIMIT
+);
+
 pub fn router(state: AppState) -> Router {
     let api = Router::new()
         .route("/auth/prelogin", post(auth::prelogin))
@@ -61,6 +69,8 @@ pub fn router(state: AppState) -> Router {
             put(vaults::put_item).delete(vaults::delete_item),
         )
         .route("/vaults/{vault_id}/members", post(members::add_member))
+        .route("/vaults/{vault_id}/accept", post(members::accept_offer))
+        .route("/vaults/{vault_id}/decline", post(members::decline_offer))
         .route(
             "/vaults/{vault_id}/members/{user_id}",
             put(members::change_role).delete(members::remove_member),

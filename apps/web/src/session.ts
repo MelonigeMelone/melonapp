@@ -178,7 +178,7 @@ const messages: Record<string, string> = {
   unauthorized: 'E-Mail oder Master-Passwort ist falsch.',
   wrong_password: 'Das Master-Passwort stimmt nicht.',
   invalid_recovery_key: 'Der Recovery-Key ist unvollständig oder hat einen Tippfehler. Prüfe jede Vierergruppe.',
-  too_many_requests: 'Zu viele Fehlversuche. Warte 15 Minuten und versuche es dann erneut.',
+  too_many_requests: 'Zu viele Versuche. Warte 15 Minuten und versuche es dann erneut.',
   registration_disabled:
     'Auf diesem Server ist die Registrierung ausgeschaltet. Du brauchst einen Einladungslink, oder der Betreiber setzt MELON_ALLOW_REGISTRATION=true.',
   email_taken: 'Für diese E-Mail gibt es schon ein Konto. Melde dich an.',
@@ -192,7 +192,7 @@ const messages: Record<string, string> = {
   owner_only: 'Das darf nur ein Besitzer des Bereichs.',
   last_owner: 'Ein Bereich braucht mindestens einen Besitzer. Mach zuerst jemand anderen zum Besitzer.',
   member_exists_or_unknown_user: 'Diese Person ist schon Mitglied.',
-  user_exists: 'Für diese E-Mail gibt es schon ein Konto. Sie wird direkt hinzugefügt.',
+  user_exists: 'Für diese E-Mail gibt es schon ein Konto. Sie bekommt den Bereich direkt als Angebot.',
   vault_key_pending: 'Ein Besitzer muss dir den Zugang noch freigeben. Das passiert automatisch, sobald er die App öffnet.',
   key_changed:
     'Der Sicherheitscode einer Person hat sich geändert, seit du ihn geprüft hast. Der Schlüssel wird ihr erst wieder gegeben, wenn du den Code im Bereich neu prüfst (Fingerabdruck-Knopf).',
@@ -204,6 +204,13 @@ const messages: Record<string, string> = {
   member_unconfirmed:
     'Ein Mitglied dieses Bereichs wurde weder von einem Besitzer hinzugefügt noch ist sein Sicherheitscode geprüft. Der neue Schlüssel wird erst erstellt, wenn du seinen Code prüfst oder es entfernst.',
   weak_kdf: 'Der Server verlangt schwächere Schlüsselparameter als üblich. Die Anmeldung wurde abgebrochen, bevor etwas vom Passwort gesendet wurde.',
+  vault_full:
+    'Dieser Bereich ist voll (höchstens 5.000 Einträge und 24 MiB). Lösche alte Einträge oder lege einen neuen Bereich an.',
+  too_many_vaults: 'Du bist schon in 100 Bereichen. Verlasse oder lösche zuerst einen.',
+  too_many_members: 'Ein Bereich hat höchstens 100 Mitglieder und offene Einladungen zusammen.',
+  too_many_offers: 'Diese Person hat schon drei offene Angebote von dir. Sie muss zuerst welche annehmen oder ablehnen.',
+  member_has_key: 'Diese Person hat schon einen Schlüssel für den Bereich.',
+  offer_not_found: 'Diese Einladung gibt es nicht mehr.',
   members_unavailable:
     'Die verschlüsselte Mitgliederliste eines Bereichs fehlt oder ist älter als zuletzt auf diesem Gerät gesehen. Bis das geklärt ist, gibt die App in diesem Bereich keine Schlüssel weiter. Prüfe den Server.',
 };

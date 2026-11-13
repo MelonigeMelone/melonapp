@@ -7,6 +7,7 @@ use axum::{
 };
 use melon_crypto::{EncString, SealedKey};
 use serde::{Deserialize, Serialize};
+use sqlx::PgExecutor;
 use uuid::Uuid;
 
 use crate::{
@@ -18,7 +19,34 @@ use crate::{
 
 pub const MAX_META_LEN: usize = 64 * 1024;
 pub const MAX_ITEM_LEN: usize = 64 * 1024;
+pub const MAX_ITEMS_PER_VAULT: i64 = 5000;
+pub const MAX_VAULT_BYTES: i64 = 24 * 1024 * 1024;
+pub const MAX_MEMBERS_PER_VAULT: i64 = 100;
+pub const MAX_SHARED_VAULTS: i64 = 100;
+pub const MAX_OFFERS_PER_SENDER: i64 = 3;
 const PAGE_SIZE: i64 = 1000;
+
+pub async fn shared_vaults<'e>(db: impl PgExecutor<'e>, user_id: Uuid) -> ApiResult<i64> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM vault_members m JOIN vaults v ON v.id = m.vault_id
+         WHERE m.user_id = $1 AND m.accepted AND NOT v.personal",
+    )
+    .bind(user_id)
+    .fetch_one(db)
+    .await?;
+    Ok(n)
+}
+
+async fn vault_usage<'e>(db: impl PgExecutor<'e>, vault_id: Uuid) -> ApiResult<(i64, i64)> {
+    let usage: (i64, i64) = sqlx::query_as(
+        "SELECT count(*), coalesce(sum(length(data)), 0)::bigint FROM items
+         WHERE vault_id = $1 AND NOT deleted",
+    )
+    .bind(vault_id)
+    .fetch_one(db)
+    .await?;
+    Ok(usage)
+}
 
 pub fn parse_sealed(s: &str) -> ApiResult<()> {
     SealedKey::parse(s)
@@ -50,6 +78,7 @@ pub struct MemberOut {
     public_key: String,
     has_key: bool,
     key_version: Option<i32>,
+    pending: bool,
 }
 
 #[derive(Serialize)]
@@ -66,9 +95,17 @@ pub struct VaultOut {
     members: Vec<MemberOut>,
 }
 
+#[derive(Serialize, sqlx::FromRow)]
+pub struct OfferOut {
+    vault_id: Uuid,
+    role: String,
+    from_email: Option<String>,
+}
+
 #[derive(Serialize)]
 pub struct VaultList {
     vaults: Vec<VaultOut>,
+    offers: Vec<OfferOut>,
 }
 
 type VaultRow = (
@@ -82,7 +119,7 @@ type VaultRow = (
     Option<String>,
     Option<i32>,
 );
-type MemberRow = (Uuid, Uuid, String, String, String, bool, Option<i32>);
+type MemberRow = (Uuid, Uuid, String, String, String, bool, Option<i32>, bool);
 
 pub async fn list_vaults(
     State(state): State<AppState>,
@@ -92,7 +129,7 @@ pub async fn list_vaults(
         "SELECT v.id, v.personal, v.encrypted_meta, v.key_version, v.revision, v.rotation_needed,
                 m.role, m.encrypted_vault_key, m.key_version
          FROM vault_members m JOIN vaults v ON v.id = m.vault_id
-         WHERE m.user_id = $1 ORDER BY v.personal DESC, v.created_at",
+         WHERE m.user_id = $1 AND m.accepted ORDER BY v.personal DESC, v.created_at",
     )
     .bind(user.user_id)
     .fetch_all(&state.db)
@@ -101,7 +138,7 @@ pub async fn list_vaults(
     let ids: Vec<Uuid> = rows.iter().map(|r| r.0).collect();
     let member_rows: Vec<MemberRow> = sqlx::query_as(
         "SELECT m.vault_id, u.id, u.email, m.role, u.public_key,
-                m.encrypted_vault_key IS NOT NULL, m.key_version
+                m.encrypted_vault_key IS NOT NULL, m.key_version, NOT m.accepted
          FROM vault_members m JOIN users u ON u.id = m.user_id
          WHERE m.vault_id = ANY($1) ORDER BY u.email",
     )
@@ -110,7 +147,7 @@ pub async fn list_vaults(
     .await?;
 
     let mut members: HashMap<Uuid, Vec<MemberOut>> = HashMap::new();
-    for (vault_id, user_id, email, role, public_key, has_key, key_version) in member_rows {
+    for (vault_id, user_id, email, role, public_key, has_key, key_version, pending) in member_rows {
         members.entry(vault_id).or_default().push(MemberOut {
             user_id,
             email,
@@ -118,6 +155,7 @@ pub async fn list_vaults(
             public_key,
             has_key,
             key_version,
+            pending,
         });
     }
 
@@ -147,7 +185,15 @@ pub async fn list_vaults(
             members: members.remove(&id).unwrap_or_default(),
         });
     }
-    Ok(Json(VaultList { vaults }))
+    let offers: Vec<OfferOut> = sqlx::query_as(
+        "SELECT m.vault_id, m.role, u.email AS from_email
+         FROM vault_members m LEFT JOIN users u ON u.id = m.added_by
+         WHERE m.user_id = $1 AND NOT m.accepted ORDER BY m.created_at",
+    )
+    .bind(user.user_id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(VaultList { vaults, offers }))
 }
 
 #[derive(Deserialize)]
@@ -170,6 +216,13 @@ pub async fn create_vault(
     check_meta(&req.encrypted_meta)?;
     parse_sealed(&req.encrypted_vault_key)?;
     let mut tx = state.db.begin().await?;
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(user.user_id)
+        .execute(&mut *tx)
+        .await?;
+    if shared_vaults(&mut *tx, user.user_id).await? >= MAX_SHARED_VAULTS {
+        return Err(ApiError::Conflict("too_many_vaults"));
+    }
     let row: Option<(i64,)> = sqlx::query_as(
         "INSERT INTO vaults (id, personal, encrypted_meta, revision)
          VALUES ($1, false, $2, nextval('revision_seq'))
@@ -312,6 +365,7 @@ pub async fn put_item(
     a.require_write()?;
     a.require_current_version(req.key_version)?;
     let data = req.data.to_string();
+    let before = vault_usage(&mut *tx, vault_id).await?;
 
     let row: Option<(i64,)> =
         match req.base_revision {
@@ -343,6 +397,12 @@ pub async fn put_item(
             .await?,
         };
     let (revision,) = row.ok_or(ApiError::Conflict("revision_mismatch"))?;
+    let after = vault_usage(&mut *tx, vault_id).await?;
+    if (after.0 > MAX_ITEMS_PER_VAULT && after.0 > before.0)
+        || (after.1 > MAX_VAULT_BYTES && after.1 > before.1)
+    {
+        return Err(ApiError::Conflict("vault_full"));
+    }
     tx.commit().await?;
     Ok(Json(RevisionOut { revision }))
 }

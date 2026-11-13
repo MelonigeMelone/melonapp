@@ -146,6 +146,7 @@ pub struct RegisterResponse {
 
 const MAX_KEY_BLOB: usize = 512;
 const MAX_SESSIONS: i64 = 20;
+const IDLE_DAYS: i32 = 7;
 
 type InviteRow = (Uuid, String, Uuid, String);
 
@@ -218,6 +219,9 @@ pub async fn register(
     .execute(&mut *tx)
     .await;
     match inserted {
+        Err(sqlx::Error::Database(e)) if e.constraint() == Some("users_pkey") => {
+            return Err(ApiError::Conflict("user_id_taken"));
+        }
         Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
             return Err(ApiError::Conflict("email_taken"));
         }
@@ -255,7 +259,8 @@ pub async fn register(
              WHERE i.id = $2 AND i.accepted_by IS NULL AND i.expires_at > now()
                AND EXISTS (SELECT 1 FROM vault_members m
                            WHERE m.vault_id = i.vault_id AND m.user_id = i.created_by
-                             AND m.role = 'owner' AND m.encrypted_vault_key IS NOT NULL)",
+                             AND m.role = 'owner' AND m.encrypted_vault_key IS NOT NULL
+                             AND m.accepted)",
         )
         .bind(user_id)
         .bind(invite_id)
@@ -415,10 +420,12 @@ async fn session(
     let hash = token_hash(token);
     let row: Option<(Uuid, Uuid, bool)> = sqlx::query_as(
         "SELECT user_id, id, last_seen_at < now() - interval '5 minutes'
-         FROM sessions WHERE token_hash = $1 AND scope = $2 AND expires_at > now()",
+         FROM sessions WHERE token_hash = $1 AND scope = $2 AND expires_at > now()
+           AND last_seen_at > now() - make_interval(days => $3)",
     )
     .bind(&hash)
     .bind(scope)
+    .bind(IDLE_DAYS)
     .fetch_optional(&state.db)
     .await?;
     let (user_id, session_id, stale) = row.ok_or(ApiError::Unauthorized)?;

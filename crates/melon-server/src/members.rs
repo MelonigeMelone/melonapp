@@ -12,11 +12,14 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    access::{Role, access, bump_vault, lock_vault, owners_with_key},
+    access::{Role, access, bump_vault, lock_vault, membership, owners_with_key},
     auth::{AuthUser, normalize_email, token_hash},
     error::{ApiError, ApiResult},
     state::AppState,
-    vaults::{check_item, check_meta, parse_sealed},
+    vaults::{
+        MAX_MEMBERS_PER_VAULT, MAX_OFFERS_PER_SENDER, MAX_SHARED_VAULTS, check_item, check_meta,
+        parse_sealed, shared_vaults,
+    },
 };
 
 const INVITE_DAYS: i32 = 7;
@@ -33,12 +36,37 @@ pub struct UserOut {
     public_key: String,
 }
 
+fn count_lookup(state: &AppState, user: &AuthUser) -> ApiResult<()> {
+    if state.lookups.try_begin(&format!("lookup:{}", user.user_id)) {
+        Ok(())
+    } else {
+        Err(ApiError::TooManyRequests)
+    }
+}
+
+async fn member_slots(tx: &mut sqlx::PgConnection, vault_id: Uuid) -> ApiResult<()> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM vault_members WHERE vault_id = $1)
+              + (SELECT count(*) FROM invites
+                 WHERE vault_id = $1 AND accepted_by IS NULL AND expires_at > now())",
+    )
+    .bind(vault_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if n >= MAX_MEMBERS_PER_VAULT {
+        Err(ApiError::Conflict("too_many_members"))
+    } else {
+        Ok(())
+    }
+}
+
 pub async fn lookup_user(
     State(state): State<AppState>,
-    _user: AuthUser,
+    user: AuthUser,
     Query(q): Query<LookupQuery>,
 ) -> ApiResult<Json<UserOut>> {
     let email = normalize_email(&q.email)?;
+    count_lookup(&state, &user)?;
     let row: Option<(Uuid, String, String)> =
         sqlx::query_as("SELECT id, email, public_key FROM users WHERE email = $1")
             .bind(&email)
@@ -74,9 +102,21 @@ pub async fn add_member(
     a.require_owner()?;
     a.require_key()?;
     a.require_current_version(req.key_version)?;
+    member_slots(&mut tx, vault_id).await?;
+    let (from_me,): (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM vault_members WHERE user_id = $1 AND added_by = $2 AND NOT accepted",
+    )
+    .bind(req.user_id)
+    .bind(user.user_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if from_me >= MAX_OFFERS_PER_SENDER {
+        return Err(ApiError::Conflict("too_many_offers"));
+    }
     let inserted = sqlx::query(
-        "INSERT INTO vault_members (vault_id, user_id, role, encrypted_vault_key, key_version)
-         SELECT $1, id, $3, $4, $5 FROM users WHERE id = $2
+        "INSERT INTO vault_members
+                (vault_id, user_id, role, encrypted_vault_key, key_version, accepted, added_by)
+         SELECT $1, id, $3, $4, $5, false, $6 FROM users WHERE id = $2
          ON CONFLICT DO NOTHING",
     )
     .bind(vault_id)
@@ -84,6 +124,7 @@ pub async fn add_member(
     .bind(req.role.as_str())
     .bind(&req.encrypted_vault_key)
     .bind(req.key_version)
+    .bind(user.user_id)
     .execute(&mut *tx)
     .await?;
     if inserted.rows_affected() == 0 {
@@ -111,8 +152,8 @@ pub async fn change_role(
     a.require_shared()?;
     a.require_owner()?;
     a.require_key()?;
-    let target = access(&mut *tx, vault_id, member_id).await?;
-    if target.role == Role::Owner && req.role != Role::Owner && target.has_key {
+    let target = membership(&mut *tx, vault_id, member_id).await?;
+    if target.role == Role::Owner && req.role != Role::Owner && target.has_key && target.accepted {
         let owners = owners_with_key(&mut *tx, vault_id).await?;
         if owners <= 1 {
             return Err(ApiError::Conflict("last_owner"));
@@ -154,12 +195,20 @@ pub async fn grant_key(
     let mut tx = state.db.begin().await?;
     lock_vault(&mut tx, vault_id).await?;
     let a = access(&mut *tx, vault_id, user.user_id).await?;
+    a.require_shared()?;
     a.require_owner()?;
     a.require_key()?;
     a.require_current_version(req.key_version)?;
+    if membership(&mut *tx, vault_id, member_id)
+        .await
+        .map_err(|_| ApiError::NotFound("member_not_found"))?
+        .has_key
+    {
+        return Err(ApiError::Conflict("member_has_key"));
+    }
     let updated = sqlx::query(
         "UPDATE vault_members SET encrypted_vault_key = $3, key_version = $4
-         WHERE vault_id = $1 AND user_id = $2",
+         WHERE vault_id = $1 AND user_id = $2 AND encrypted_vault_key IS NULL",
     )
     .bind(vault_id)
     .bind(member_id)
@@ -184,7 +233,7 @@ pub async fn remove_member(
     lock_vault(&mut tx, vault_id).await?;
     let a = access(&mut *tx, vault_id, user.user_id).await?;
     a.require_shared()?;
-    let target = access(&mut *tx, vault_id, member_id).await?;
+    let target = membership(&mut *tx, vault_id, member_id).await?;
     let leaving = member_id == user.user_id;
 
     if leaving {
@@ -403,6 +452,8 @@ pub async fn create_invite(
     a.require_shared()?;
     a.require_owner()?;
     a.require_key()?;
+    member_slots(&mut tx, vault_id).await?;
+    count_lookup(&state, &user)?;
     let exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE email = $1")
         .bind(&email)
         .fetch_optional(&mut *tx)
@@ -487,6 +538,63 @@ pub async fn delete_invite(
         .bind(vault_id)
         .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn accept_offer(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(vault_id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let mut tx = state.db.begin().await?;
+    sqlx::query("SELECT id FROM users WHERE id = $1 FOR NO KEY UPDATE")
+        .bind(user.user_id)
+        .execute(&mut *tx)
+        .await?;
+    lock_vault(&mut tx, vault_id).await?;
+    if shared_vaults(&mut *tx, user.user_id).await? >= MAX_SHARED_VAULTS {
+        return Err(ApiError::Conflict("too_many_vaults"));
+    }
+    let accepted = sqlx::query(
+        "UPDATE vault_members SET accepted = true
+         WHERE vault_id = $1 AND user_id = $2 AND NOT accepted",
+    )
+    .bind(vault_id)
+    .bind(user.user_id)
+    .execute(&mut *tx)
+    .await?;
+    if accepted.rows_affected() == 0 {
+        return Err(ApiError::NotFound("offer_not_found"));
+    }
+    bump_vault(&mut *tx, vault_id).await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn decline_offer(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path(vault_id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let mut tx = state.db.begin().await?;
+    lock_vault(&mut tx, vault_id).await?;
+    let declined: Option<(bool,)> = sqlx::query_as(
+        "DELETE FROM vault_members WHERE vault_id = $1 AND user_id = $2 AND NOT accepted
+         RETURNING encrypted_vault_key IS NOT NULL",
+    )
+    .bind(vault_id)
+    .bind(user.user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let (had_key,) = declined.ok_or(ApiError::NotFound("offer_not_found"))?;
+    if had_key {
+        sqlx::query("UPDATE vaults SET rotation_needed = true WHERE id = $1")
+            .bind(vault_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+    bump_vault(&mut *tx, vault_id).await?;
     tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
 }

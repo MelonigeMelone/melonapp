@@ -249,9 +249,11 @@ export function SpaceDialog({
                   <ListItemText
                     primary={m.user_id === me ? `${m.email} (du)` : m.email}
                     secondary={
-                      m.has_key
-                        ? undefined
-                        : 'Wartet auf Freigabe. Eingeladene Personen werden automatisch freigegeben, alle anderen erst nach geprüftem Sicherheitscode.'
+                      m.pending
+                        ? 'Hat noch nicht zugestimmt. Der Bereich erscheint bei dieser Person erst, wenn sie ihn annimmt.'
+                        : m.has_key
+                          ? undefined
+                          : 'Wartet auf Freigabe. Eingeladene Personen werden automatisch freigegeben, alle anderen erst nach geprüftem Sicherheitscode.'
                     }
                     slotProps={{ primary: { sx: { overflowWrap: 'anywhere' } } }}
                   />
@@ -392,7 +394,7 @@ export function SpaceDialog({
                 if (!confirmUser) return;
                 await manager.setVerified(confirmUser.user_id, confirmUser.public_key);
                 await manager.addKnownMember(vault.id, confirmUser, role);
-                setNotice(`${confirmUser.email} hat jetzt Zugriff.`);
+                setNotice(`${confirmUser.email} ist eingeladen. Der Bereich erscheint dort, sobald die Person annimmt.`);
                 setConfirmUser(null);
                 setEmail('');
               })

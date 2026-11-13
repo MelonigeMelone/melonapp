@@ -59,6 +59,8 @@ Seit Migration 0003 außerdem `id` (zufällige UUID, für die Geräteliste, nie 
 | `role` | `owner`, `editor` oder `viewer` |
 | `encrypted_vault_key` | Tresor-Schlüssel per HPKE für dieses Mitglied. `NULL` = wartet auf Freigabe. |
 | `key_version` | Version des hinterlegten Schlüssels |
+| `accepted` | `false` = Angebot, noch nicht angenommen ([ADR 0028](/melonapp/entscheidungen/0028-bereiche-nur-mit-zustimmung/)) |
+| `added_by` | wer das Angebot gemacht hat (`NULL`, wenn dieses Konto gelöscht ist) |
 
 ## `items`
 

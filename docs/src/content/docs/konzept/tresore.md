@@ -48,8 +48,11 @@ Das gilt für jeden Passwortmanager.
 
 **Hat die Person schon ein Konto** auf deinem Server, gibst du ihre E-Mail ein. Die App zeigt
 ihren **Sicherheitscode** (sechs fünfstellige Zahlen). Sie sieht ihren eigenen unter „Konto“.
-Stimmen beide überein, fügst du sie hinzu: Die App verschlüsselt den Bereichs-Schlüssel für sie, und
-sie sieht den Bereich sofort. Der Vergleich stellt sicher, dass niemand auf dem Server einen
+Stimmen beide überein, fügst du sie hinzu: Die App verschlüsselt den Bereichs-Schlüssel für sie.
+Sie bekommt auf ihrer Startseite ein **Angebot** mit deiner E-Mail und der Rolle und sieht den
+Bereich erst, wenn sie annimmt. Lehnt sie ab, bekommt der Bereich einen neuen Schlüssel. So kann
+niemand anderen fremde Einträge unterschieben
+([ADR 0028](/melonapp/entscheidungen/0028-bereiche-nur-mit-zustimmung/)). Der Vergleich stellt sicher, dass niemand auf dem Server einen
 falschen Schlüssel untergeschoben hat. Danach steht bei ihr „Code geprüft“. Ändert sich ihr
 Schlüssel später, steht dort „Code geändert“, und sie bekommt keine neuen Bereichs-Schlüssel, bis
 du den Code neu verglichen hast. Den Code jedes Mitglieds kannst du auch nachträglich prüfen
@@ -69,6 +72,11 @@ Die App merkt sich jede Einladung verschlüsselt im Bereich. Automatisch freigeg
 eingeladen wurde, schon in der verschlüsselten Mitgliederliste steht oder einen geprüften Code hat.
 Taucht jemand anderes als wartendes Mitglied auf, gibt die App den Schlüssel erst, wenn du seinen
 Code geprüft hast ([ADR 0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/)).
+
+Ein Bereich hat höchstens 100 Mitglieder und offene Einladungen, 5.000 Einträge und 24 MiB. Ein
+Konto ist in höchstens 100 geteilten Bereichen und hat von derselben Person höchstens 3 offene
+Angebote. Eine Gesamtgrenze gibt es bewusst nicht: Sonst könnte jemand mit vielen Konten alle Plätze
+belegen, und niemand sonst könnte mehr etwas mit der Person teilen.
 
 Eine Einladung gilt nur, solange die Person, die sie erzeugt hat, Besitzer ist. Verlässt sie den
 Bereich, wird sie entfernt oder herabgestuft, verfallen ihre offenen Einladungen. Wer als Besitzer

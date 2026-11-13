@@ -11,7 +11,7 @@ function pending(file: string, credentialId: string, privateKey = 'a2V5'): Pendi
 
 function fake(snapshot: Partial<Snapshot>, fail = new Set<string>()) {
   const saved: { vaultId: string; item: Item }[] = [];
-  const state: Snapshot = { vaults: [view('shared', false), view('personal', true)], items: [], trash: [], verified: {}, verifiedReady: true, ...snapshot };
+  const state: Snapshot = { vaults: [view('shared', false), view('personal', true)], items: [], trash: [], offers: [], verified: {}, verifiedReady: true, ...snapshot };
   return {
     saved,
     getSnapshot: () => state,

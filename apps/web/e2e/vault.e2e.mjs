@@ -433,8 +433,9 @@ await step('re-adding bob shows his security code first', async () => {
   if (shown !== bobCode) throw new Error(`security codes differ: ${shown} vs ${bobCode}`);
   await shot(a, '7b-compare-code');
   await confirm.getByRole('button', { name: 'Code stimmt, hinzufügen' }).click();
-  await dialog.getByText(`${bob.email} hat jetzt Zugriff.`).waitFor({ timeout: 15000 });
+  await dialog.getByText(`${bob.email} ist eingeladen.`, { exact: false }).waitFor({ timeout: 15000 });
   const bobRow = dialog.getByRole('listitem').filter({ hasText: bob.email });
+  await bobRow.getByText('Hat noch nicht zugestimmt.', { exact: false }).waitFor();
   await bobRow.getByText('Code geprüft').waitFor();
   await bobRow.getByRole('button', { name: `Sicherheitscode von ${bob.email}` }).click();
   const codeDialog = a.getByRole('dialog', { name: `Sicherheitscode von ${bob.email}` });
@@ -449,6 +450,20 @@ await step('re-adding bob shows his security code first', async () => {
   await dialog.getByRole('button', { name: 'Schließen' }).click();
 
   current = b;
+  await sync(b);
+  await b.waitForTimeout(1500);
+  if (await b.locator('.vault-row', { hasText: 'Familie' }).count()) throw new Error('bob sees the vault before accepting it');
+  await b.getByRole('tab', { name: 'Start' }).click();
+  const offer = b.locator('.space-offers').getByText(`${alice.email} möchte einen Bereich mit dir teilen`, { exact: false });
+  for (let i = 0; i < 10 && !(await offer.count()); i++) {
+    await sync(b);
+    await b.waitForTimeout(700);
+  }
+  await offer.waitFor();
+  await shot(b, '7c-offer');
+  await b.locator('.space-offers').getByRole('button', { name: 'Annehmen' }).click();
+  await b.locator('.space-offers').waitFor({ state: 'detached', timeout: 15000 });
+  await b.getByRole('tab', { name: 'Passwörter' }).click();
   for (let i = 0; i < 10 && !(await b.locator('.entry-row', { hasText: 'WLAN Zuhause' }).count()); i++) {
     await sync(b);
     await b.waitForTimeout(700);

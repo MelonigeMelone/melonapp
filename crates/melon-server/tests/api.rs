@@ -268,15 +268,39 @@ async fn add_member(
         return s;
     }
     let public = PublicKey::from_base64(found["public_key"].as_str().unwrap()).unwrap();
+    let s = offer(app, owner, vault, key, &member.id, &public, role).await;
+    if s == StatusCode::CREATED && !member.token.is_empty() {
+        let (accepted, _) = member
+            .send(
+                app,
+                "POST",
+                &format!("/api/v1/vaults/{vault}/accept"),
+                json!({}),
+            )
+            .await;
+        assert_eq!(accepted, StatusCode::NO_CONTENT);
+    }
+    s
+}
+
+async fn offer(
+    app: &Router,
+    owner: &Person,
+    vault: &str,
+    key: &SymmetricKey,
+    member_id: &str,
+    public: &PublicKey,
+    role: &str,
+) -> StatusCode {
     owner
         .send(
             app,
             "POST",
             &format!("/api/v1/vaults/{vault}/members"),
             json!({
-                "user_id": member.id,
+                "user_id": member_id,
                 "role": role,
-                "encrypted_vault_key": seal_vault_key(&owner.keys, &public, key, &ctx(vault, &member.id, 1)).unwrap().to_string(),
+                "encrypted_vault_key": seal_vault_key(&owner.keys, public, key, &ctx(vault, member_id, 1)).unwrap().to_string(),
                 "key_version": 1,
             }),
         )
@@ -1084,6 +1108,15 @@ async fn invites_end_when_their_owner_leaves_is_removed_or_demoted() {
         )
         .await;
     assert_eq!(s, StatusCode::CREATED);
+    let (s, _) = bob
+        .send(
+            &app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/accept"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
     let demoted = Person::new("demoted");
     let (_, demoted_token) = invite(&app, &bob, &vault, &demoted.email, "owner").await;
     let (s, _) = alice
@@ -1881,4 +1914,473 @@ async fn devices_can_be_listed_and_signed_out_but_only_your_own() {
     assert_eq!(s, StatusCode::OK, "other users are untouched");
     let (s, _) = call(&app, "GET", "/api/v1/sessions", None, None).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn nobody_lands_in_a_shared_vault_without_accepting_it() {
+    let Some(app) = app(true).await else { return };
+    let (mut mallory, mut victim, mut bob) = (
+        Person::new("mallory"),
+        Person::new("victim"),
+        Person::new("bob"),
+    );
+    for p in [&mallory, &victim, &bob] {
+        p.register(&app, None).await;
+    }
+    mallory.login(&app).await;
+    victim.login(&app).await;
+    bob.login(&app).await;
+    let (vault, key) = create_shared_vault(&app, &mallory).await;
+    put_item(
+        &app,
+        &mallory,
+        (&vault, &key, 1),
+        &Uuid::new_v4().to_string(),
+        b"bank",
+        Value::Null,
+    )
+    .await;
+
+    let victim_key = victim.keys.public_key().clone();
+    assert_eq!(
+        offer(
+            &app,
+            &mallory,
+            &vault,
+            &key,
+            &victim.id,
+            &victim_key,
+            "owner"
+        )
+        .await,
+        StatusCode::CREATED
+    );
+    assert_eq!(victim.vault(&app, &vault).await, None);
+    let (_, list) = victim.get(&app, "/api/v1/vaults").await;
+    assert_eq!(list["offers"][0]["vault_id"], vault.as_str());
+    assert_eq!(list["offers"][0]["from_email"], mallory.email.as_str());
+    let (s, _) = victim
+        .get(&app, &format!("/api/v1/vaults/{vault}/items"))
+        .await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _) = victim
+        .send(
+            &app,
+            "DELETE",
+            &format!("/api/v1/vaults/{vault}"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let pending = mallory.vault(&app, &vault).await.unwrap()["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["user_id"] == victim.id.as_str())
+        .cloned()
+        .unwrap();
+    assert_eq!(pending["pending"], true);
+
+    let (s, r) = mallory
+        .send(
+            &app,
+            "DELETE",
+            &format!("/api/v1/vaults/{vault}/members/{}", mallory.id),
+            json!({}),
+        )
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("last_owner")),
+        "an owner who has not accepted does not count"
+    );
+
+    let (s, _) = victim
+        .send(
+            &app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/decline"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (_, list) = victim.get(&app, "/api/v1/vaults").await;
+    assert_eq!(list["offers"], json!([]));
+    let after = mallory.vault(&app, &vault).await.unwrap();
+    assert_eq!(after["rotation_needed"], true);
+    assert_eq!(after["members"].as_array().unwrap().len(), 1);
+    let (s, _) = victim
+        .send(
+            &app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/accept"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+
+    let (bobs, bob_key) = create_shared_vault(&app, &bob).await;
+    assert_eq!(
+        add_member(&app, &bob, &bobs, &bob_key, &victim, "editor").await,
+        StatusCode::CREATED
+    );
+    assert!(victim.vault(&app, &bobs).await.is_some());
+    assert_eq!(
+        victim.vault_key(&app, &bobs).await.as_bytes(),
+        bob_key.as_bytes()
+    );
+}
+
+#[tokio::test]
+async fn offers_shared_vaults_and_members_are_capped() {
+    let Some(app) = app(true).await else { return };
+    let (mut mallory, mut victim, mut bob) = (
+        Person::new("mallory"),
+        Person::new("victim"),
+        Person::new("bob"),
+    );
+    for p in [&mallory, &victim, &bob] {
+        p.register(&app, None).await;
+    }
+    mallory.login(&app).await;
+    victim.login(&app).await;
+    bob.login(&app).await;
+    let victim_key = victim.keys.public_key().clone();
+    for _ in 0..3 {
+        let (vault, key) = create_shared_vault(&app, &mallory).await;
+        assert_eq!(
+            offer(
+                &app,
+                &mallory,
+                &vault,
+                &key,
+                &victim.id,
+                &victim_key,
+                "viewer"
+            )
+            .await,
+            StatusCode::CREATED
+        );
+    }
+    let (vault, key) = create_shared_vault(&app, &mallory).await;
+    let (s, r) = mallory
+        .send(
+            &app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/members"),
+            json!({
+                "user_id": victim.id,
+                "role": "viewer",
+                "encrypted_vault_key": seal_vault_key(&mallory.keys, &victim_key, &key, &ctx(&vault, &victim.id, 1)).unwrap().to_string(),
+                "key_version": 1,
+            }),
+        )
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("too_many_offers"))
+    );
+    let (bobs, bob_key) = create_shared_vault(&app, &bob).await;
+    assert_eq!(
+        add_member(&app, &bob, &bobs, &bob_key, &victim, "editor").await,
+        StatusCode::CREATED,
+        "one sender cannot use up someone's offers"
+    );
+
+    let db = test_db().await;
+    sqlx::query(
+        "WITH v AS (
+             INSERT INTO vaults (id, personal, encrypted_meta, revision)
+             SELECT gen_random_uuid(), false, 'x', nextval('revision_seq')
+             FROM generate_series(1, 96) RETURNING id)
+         INSERT INTO vault_members (vault_id, user_id, role) SELECT id, $1, 'owner' FROM v",
+    )
+    .bind(Uuid::parse_str(&mallory.id).unwrap())
+    .execute(&db)
+    .await
+    .unwrap();
+    let id = Uuid::new_v4().to_string();
+    let key = SymmetricKey::generate();
+    let (s, r) = mallory
+        .send(
+            &app,
+            "POST",
+            "/api/v1/vaults",
+            json!({
+                "id": id,
+                "encrypted_meta": key.encrypt(b"{}", &vault_meta_aad(&id, 1)),
+                "encrypted_vault_key": seal_vault_key(&mallory.keys, mallory.keys.public_key(), &key, &ctx(&id, &mallory.id, 1)).unwrap().to_string(),
+            }),
+        )
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("too_many_vaults"))
+    );
+
+    sqlx::query(
+        "WITH u AS (
+             INSERT INTO users (id, email, kdf_memory_kib, kdf_iterations, kdf_parallelism,
+                                kdf_salt, auth_hash, wrapped_account_key, public_key,
+                                encrypted_private_key)
+             SELECT gen_random_uuid(), gen_random_uuid() || '@example.com', 0, 0, 0, '', '', '', '', ''
+             FROM generate_series(1, 98) RETURNING id)
+         INSERT INTO vault_members (vault_id, user_id, role) SELECT $1, id, 'viewer' FROM u",
+    )
+    .bind(Uuid::parse_str(&vault).unwrap())
+    .execute(&db)
+    .await
+    .unwrap();
+    let (s, r) = invite(&app, &mallory, &vault, "noch-einer@example.com", "viewer").await;
+    assert_eq!(s, StatusCode::CREATED, "{r}");
+    let (s, r) = mallory
+        .send(
+            &app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/invites"),
+            json!({ "email": "zu-viele@example.com", "role": "viewer" }),
+        )
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("too_many_members"))
+    );
+}
+
+#[tokio::test]
+async fn a_vault_cannot_grow_past_what_one_key_change_can_carry() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    alice.register(&app, None).await;
+    alice.login(&app).await;
+    let (vault, key) = create_shared_vault(&app, &alice).await;
+    let vault_id = Uuid::parse_str(&vault).unwrap();
+    let db = test_db().await;
+    sqlx::query(
+        "INSERT INTO items (vault_id, id, data, key_version, revision)
+         SELECT $1, gen_random_uuid(), repeat('x', 65000), 1, nextval('revision_seq')
+         FROM generate_series(1, 387)",
+    )
+    .bind(vault_id)
+    .execute(&db)
+    .await
+    .unwrap();
+    let big = vec![b'a'; 40_000];
+    let item = Uuid::new_v4().to_string();
+    let (s, r) = put_item(&app, &alice, (&vault, &key, 1), &item, &big, Value::Null).await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("vault_full"))
+    );
+    let (s, small) = put_item(
+        &app,
+        &alice,
+        (&vault, &key, 1),
+        &item,
+        b"klein",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK, "{small}");
+    let (s, r) = put_item(
+        &app,
+        &alice,
+        (&vault, &key, 1),
+        &item,
+        &big,
+        small["revision"].clone(),
+    )
+    .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("vault_full")),
+        "growing an existing item counts too"
+    );
+
+    let live: Vec<(Uuid, i64)> =
+        sqlx::query_as("SELECT id, revision FROM items WHERE vault_id = $1 AND NOT deleted")
+            .bind(vault_id)
+            .fetch_all(&db)
+            .await
+            .unwrap();
+    let new_key = SymmetricKey::generate();
+    let filler = vec![b'b'; 48_000];
+    let items: Vec<Value> = live
+        .iter()
+        .map(|(id, rev)| {
+            let id = id.to_string();
+            json!({
+                "id": id,
+                "data": new_key.encrypt(&filler, &item_aad(&vault, &id, 2)),
+                "base_revision": rev,
+            })
+        })
+        .collect();
+    let (s, r) = alice
+        .send(
+            &app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/rotate"),
+            json!({
+                "key_version": 2,
+                "encrypted_meta": new_key.encrypt(b"{}", &vault_meta_aad(&vault, 2)),
+                "members": [{
+                    "user_id": alice.id,
+                    "encrypted_vault_key": seal_vault_key(&alice.keys, alice.keys.public_key(), &new_key, &ctx(&vault, &alice.id, 2)).unwrap().to_string(),
+                }],
+                "items": items,
+            }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT, "{r}");
+
+    sqlx::query("DELETE FROM items WHERE vault_id = $1")
+        .bind(vault_id)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query(
+        "INSERT INTO items (vault_id, id, data, key_version, revision)
+         SELECT $1, gen_random_uuid(), 'x', 2, nextval('revision_seq')
+         FROM generate_series(1, 5000)",
+    )
+    .bind(vault_id)
+    .execute(&db)
+    .await
+    .unwrap();
+    let (s, r) = put_item(
+        &app,
+        &alice,
+        (&vault, &new_key, 2),
+        &Uuid::new_v4().to_string(),
+        b"eins zu viel",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("vault_full"))
+    );
+}
+
+#[tokio::test]
+async fn looking_up_accounts_is_rate_limited() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    alice.register(&app, None).await;
+    alice.login(&app).await;
+    for i in 0..30 {
+        let (s, _) = alice
+            .get(
+                &app,
+                &format!("/api/v1/users/lookup?email=raten{i}@example.com"),
+            )
+            .await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
+    }
+    let (s, _) = alice
+        .get(&app, &format!("/api/v1/users/lookup?email={}", alice.email))
+        .await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
+    let (vault, _) = create_shared_vault(&app, &alice).await;
+    let (s, _) = invite(&app, &alice, &vault, "noch-jemand@example.com", "viewer").await;
+    assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn a_key_can_only_be_granted_to_a_member_still_waiting_for_one() {
+    let Some(app) = app(true).await else { return };
+    let (mut alice, mut bob) = (Person::new("alice"), Person::new("bob"));
+    alice.register(&app, None).await;
+    bob.register(&app, None).await;
+    alice.login(&app).await;
+    bob.login(&app).await;
+    let (vault, key) = create_shared_vault(&app, &alice).await;
+    add_member(&app, &alice, &vault, &key, &bob, "editor").await;
+    let other = SymmetricKey::generate();
+    let (s, r) = alice
+        .send(
+            &app,
+            "PUT",
+            &format!("/api/v1/vaults/{vault}/members/{}/key", bob.id),
+            json!({
+                "encrypted_vault_key": seal_vault_key(&alice.keys, bob.keys.public_key(), &other, &ctx(&vault, &bob.id, 1)).unwrap().to_string(),
+                "key_version": 1,
+            }),
+        )
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("member_has_key"))
+    );
+    assert_eq!(bob.vault_key(&app, &vault).await.as_bytes(), key.as_bytes());
+
+    let pv = alice.personal_vault.clone();
+    let (s, r) = alice
+        .send(
+            &app,
+            "PUT",
+            &format!("/api/v1/vaults/{pv}/members/{}/key", alice.id),
+            json!({
+                "encrypted_vault_key": seal_vault_key(&alice.keys, alice.keys.public_key(), &other, &ctx(&pv, &alice.id, 1)).unwrap().to_string(),
+                "key_version": 1,
+            }),
+        )
+        .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("personal_vault"))
+    );
+}
+
+#[tokio::test]
+async fn unused_sessions_end_and_taken_ids_are_named() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    alice.register(&app, None).await;
+    alice.login(&app).await;
+    let (s, _) = alice.get(&app, "/api/v1/vaults").await;
+    assert_eq!(s, StatusCode::OK);
+    let db = test_db().await;
+    sqlx::query("UPDATE sessions SET last_seen_at = now() - interval '8 days' WHERE user_id = $1")
+        .bind(Uuid::parse_str(&alice.id).unwrap())
+        .execute(&db)
+        .await
+        .unwrap();
+    let (s, _) = alice.get(&app, "/api/v1/vaults").await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+
+    let mut copy = Person::new("copy");
+    copy.id = alice.id.clone();
+    let salt = generate_salt();
+    let kdf = KdfParams::minimum();
+    let mk = derive_master_key(&copy.password, &salt, &kdf).unwrap();
+    let vault_key = SymmetricKey::generate();
+    let pv = copy.personal_vault.clone();
+    let (s, r) = call(
+        &app,
+        "POST",
+        "/api/v1/auth/register",
+        None,
+        Some(json!({
+            "user_id": copy.id,
+            "email": copy.email,
+            "kdf": kdf,
+            "salt": STANDARD.encode(salt),
+            "auth_key": mk.auth_key().to_base64(),
+            "wrapped_account_key": wrap_account_key(&mk.wrapping_key(), &copy.account_key),
+            "public_key": copy.keys.public_key().to_base64(),
+            "encrypted_private_key": copy.keys.seal_with(&copy.account_key),
+            "personal_vault": {
+                "id": pv,
+                "encrypted_meta": vault_key.encrypt(b"{}", &vault_meta_aad(&pv, 1)),
+                "encrypted_vault_key": seal_vault_key(&copy.keys, copy.keys.public_key(), &vault_key, &ctx(&pv, &copy.id, 1)).unwrap().to_string(),
+            },
+        })),
+    )
+    .await;
+    assert_eq!(
+        (s, r["error"].as_str()),
+        (StatusCode::CONFLICT, Some("user_id_taken"))
+    );
 }

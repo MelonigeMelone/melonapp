@@ -1,4 +1,4 @@
-import { ApiError, type Api, type InviteInfo, type RemoteMember, type RemoteVault, type Role } from '../api';
+import { ApiError, type Api, type InviteInfo, type Offer, type RemoteMember, type RemoteVault, type Role } from '../api';
 import type { CryptoMethods } from '../crypto/protocol';
 import { newId, type Item, type VaultItem } from './item';
 import { emptyKeyring, KEYRING_PURPOSE, parseKeyring, sameGranters, type Keyring } from './keyring';
@@ -29,6 +29,7 @@ export interface VaultView {
 
 export interface Snapshot {
   vaults: VaultView[];
+  offers: Offer[];
   items: VaultItem[];
   trash: VaultItem[];
   verified: Verified;
@@ -59,7 +60,8 @@ const versionSeen = (vaultId: string) => `#version:${vaultId}`;
 export class VaultsManager {
   private vaults = new Map<string, Entry>();
   private listeners = new Set<() => void>();
-  private snapshot: Snapshot = { vaults: [], items: [], trash: [], verified: {}, verifiedReady: false };
+  private snapshot: Snapshot = { vaults: [], offers: [], items: [], trash: [], verified: {}, verifiedReady: false };
+  private offers: Offer[] = [];
   private running: Promise<void> | null = null;
   private marks: Marks | null = null;
   private marksLoads = 0;
@@ -107,7 +109,7 @@ export class VaultsManager {
     const trash = all
       .filter((v) => isTrashed(v.item))
       .sort((a, b) => (b.item.trashedAt ?? '').localeCompare(a.item.trashedAt ?? ''));
-    this.snapshot = { vaults: views, items, trash, verified: this.marks?.marks ?? {}, verifiedReady: this.marks !== null };
+    this.snapshot = { vaults: views, offers: this.offers, items, trash, verified: this.marks?.marks ?? {}, verifiedReady: this.marks !== null };
     for (const l of this.listeners) l();
   };
 
@@ -131,7 +133,8 @@ export class VaultsManager {
   }
 
   private async pullOnce(): Promise<boolean> {
-    const { vaults } = await this.api.listVaults();
+    const { vaults, offers } = await this.api.listVaults();
+    this.offers = offers ?? [];
     let failure: unknown;
     const seen = new Set(vaults.map((v) => v.id));
     for (const id of this.vaults.keys()) if (!seen.has(id)) this.vaults.delete(id);
@@ -641,6 +644,16 @@ export class VaultsManager {
 
   async deleteVault(vaultId: string) {
     await this.api.deleteVault(vaultId);
+    await this.sync();
+  }
+
+  async acceptOffer(vaultId: string) {
+    await this.api.acceptOffer(vaultId);
+    await this.sync();
+  }
+
+  async declineOffer(vaultId: string) {
+    await this.api.declineOffer(vaultId);
     await this.sync();
   }
 
