@@ -4,6 +4,12 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Which apps to build
+        type: choice
+        options: [both, macos, ios]
+        default: both
 
 permissions:
   contents: read
@@ -15,6 +21,7 @@ concurrency:
 jobs:
   macos:
     name: macOS notarized
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'ios'
     runs-on: macos-15
     timeout-minutes: 360
     environment: apple-release
@@ -98,6 +105,7 @@ jobs:
 
   ios:
     name: iOS to TestFlight
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'macos'
     runs-on: macos-15
     environment: apple-release
     steps:
@@ -156,18 +164,7 @@ jobs:
             -exportPath "$RUNNER_TEMP/export"
           echo "MELON_IPA=$RUNNER_TEMP/export/MelonApp.ipa" >> "$GITHUB_ENV"
       - name: Package contents
-        run: |
-          ipa="$MELON_IPA"
-          rm -rf "$RUNNER_TEMP/ipa" && mkdir "$RUNNER_TEMP/ipa" && unzip -q "$ipa" -d "$RUNNER_TEMP/ipa"
-          app="$RUNNER_TEMP/ipa/Payload/MelonApp.app"
-          extension="$app/PlugIns/MelonAutoFill.appex"
-          ! otool -L "$extension/MelonAutoFill" | tail -n +2 | grep -v -e /usr/lib/ -e /System/Library/
-          test "$(plutil -extract CFBundleVersion raw "$app/Info.plist")" = "$MELON_BUILD"
-          test "$(plutil -extract CFBundleVersion raw "$extension/Info.plist")" = "$MELON_BUILD"
-          test -f "$app/PrivacyInfo.xcprivacy"
-          test -f "$extension/PrivacyInfo.xcprivacy"
-          entitlements=$(codesign -d --entitlements :- "$extension" 2>/dev/null)
-          grep -q group.de.melonigemelone.app <<<"$entitlements"
+        run: bash scripts/ios-check-ipa.sh "$MELON_IPA" "$MELON_BUILD"
       - name: Upload to TestFlight
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
