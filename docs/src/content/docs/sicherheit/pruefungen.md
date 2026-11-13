@@ -42,6 +42,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Fremde sehen keine Tresore, persönliche Tresore sind nicht teilbar | `api::sharing_respects_roles_and_isolation` |
 | Betrachter können nicht schreiben, Bearbeiter keine Mitglieder verwalten | `api::sharing_respects_roles_and_isolation` |
 | Einladung: an E-Mail gebunden, einmalig, Registrierung sonst geschlossen | `api::invite_link_registration_and_key_grant` |
+| Besitzer ohne Schlüssel können nichts verwalten oder löschen; Einladungen verfallen, wenn ihr Ersteller geht, entfernt oder herabgestuft wird oder den Schlüssel nicht mehr hat; die App gibt auf solche Einladungen nichts frei | `api::an_owner_without_the_key_cannot_manage_or_delete_the_vault`, `api::invites_end_when_their_owner_leaves_is_removed_or_demoted`, `api::an_invite_only_counts_while_its_creator_is_an_owner_with_the_key`, `manager.test.ts` (`an invitation from someone who is no longer a member grants nothing`) |
 | Entfernen erzwingt Schlüsselwechsel über alle Einträge und Mitglieder | `api::removing_a_member_rotates_the_key` |
 | Schlüsselwechsel überschreibt keine gleichzeitige Änderung (Revision wird geprüft) | `api::removing_a_member_rotates_the_key` |
 | Schreiben mit altem Schlüssel wird abgelehnt | `api::removing_a_member_rotates_the_key`, `store.test.ts` |

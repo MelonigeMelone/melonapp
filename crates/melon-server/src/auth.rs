@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use crate::client_ip::{ClientIp, limiter_key};
 use crate::{
-    access::bump_vault,
+    access::{bump_vault, lock_vault},
     error::{ApiError, ApiResult},
     state::AppState,
     vaults::MAX_META_LEN,
@@ -250,11 +250,21 @@ pub async fn register(
     .await?;
 
     if let Some((invite_id, _, vault_id, role)) = invite {
-        sqlx::query("UPDATE invites SET accepted_by = $1, accepted_at = now() WHERE id = $2")
-            .bind(user_id)
-            .bind(invite_id)
-            .execute(&mut *tx)
-            .await?;
+        lock_vault(&mut tx, vault_id).await?;
+        let accepted = sqlx::query(
+            "UPDATE invites i SET accepted_by = $1, accepted_at = now()
+             WHERE i.id = $2 AND i.accepted_by IS NULL AND i.expires_at > now()
+               AND EXISTS (SELECT 1 FROM vault_members m
+                           WHERE m.vault_id = i.vault_id AND m.user_id = i.created_by
+                             AND m.role = 'owner' AND m.encrypted_vault_key IS NOT NULL)",
+        )
+        .bind(user_id)
+        .bind(invite_id)
+        .execute(&mut *tx)
+        .await?;
+        if accepted.rows_affected() != 1 {
+            return Err(ApiError::BadRequest("invalid_invite"));
+        }
         sqlx::query(
             "INSERT INTO vault_members (vault_id, user_id, role) VALUES ($1, $2, $3)
              ON CONFLICT DO NOTHING",

@@ -110,12 +110,22 @@ pub async fn change_role(
     let a = access(&mut *tx, vault_id, user.user_id).await?;
     a.require_shared()?;
     a.require_owner()?;
+    a.require_key()?;
     let target = access(&mut *tx, vault_id, member_id).await?;
     if target.role == Role::Owner && req.role != Role::Owner && target.has_key {
         let owners = owners_with_key(&mut *tx, vault_id).await?;
         if owners <= 1 {
             return Err(ApiError::Conflict("last_owner"));
         }
+    }
+    if req.role != Role::Owner {
+        sqlx::query(
+            "DELETE FROM invites WHERE vault_id = $1 AND accepted_by IS NULL AND created_by = ANY($2)",
+        )
+        .bind(vault_id)
+        .bind([member_id])
+        .execute(&mut *tx)
+        .await?;
     }
     sqlx::query("UPDATE vault_members SET role = $3 WHERE vault_id = $1 AND user_id = $2")
         .bind(vault_id)
@@ -186,6 +196,7 @@ pub async fn remove_member(
         }
     } else {
         a.require_owner()?;
+        a.require_key()?;
         if target.has_key {
             return Err(ApiError::Conflict("rotation_required"));
         }
@@ -196,6 +207,14 @@ pub async fn remove_member(
         .bind(member_id)
         .execute(&mut *tx)
         .await?;
+    sqlx::query(
+        "DELETE FROM invites WHERE vault_id = $1 AND accepted_by IS NULL AND created_by = ANY($2)",
+    )
+    .bind(vault_id)
+    .bind([member_id])
+    .execute(&mut *tx)
+    .await?;
+
     if target.has_key {
         sqlx::query("UPDATE vaults SET rotation_needed = true WHERE id = $1")
             .bind(vault_id)
@@ -346,6 +365,13 @@ pub async fn rotate(
         .bind(&req.remove_user_ids)
         .execute(&mut *tx)
         .await?;
+    sqlx::query(
+        "DELETE FROM invites WHERE vault_id = $1 AND accepted_by IS NULL AND created_by = ANY($2)",
+    )
+    .bind(vault_id)
+    .bind(&req.remove_user_ids)
+    .execute(&mut *tx)
+    .await?;
     tx.commit().await?;
     tracing::info!(%vault_id, key_version = req.key_version, "vault key rotated");
     Ok(StatusCode::NO_CONTENT)
@@ -376,6 +402,7 @@ pub async fn create_invite(
     let a = access(&mut *tx, vault_id, user.user_id).await?;
     a.require_shared()?;
     a.require_owner()?;
+    a.require_key()?;
     let exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE email = $1")
         .bind(&email)
         .fetch_optional(&mut *tx)
@@ -429,9 +456,9 @@ pub async fn list_invites(
     user: AuthUser,
     Path(vault_id): Path<Uuid>,
 ) -> ApiResult<Json<InviteList>> {
-    access(&state.db, vault_id, user.user_id)
-        .await?
-        .require_owner()?;
+    let a = access(&state.db, vault_id, user.user_id).await?;
+    a.require_owner()?;
+    a.require_key()?;
     let invites: Vec<InviteOut> = sqlx::query_as(
         "SELECT id, email, role,
                 (extract(epoch FROM expires_at - now()) / 3600)::bigint AS expires_in_hours
@@ -452,9 +479,9 @@ pub async fn delete_invite(
 ) -> ApiResult<StatusCode> {
     let mut tx = state.db.begin().await?;
     lock_vault(&mut tx, vault_id).await?;
-    access(&mut *tx, vault_id, user.user_id)
-        .await?
-        .require_owner()?;
+    let a = access(&mut *tx, vault_id, user.user_id).await?;
+    a.require_owner()?;
+    a.require_key()?;
     sqlx::query("DELETE FROM invites WHERE id = $1 AND vault_id = $2")
         .bind(invite_id)
         .bind(vault_id)

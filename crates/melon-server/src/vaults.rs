@@ -234,6 +234,7 @@ pub async fn delete_vault(
     let a = access(&mut *tx, vault_id, user.user_id).await?;
     a.require_shared()?;
     a.require_owner()?;
+    a.require_key()?;
     sqlx::query("DELETE FROM vaults WHERE id = $1")
         .bind(vault_id)
         .execute(&mut *tx)

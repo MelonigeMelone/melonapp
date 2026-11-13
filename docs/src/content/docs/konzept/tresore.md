@@ -70,6 +70,10 @@ eingeladen wurde, schon in der verschlüsselten Mitgliederliste steht oder einen
 Taucht jemand anderes als wartendes Mitglied auf, gibt die App den Schlüssel erst, wenn du seinen
 Code geprüft hast ([ADR 0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/)).
 
+Eine Einladung gilt nur, solange die Person, die sie erzeugt hat, Besitzer ist. Verlässt sie den
+Bereich, wird sie entfernt oder herabgestuft, verfallen ihre offenen Einladungen. Wer als Besitzer
+eingeladen wurde, darf erst etwas verwalten oder löschen, wenn er den Bereichs-Schlüssel hat.
+
 ## Jemanden entfernen
 
 Wer einmal Mitglied war, hatte den Bereichs-Schlüssel. Deshalb bekommt der Bereich beim

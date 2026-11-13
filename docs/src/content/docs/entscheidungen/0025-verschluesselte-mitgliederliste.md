@@ -22,7 +22,7 @@ Jeder Tresor führt im verschlüsselten `encrypted_meta` ein Feld
 
 - `members`: User-IDs, denen ein Besitzer den Schlüssel gegeben hat oder geben will.
 - `invited`: `{ email, until, by }` für jede Einladung, die ein Besitzer erzeugt hat, mit
-  Ablaufdatum und User-ID des Einladenden.
+  Ablaufdatum und User-ID des Einladenden. Sie zählt nur, solange `by` in `members` steht.
 - `seq`: Zähler, der bei jeder Änderung steigt. Jedes Gerät merkt sich den höchsten gesehenen
   Wert wie bei der [Rollback-Erkennung](/melonapp/clients/web/#rollback-erkennung).
 

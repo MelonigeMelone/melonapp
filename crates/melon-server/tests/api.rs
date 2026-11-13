@@ -867,6 +867,276 @@ async fn removing_a_member_rotates_the_key() {
     );
 }
 
+async fn test_db() -> sqlx::PgPool {
+    PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&std::env::var("MELON_TEST_DATABASE_URL").unwrap())
+        .await
+        .unwrap()
+}
+
+async fn invite(
+    app: &Router,
+    by: &Person,
+    vault: &str,
+    email: &str,
+    role: &str,
+) -> (StatusCode, String) {
+    let (s, r) = by
+        .send(
+            app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/invites"),
+            json!({ "email": email, "role": role }),
+        )
+        .await;
+    (s, r["token"].as_str().unwrap_or_default().to_owned())
+}
+
+#[tokio::test]
+async fn an_owner_without_the_key_cannot_manage_or_delete_the_vault() {
+    let Some(app) = app(true).await else { return };
+    let mut alice = Person::new("alice");
+    alice.register(&app, None).await;
+    alice.login(&app).await;
+    let (vault, key) = create_shared_vault(&app, &alice).await;
+    let mut carol = Person::new("carol");
+    let (_, token) = invite(&app, &alice, &vault, &carol.email, "owner").await;
+    assert_eq!(
+        carol.register(&app, Some(&token)).await,
+        StatusCode::CREATED
+    );
+    carol.login(&app).await;
+    let dave = Person::new("dave");
+    let (_, dave_token) = invite(&app, &alice, &vault, &dave.email, "viewer").await;
+    assert_eq!(
+        dave.register(&app, Some(&dave_token)).await,
+        StatusCode::CREATED
+    );
+
+    let pending = |r: (StatusCode, Value)| (r.0, r.1["error"].as_str().map(str::to_owned));
+    let refused = (StatusCode::FORBIDDEN, Some("vault_key_pending".to_owned()));
+    let invites = format!("/api/v1/vaults/{vault}/invites");
+    assert_eq!(
+        pending(
+            carol
+                .send(
+                    &app,
+                    "DELETE",
+                    &format!("/api/v1/vaults/{vault}"),
+                    json!({})
+                )
+                .await
+        ),
+        refused
+    );
+    assert_eq!(
+        pending(
+            carol
+                .send(
+                    &app,
+                    "POST",
+                    &invites,
+                    json!({ "email": "x@example.com", "role": "owner" })
+                )
+                .await
+        ),
+        refused
+    );
+    assert_eq!(pending(carol.get(&app, &invites).await), refused);
+    assert_eq!(
+        pending(
+            carol
+                .send(
+                    &app,
+                    "PUT",
+                    &format!("/api/v1/vaults/{vault}/members/{}", alice.id),
+                    json!({ "role": "viewer" })
+                )
+                .await
+        ),
+        refused
+    );
+    assert_eq!(
+        pending(
+            carol
+                .send(
+                    &app,
+                    "DELETE",
+                    &format!("/api/v1/vaults/{vault}/members/{}", dave.id),
+                    json!({})
+                )
+                .await
+        ),
+        refused
+    );
+    let (_, list) = alice.get(&app, &invites).await;
+    let first = list["invites"].as_array().map(Vec::len);
+    assert_eq!(
+        pending(
+            carol
+                .send(
+                    &app,
+                    "DELETE",
+                    &format!("{invites}/{}", Uuid::new_v4()),
+                    json!({})
+                )
+                .await
+        ),
+        refused
+    );
+    assert!(
+        alice.vault(&app, &vault).await.is_some(),
+        "vault still exists"
+    );
+    assert_eq!(
+        alice.get(&app, &invites).await.1["invites"]
+            .as_array()
+            .map(Vec::len),
+        first
+    );
+
+    let v = alice.vault(&app, &vault).await.unwrap();
+    let carol_pub = v["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["user_id"] == carol.id.as_str())
+        .unwrap()["public_key"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let carol_pub = PublicKey::from_base64(&carol_pub).unwrap();
+    let (s, _) = alice.send(&app, "PUT", &format!("/api/v1/vaults/{vault}/members/{}/key", carol.id), json!({
+        "encrypted_vault_key": seal_vault_key(&alice.keys, &carol_pub, &key, &ctx(&vault, &carol.id, 1)).to_string(),
+        "key_version": 1,
+    })).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(carol.get(&app, &invites).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn invites_end_when_their_owner_leaves_is_removed_or_demoted() {
+    let Some(app) = app(true).await else { return };
+    let (mut alice, mut bob) = (Person::new("alice"), Person::new("bob"));
+    alice.register(&app, None).await;
+    bob.register(&app, None).await;
+    alice.login(&app).await;
+    bob.login(&app).await;
+    let (vault, key) = create_shared_vault(&app, &alice).await;
+    add_member(&app, &alice, &vault, &key, &bob, "owner").await;
+
+    let removed = Person::new("removed");
+    let (s, removed_token) = invite(&app, &bob, &vault, &removed.email, "owner").await;
+    assert_eq!(s, StatusCode::CREATED);
+    let new_key = SymmetricKey::generate();
+    let (s, _) = alice.send(&app, "POST", &format!("/api/v1/vaults/{vault}/rotate"), json!({
+        "key_version": 2,
+        "encrypted_meta": new_key.encrypt(br#"{"name":"Familie"}"#, &vault_meta_aad(&vault, 2)),
+        "members": [{ "user_id": alice.id, "encrypted_vault_key": seal_vault_key(&alice.keys, alice.keys.public_key(), &new_key, &ctx(&vault, &alice.id, 2)).to_string() }],
+        "items": [],
+        "remove_user_ids": [bob.id],
+    })).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(
+        removed.register(&app, Some(&removed_token)).await,
+        StatusCode::BAD_REQUEST,
+        "removed owner's invite is gone"
+    );
+
+    let (s, _) = alice
+        .send(
+            &app,
+            "POST",
+            &format!("/api/v1/vaults/{vault}/members"),
+            json!({
+                "user_id": bob.id,
+                "role": "owner",
+                "encrypted_vault_key": seal_vault_key(&alice.keys, bob.keys.public_key(), &new_key, &ctx(&vault, &bob.id, 2)).to_string(),
+                "key_version": 2,
+            }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::CREATED);
+    let demoted = Person::new("demoted");
+    let (_, demoted_token) = invite(&app, &bob, &vault, &demoted.email, "owner").await;
+    let (s, _) = alice
+        .send(
+            &app,
+            "PUT",
+            &format!("/api/v1/vaults/{vault}/members/{}", bob.id),
+            json!({ "role": "editor" }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(
+        demoted.register(&app, Some(&demoted_token)).await,
+        StatusCode::BAD_REQUEST,
+        "demoted owner's invite is gone"
+    );
+
+    let (s, _) = alice
+        .send(
+            &app,
+            "PUT",
+            &format!("/api/v1/vaults/{vault}/members/{}", bob.id),
+            json!({ "role": "owner" }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let left = Person::new("left");
+    let (_, left_token) = invite(&app, &bob, &vault, &left.email, "owner").await;
+    let (s, _) = bob
+        .send(
+            &app,
+            "DELETE",
+            &format!("/api/v1/vaults/{vault}/members/{}", bob.id),
+            json!({}),
+        )
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(
+        left.register(&app, Some(&left_token)).await,
+        StatusCode::BAD_REQUEST,
+        "invite of an owner who left is gone"
+    );
+
+    let kept = Person::new("kept");
+    let (_, kept_token) = invite(&app, &alice, &vault, &kept.email, "viewer").await;
+    assert_eq!(
+        kept.register(&app, Some(&kept_token)).await,
+        StatusCode::CREATED,
+        "other owners' invites stay"
+    );
+}
+
+#[tokio::test]
+async fn an_invite_only_counts_while_its_creator_is_an_owner_with_the_key() {
+    let Some(app) = app(true).await else { return };
+    let (mut alice, mut bob) = (Person::new("alice"), Person::new("bob"));
+    alice.register(&app, None).await;
+    bob.register(&app, None).await;
+    alice.login(&app).await;
+    bob.login(&app).await;
+    let (vault, key) = create_shared_vault(&app, &alice).await;
+    add_member(&app, &alice, &vault, &key, &bob, "owner").await;
+    let erin = Person::new("erin");
+    let (_, token) = invite(&app, &bob, &vault, &erin.email, "editor").await;
+    sqlx::query("UPDATE vault_members SET encrypted_vault_key = NULL WHERE vault_id = $1::uuid AND user_id = $2::uuid")
+        .bind(&vault)
+        .bind(&bob.id)
+        .execute(&test_db().await)
+        .await
+        .unwrap();
+    assert_eq!(
+        erin.register(&app, Some(&token)).await,
+        StatusCode::BAD_REQUEST
+    );
+    let (s, r) = alice.get(&app, "/api/v1/vaults").await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(!r.to_string().contains(&erin.email), "nobody joined");
+}
+
 #[tokio::test]
 async fn leaving_flags_rotation_and_last_owner_stays() {
     let Some(app) = app(true).await else { return };

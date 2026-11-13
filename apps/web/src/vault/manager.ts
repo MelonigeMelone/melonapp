@@ -93,7 +93,7 @@ export class VaultsManager {
       members: remote.members,
       waitingForKey: remote.encrypted_vault_key === null,
       canWrite: remote.encrypted_vault_key !== null && remote.role !== 'viewer' && !oldPersonalKey,
-      isOwner: remote.role === 'owner',
+      isOwner: remote.role === 'owner' && remote.encrypted_vault_key !== null,
       itemCount: store?.list().filter((v) => !isTrashed(v.item)).length ?? 0,
       unreadable: store?.unreadableCount ?? 0,
       rolledBack: store?.rolledBackCount ?? 0,

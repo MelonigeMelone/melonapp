@@ -46,6 +46,10 @@ Formate: `EncString` = `1.<base64url>` (XChaCha20-Poly1305), `SealedKey` = `h1.<
 
 \* Registrierung nur bei `MELON_ALLOW_REGISTRATION=true` oder mit gültigem Einladungs-Token.
 
+Alle Besitzer-Aktionen (Tresor löschen, Rollen ändern, Mitglieder hinzufügen, entfernen oder
+freischalten, Einladungen, Schlüsselwechsel, Name ändern) verlangen zusätzlich, dass der Besitzer
+den Tresor-Schlüssel schon hat. Ein Besitzer, der noch wartet, bekommt `403 vault_key_pending`.
+
 Wer kein Mitglied ist, bekommt für einen Tresor immer `404 vault_not_found`, auch wenn es ihn
 gibt. So verrät die API nicht, welche Tresore existieren.
 
@@ -73,7 +77,10 @@ gibt. So verrät die API nicht, welche Tresore existieren.
 
 Die Nutzer-ID kommt vom Client, weil der Tresor-Schlüssel des persönlichen Tresors schon
 bei der Registrierung an sie gebunden wird. Mit Einladungs-Token wird die Person zusätzlich
-**wartendes Mitglied** des einladenden Tresors.
+**wartendes Mitglied** des einladenden Tresors. Ob die Einladung noch offen ist und ihr Ersteller
+noch Besitzer mit Schlüssel ist, prüft der Server in derselben Transaktion, in der er sie
+einlöst, mit gesperrter Tresor-Zeile. Ein gleichzeitiger Widerruf gewinnt also immer
+(`400 invalid_invite`).
 
 ### `POST /auth/login`
 
@@ -250,6 +257,10 @@ Schreiben rutschen.
 `{ "email", "role" }` → `201 { "id", "token", "expires_in_days": 7 }` · `409 user_exists`
 
 Der Token wird nur dieses eine Mal zurückgegeben. Gespeichert ist nur sein SHA-256-Hash.
+
+Offene Einladungen enden, sobald ihr Ersteller den Tresor verlässt, entfernt wird oder nicht mehr
+Besitzer ist. Sonst könnte ein entfernter Besitzer mit einer vorher erzeugten Einladung wieder
+eintreten.
 
 ### `GET /vaults/{id}/invites`
 

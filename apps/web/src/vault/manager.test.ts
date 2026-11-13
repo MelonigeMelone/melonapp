@@ -218,6 +218,25 @@ describe('verified security codes in the vaults manager', () => {
     expect(trust.invited).toEqual([]);
   });
 
+  it('an invitation from someone who is no longer a member grants nothing', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    const meta = JSON.parse(server.family().encrypted_meta);
+    meta.trust = { seq: meta.trust.seq + 1, members: [ME], invited: [{ email: 'eve@example.test', until: '2026-11-19T10:00:00.000Z', by: MIA }] };
+    server.family().encrypted_meta = JSON.stringify(meta);
+    server.family().members = server.family().members.filter((m) => m.user_id !== MIA);
+    server.family().members.push(member(EVE, 'EVE-KEY', false));
+    await manager.sync().catch(() => undefined);
+    expect(server.sealedFor).not.toContain(EVE);
+  });
+
+  it('an owner still waiting for the key gets no owner controls', async () => {
+    const { server, manager } = setup();
+    Object.assign(server.family(), { encrypted_vault_key: null, member_key_version: null });
+    await manager.sync();
+    expect(manager.vault('family')?.isOwner).toBe(false);
+  });
+
   it('a revoked invitation no longer grants access', async () => {
     const { server, manager } = setup();
     await manager.sync();

@@ -41,7 +41,7 @@ export function stillValid(invite: Invited, now: Date): boolean {
 
 export function isInvited(trust: TrustList, email: string, now: Date): boolean {
   const wanted = normalizeEmail(email);
-  return trust.invited.some((i) => i.email === wanted && stillValid(i, now));
+  return trust.invited.some((i) => i.email === wanted && stillValid(i, now) && trust.members.includes(i.by));
 }
 
 export function withTrust(meta: Meta, list: TrustList, seq: number, now: Date): Meta {
@@ -50,7 +50,7 @@ export function withTrust(meta: Meta, list: TrustList, seq: number, now: Date): 
     trust: {
       seq,
       members: [...new Set(list.members)],
-      invited: list.invited.filter((i) => stillValid(i, now)),
+      invited: list.invited.filter((i) => stillValid(i, now) && list.members.includes(i.by)),
     },
   };
 }
