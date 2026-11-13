@@ -80,7 +80,9 @@ lässt sich mit `platform` auch nur macOS oder nur iOS bauen.
   `stapler` und `spctl`, dass Gatekeeper App und DMG annimmt. Das DMG hängt am
   GitHub-Release des Tags und liegt bei manuellen Läufen als Artefakt vor. Tauris eigene
   Notarisierung wird nicht genutzt, weil sie beim ersten Netzwerkfehler abbricht.
-- **iOS:** `scripts/ios-export-options.py` prüft die beiden App-Store-Profile (Team,
+- **iOS:** Der Job wählt das neueste installierte Xcode 26, weil App Store Connect das
+  iOS-26-SDK verlangt und die Signatur sonst von der lokal geprüften abweicht.
+  `scripts/ios-export-options.py` prüft die beiden App-Store-Profile (Team,
   App-ID, Ablaufdatum, keine Geräteliste, kein `get-task-allow`), installiert sie und
   schreibt die Export-Optionen. `scripts/ios-release-signing.rb` trägt danach nur im CI in
   `project.yml` für App und Extension manuelles Signieren mit Apple Distribution, Team,

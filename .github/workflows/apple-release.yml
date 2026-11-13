@@ -114,6 +114,13 @@ jobs:
         with:
           toolchain: stable
           targets: aarch64-apple-ios
+      - name: Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n 1)
+          test -n "$xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
@@ -155,6 +162,14 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple/private_keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
         run: npm run tauri -w desktop -- ios build -v --target aarch64 --export-method app-store-connect --archive-only --ci --config "{\"bundle\":{\"iOS\":{\"bundleVersion\":\"$MELON_BUILD\"}}}"
+      - name: Archive entitlements
+        run: |
+          app=apps/desktop/src-tauri/gen/apple/build/melon-desktop_iOS.xcarchive/Products/Applications/MelonApp.app
+          for bundle in "$app" "$app/PlugIns/MelonAutoFill.appex"; do
+            echo "== $(basename "$bundle")"
+            codesign -d --entitlements - "$bundle" 2>&1 || true
+          done
+          cat apps/desktop/src-tauri/gen/apple/MelonAutoFill/MelonAutoFill.entitlements
       - name: Export with the App Store profiles
         run: |
           xcodebuild -exportArchive \
