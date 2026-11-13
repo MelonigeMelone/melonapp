@@ -42,12 +42,14 @@ Master-Passwort.
 - **Anmeldung in zwei Schritten** (erst E-Mail-Seite, dann Passwort-Seite, wie bei Google oder
   Microsoft): Das Symbol erscheint schon im E-Mail-Feld und füllt nur die E-Mail. Auf der
   Passwort-Seite steht der gewählte Login oben („eben gewählt“). Beim Speichern übernimmt die Karte
-  die E-Mail aus dem ersten Schritt. Gemerkt wird das pro Tab und Website für 5 Minuten, nur im
-  Arbeitsspeicher. Such-, Newsletter- und Code-Felder werden nicht als E-Mail-Schritt erkannt.
+  die E-Mail aus dem ersten Schritt. Gemerkt wird das pro Tab und genauer Adresse (Host) für 5 Minuten,
+  nur im Arbeitsspeicher. Beide Schritte müssen also auf demselben Host liegen. Such-, Newsletter- und Code-Felder werden nicht als E-Mail-Schritt erkannt.
 - **Neue Logins:** Nach dem Anmelden oder Registrieren erscheint oben rechts auf der Seite eine Karte
   „Neuen Login speichern?“ bzw. „Passwort aktualisieren?“ mit **Speichern**, **Nicht jetzt** und
   **Nie für diese Seite**. Das klappt auch auf Seiten, die nicht neu laden (z. B. Web-Apps). Zusätzlich
   zeigt das Symbol in der Leiste eine rote **1**, im Popup lässt sich der Login ebenfalls speichern.
+  Offene Vorschläge merkt sich die Erweiterung pro Website, höchstens 10 Minuten lang und nur bis zum
+  Sperren. Ein Vorschlag einer anderen Seite verdrängt sie nicht.
 - **Ausgeschlossene Seiten:** „Nie für diese Seite“ merkt sich die Website (Host ohne `www.`) in
   `storage.local`, auch über Neustarts hinweg. Ausfüllen funktioniert dort weiter, nur die Karte
   kommt nicht mehr. Rückgängig machen: im Popup auf so einer Seite **Wieder fragen**, oder unter
@@ -63,7 +65,10 @@ Master-Passwort.
 - **Generator:** In Registrierungs-Formularen bietet das Melonen-Symbol „Sicheres Passwort vorschlagen“
   an und füllt beide Passwortfelder.
 - **Sperren:** Schloss-Symbol im Popup, automatisch nach 30 Minuten ohne Nutzung und beim Schließen
-  des Browsers.
+  des Browsers. Als Nutzung zählen nur eigene Aktionen: Popup öffnen, Login ausfüllen, Code holen,
+  Login wählen. Dass eine Seite ein Passwortfeld fokussiert oder die Speicher-Karte lädt, verlängert
+  die Zeit nicht.
+- **Server-Adresse:** nur `https`. `http` geht nur für `localhost` und `127.0.0.1`.
 
 ## Aufbau
 
@@ -117,6 +122,7 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 | Symbol und Menü in der Seite haben **keine** Animation, kein `transform`, keinen Weichzeichner (`backdrop-filter`) und keine Halbtransparenz. Sie nutzen die Aurora-Farben ([ADR 0018](/melonapp/entscheidungen/0018-aurora-design/)) als feste Flächen, hell oder dunkel nach `prefers-color-scheme`. | Sonst meldet `trackVisibility` sie als nicht sichtbar und die Klicks werden verworfen. Popup und Speicher-Karte nutzen das normale Theme der Web-App. |
 | Zusätzlich: eigene Stile am Host mit `!important`, und Deckkraft, Sichtbarkeit, `filter`, `clip-path`, Maske und `mix-blend-mode` werden für den Knopf und alle Vorfahren bis `<html>` geprüft | Browser ohne `trackVisibility` (Firefox), siehe [offene Punkte](/melonapp/sicherheit/offene-punkte/) |
 | Nur echte Absende-Knöpfe lösen die Speicher-Karte aus, nicht z. B. „Passwort zeigen“ | Speicher-Karten mit halb eingegebenen Passwörtern |
+| Abgesendet wird nur gemeldet, was sich Schritt für Schritt aus echten Eingaben der Person ergibt oder was MelonApp eingefüllt hat. Jede Änderung im Feld muss genau zu einer echten Taste oder einem echten Einfügen an der aktuellen Cursorposition passen: ein Zeichen pro Taste, Rücktaste und Entf, eingefügter Text aus der Zwischenablage. Ändert sich der Wert anders, etwa per Skript, `execCommand` oder durch eine abgefangene Taste, zählt das Feld nicht mehr. Ereignisse von Skripten (`dispatchEvent`, `requestSubmit`, `click()`) lösen nichts aus. Vom Browser eingefüllte oder per Eingabemethode (IME) getippte Passwörter lösen deshalb keine Karte aus. Ein schon gespeichertes Passwort räumt einen offenen Vorschlag für die Seite weg. | Seiten, die per Skript Passwörter absenden oder unterschieben, um die Karte auszulösen, Vorschläge zu überschreiben oder zu testen, ob ein geratenes Passwort gespeichert ist |
 | Nur sichtbare, aktivierte Felder werden erkannt und befüllt | versteckte Felder |
 | Nur im Hauptframe, nicht in iframes | fremde, eingebettete Seiten |
 | Der Hintergrund prüft die Adresse über `sender.tab.url` (vom Browser), nicht über Angaben der Seite | eine Seite, die sich als andere ausgibt |
@@ -125,9 +131,11 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
 | Auch das Popup bindet „Ausfüllen“ an die URLs des Logins, das Content-Script prüft sie | Tab hat zwischenzeitlich die Seite gewechselt |
 | Nachrichten nur von der eigenen Erweiterung (`sender.id`) | andere Erweiterungen |
 | CSP der Erweiterungsseiten: `script-src 'self' 'wasm-unsafe-eval'` | eingeschleuster Code im Popup |
-| Speicher-Karte ist eine Erweiterungsseite im iframe, keine HTML-Einfügung in die Seite | Website liest oder verändert die Karte |
+| Speicher-Karte ist eine Erweiterungsseite im iframe, keine HTML-Einfügung in die Seite. Das iframe liegt im selben geschlossenen Shadow DOM wie Symbol und Menü. | Website liest oder verändert die Karte, liest ihre Adresse, sieht, ob sie erscheint, oder macht sie per CSS unsichtbar |
+| Die Knöpfe der Karte reagieren erst, wenn sie 600 ms sichtbar war | Klicks, die eigentlich der Seite gelten sollten |
+| Die Karte zeigt nur den Vorschlag für die Website des Tabs, in dem sie steckt. „Nie für diese Seite“ und „Verwerfen“ wirken nur auf diese Website. Der Hintergrund prüft das über `sender.tab.url`. | eine Seite, die die Karte selbst einbettet und Vorschläge anderer Seiten verwirft oder ausschließt |
 | Speicher-Karte fragt **nie** nach dem Master-Passwort | Websites, die eine täuschend echte Karte nachbauen, um das Master-Passwort abzugreifen |
-| `use_dynamic_url` für die Karte (Chromium) | Websites erkennen nicht dauerhaft, dass MelonApp installiert ist |
+| `use_dynamic_url` für die Karte (Chromium) | Websites erkennen nicht dauerhaft, dass MelonApp installiert ist, falls sie die Adresse doch erfahren |
 | Karte nur auf derselben Domain wie der abgesendete Login und höchstens 5 Minuten lang | Karte taucht auf fremden Seiten auf |
 
 ## Tests
@@ -144,4 +152,7 @@ normalen, getesteten Weg mit Verschlüsselung, Konflikterkennung und Verlauf.
   Menü über den Accessibility-Baum (CDP) und klicken per Koordinaten. Nichts auf fremder Domain, zweistufiger Login und zweistufige Registrierung, Generator, Speichern über die Karte auf der Seite (danach in der
   Web-App sichtbar), Passwort-Aktualisierung, „Nie für diese Seite“ unterdrückt weitere Karten, die
   Einstellungsseite listet die Seite und „Wieder fragen“ bringt die Karte zurück, Sperren
-  beendet das Ausfüllen.
+  beendet das Ausfüllen. Per Skript abgesendete oder per `execCommand` eingefügte Passwörter lösen keine Karte aus, die Seite sieht das
+  iframe der Karte nicht, und Fokus per Skript verlängert die Sperrzeit nicht.
+- `pending.test.ts`: Vorschläge pro Website, alte und kaputte Einträge fallen heraus.
+- `server.test.ts`: Server-Adresse nur mit `https`, `http` nur lokal.

@@ -4,7 +4,8 @@ import { login } from '@web/session';
 import { allFields, emptyItem, fieldValue, totpFields, type Item } from '@web/vault/item';
 import { VaultsManager } from '@web/vault/manager';
 import { hostOf } from '../shared/match';
-import { PENDING_KEY, SESSION_KEY, type Login, type PendingSave, type Snapshot } from '../shared/messages';
+import { AUTO_LOCK_MINUTES, PENDING_KEY, SESSION_KEY, type Login, type PendingSave, type Snapshot } from '../shared/messages';
+import { dropPending, loadPending, newestPending } from '../shared/pending';
 
 export interface Unlocked {
   snapshot: Snapshot;
@@ -21,10 +22,7 @@ export async function loadPrefs(): Promise<Prefs> {
   return { server: p.server ?? '', email: p.email ?? '' };
 }
 
-export function normalizeServer(input: string): string {
-  const trimmed = input.trim().replace(/\/+$/, '');
-  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
+export { InsecureServerError, normalizeServer } from '../shared/server';
 
 function logins(manager: VaultsManager): Login[] {
   return manager
@@ -43,13 +41,13 @@ function logins(manager: VaultsManager): Login[] {
     }));
 }
 
-async function capture(base: Omit<Snapshot, 'logins' | 'spaces' | 'keys' | 'lastUsed'>, manager: VaultsManager): Promise<Snapshot> {
+async function capture(base: Omit<Snapshot, 'logins' | 'spaces' | 'keys' | 'lastUsed'>, manager: VaultsManager, lastUsed = Date.now()): Promise<Snapshot> {
   const snapshot: Snapshot = {
     ...base,
     logins: logins(manager),
     spaces: manager.getSnapshot().vaults.map((v) => ({ id: v.id, name: v.name, canWrite: v.canWrite })),
     keys: await cryptoCall('exportVaultKeys'),
-    lastUsed: Date.now(),
+    lastUsed,
   };
   await chrome.storage.session.set({ [SESSION_KEY]: snapshot });
   return snapshot;
@@ -64,14 +62,22 @@ export async function unlock(server: string, email: string, password: string): P
   return { snapshot, manager: session.vaults };
 }
 
-export async function restore(): Promise<Unlocked | null> {
+export function expired(snapshot: Snapshot, now: number): boolean {
+  return now - snapshot.lastUsed > AUTO_LOCK_MINUTES * 60_000;
+}
+
+export async function restore(byUser: boolean): Promise<Unlocked | null> {
   const stored = (await chrome.storage.session.get(SESSION_KEY))[SESSION_KEY] as Snapshot | undefined;
   if (!stored) return null;
+  if (expired(stored, Date.now())) {
+    await chrome.storage.session.remove([SESSION_KEY, PENDING_KEY]);
+    return null;
+  }
   setApiBase(stored.server);
   await cryptoCall('importVaultKeys', { keys: stored.keys });
   const manager = new VaultsManager(stored.userId, authed(stored.token), cryptoCall, undefined, undefined, false);
   await manager.sync();
-  const snapshot = await capture(stored, manager);
+  const snapshot = await capture(stored, manager, byUser ? Date.now() : stored.lastUsed);
   return { snapshot, manager };
 }
 
@@ -81,17 +87,19 @@ export async function refresh(u: Unlocked): Promise<Unlocked> {
 }
 
 export async function lockAll(u: Unlocked | null) {
-  await chrome.storage.session.remove(SESSION_KEY);
+  await chrome.storage.session.remove([SESSION_KEY, PENDING_KEY]);
   await cryptoCall('lock');
   if (u) await api.logout(u.snapshot.token).catch(() => undefined);
 }
 
-export async function pendingSave(): Promise<PendingSave | null> {
-  return ((await chrome.storage.session.get(PENDING_KEY))[PENDING_KEY] as PendingSave | undefined) ?? null;
+export async function pendingSave(host: string | null): Promise<PendingSave | null> {
+  const all = await loadPending();
+  return (host ? all[host] : undefined) ?? newestPending(all);
 }
 
-export async function dismissPending() {
-  await chrome.storage.session.remove(PENDING_KEY);
+export async function dismissPending(pending: PendingSave) {
+  const host = hostOf(pending.url);
+  if (host) await dropPending(host);
 }
 
 export function existingFor(snapshot: Snapshot, pending: PendingSave): Login | undefined {

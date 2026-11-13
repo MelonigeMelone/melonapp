@@ -17,7 +17,8 @@ import { MelonMark } from '@web/components/Brand';
 import { theme } from '@web/theme';
 import type { FrameRequest, PendingSave } from '../shared/messages';
 import { PendingCard } from '../popup/PendingCard';
-import { dismissPending, pendingSave, restore, type Unlocked } from '../popup/state';
+import { restore, type Unlocked } from '../popup/state';
+import { SAVE_PROMPT_ARM_MS } from '../shared/messages';
 
 const send = (msg: FrameRequest) => chrome.runtime.sendMessage(msg).catch(() => undefined);
 const close = () => void send({ type: 'closeSavePrompt' });
@@ -25,15 +26,31 @@ const close = () => void send({ type: 'closeSavePrompt' });
 function SavePrompt() {
   const [state, setState] = useState<{ pending: PendingSave; unlocked: Unlocked | null } | 'loading'>('loading');
   const [saved, setSaved] = useState(false);
+  const [armed, setArmed] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void (async () => {
-      const pending = await pendingSave();
+      const pending = (await send({ type: 'savePromptPending' })) as PendingSave | null | undefined;
       if (!pending) return close();
-      const unlocked = await restore().catch(() => null);
+      const unlocked = await restore(false).catch(() => null);
       setState({ pending, unlocked });
     })();
+  }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      setArmed(false);
+      if (document.visibilityState === 'visible') timer = setTimeout(() => setArmed(true), SAVE_PROMPT_ARM_MS);
+    };
+    arm();
+    document.addEventListener('visibilitychange', arm);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', arm);
+    };
   }, []);
 
   useEffect(() => {
@@ -51,7 +68,7 @@ function SavePrompt() {
   }, [saved]);
 
   return (
-    <Box ref={root}>
+    <Box ref={root} sx={{ pointerEvents: armed ? 'auto' : 'none' }} aria-busy={!armed}>
       <Paper sx={{ borderRadius: '16px', overflow: 'hidden', border: 1, borderColor: 'divider' }}>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1, px: 2, pt: 1.5 }}>
           <MelonMark size={24} />
@@ -84,7 +101,7 @@ function SavePrompt() {
               Login. Hier fragt MelonApp nie nach deinem Master-Passwort.
             </Typography>
             <Stack direction="row" spacing={1}>
-              <Button size="small" onClick={() => void dismissPending().then(close)}>
+              <Button size="small" onClick={() => void send({ type: 'dismissSavePrompt' })}>
                 Verwerfen
               </Button>
               <Button size="small" onClick={close}>

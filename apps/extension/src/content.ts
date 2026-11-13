@@ -40,6 +40,7 @@ const HOST_STYLE =
   'visibility: visible !important; pointer-events: auto !important; transform: none !important;';
 const MENU_ARM_MS = 300;
 const KEY_CLICK_MS = 1000;
+const GESTURE_MS = 1000;
 
 const host = document.createElement('melon-autofill');
 host.setAttribute('style', HOST_STYLE);
@@ -102,6 +103,64 @@ function genuineClick(e: MouseEvent, armMs: number): boolean {
   if (e.detail === 0) return keyTarget === el && performance.now() - keyAt < KEY_CLICK_MS;
   return document.elementFromPoint(e.clientX, e.clientY) === host;
 }
+const entered = new WeakMap<HTMLInputElement, string>();
+
+function setByUs(input: HTMLInputElement, value: string) {
+  setValue(input, value);
+  entered.set(input, input.value);
+}
+
+function enteredByUser(input: HTMLInputElement | null | undefined): input is HTMLInputElement {
+  return !!input && !!input.value && entered.get(input) === input.value;
+}
+
+interface Gesture {
+  at: number;
+  used: boolean;
+  before: string;
+  start: number;
+  end: number;
+  key: string | null;
+  pasted: string | null;
+}
+const gestures = new WeakMap<HTMLInputElement, Gesture>();
+
+function remember(e: Event, key: string | null, pasted: string | null) {
+  const input = e.target;
+  if (!e.isTrusted || !(input instanceof HTMLInputElement)) return;
+  const start = input.selectionStart ?? input.value.length;
+  gestures.set(input, { at: performance.now(), used: false, before: input.value, start, end: input.selectionEnd ?? start, key, pasted });
+}
+
+document.addEventListener('keydown', (e) => remember(e, e.key, null), true);
+document.addEventListener('paste', (e) => remember(e, null, e.clipboardData?.getData('text/plain') ?? null), true);
+
+function expectedAfter(g: Gesture, e: InputEvent): string | null {
+  const head = g.before.slice(0, g.start);
+  const tail = g.before.slice(g.end);
+  if (e.inputType === 'insertText' && g.key !== null && [...g.key].length === 1 && e.data === g.key) return head + g.key + tail;
+  if (e.inputType === 'insertFromPaste' && g.pasted) return head + g.pasted.replace(/[\r\n]/g, '') + tail;
+  if (g.start !== g.end && (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward')) return head + tail;
+  if (e.inputType === 'deleteContentBackward' && g.key === 'Backspace' && g.start > 0) return g.before.slice(0, g.start - 1) + tail;
+  if (e.inputType === 'deleteContentForward' && g.key === 'Delete') return head + g.before.slice(g.end + 1);
+  return null;
+}
+
+document.addEventListener(
+  'input',
+  (e) => {
+    const input = e.target;
+    if (!e.isTrusted || !(input instanceof HTMLInputElement) || !(e instanceof InputEvent)) return;
+    const previous = entered.get(input) ?? '';
+    entered.delete(input);
+    const gesture = gestures.get(input);
+    if (!gesture || gesture.used || performance.now() - gesture.at >= GESTURE_MS || gesture.before !== previous) return;
+    gesture.used = true;
+    if (input.value === expectedAfter(gesture, e)) entered.set(input, input.value);
+  },
+  true,
+);
+
 let attached = false;
 let active: LoginFields | null = null;
 let anchor: HTMLInputElement | null = null;
@@ -128,7 +187,8 @@ function showSavePrompt() {
     colorScheme: 'normal',
     background: 'transparent',
   });
-  document.documentElement.append(frame);
+  ensureHost();
+  shadow.append(frame);
   saveFrame = frame;
 }
 
@@ -177,8 +237,8 @@ function placeMenu(menu: HTMLElement, input: HTMLInputElement) {
 }
 
 function fill(fields: LoginFields, username: string, password: string) {
-  if (fields.username && username) setValue(fields.username, username);
-  if (fields.password && password) setValue(fields.password, password);
+  if (fields.username && username) setByUs(fields.username, username);
+  if (fields.password && password) setByUs(fields.password, password);
   clear();
 }
 
@@ -259,7 +319,7 @@ async function openMenu(fields: LoginFields, input: HTMLInputElement) {
     menuItem(menu, 'Sicheres Passwort vorschlagen', '20 Zeichen, zufällig', async () => {
       const r = await ask<{ password: string } | null>({ type: 'generate' });
       if (!r) return;
-      for (const p of findLoginFields(document).filter((f) => f.password?.form === fields.password?.form)) if (p.password) setValue(p.password, r.password);
+      for (const p of findLoginFields(document).filter((f) => f.password?.form === fields.password?.form)) if (p.password) setByUs(p.password, r.password);
       clear();
     });
   }
@@ -350,31 +410,40 @@ window.addEventListener('resize', reposition);
 
 function reportSubmit(form: HTMLFormElement | null) {
   const scope = form ?? document;
-  const fields = findLoginFields(scope).find((f) => f.password?.value);
+  const fields = findLoginFields(scope).find((f) => enteredByUser(f.password));
   if (fields?.password) {
-    void ask({ type: 'submitted', username: fields.username?.value ?? '', password: fields.password.value }).then(() =>
+    const username = enteredByUser(fields.username) ? fields.username.value : '';
+    void ask({ type: 'submitted', username, password: fields.password.value }).then(() =>
       setTimeout(() => void checkPending(), 1200),
     );
     return;
   }
-  const identifier = findIdentifierFields(scope).find((f) => f.username?.value.trim());
+  const identifier = findIdentifierFields(scope).find((f) => enteredByUser(f.username) && f.username.value.trim());
   if (identifier?.username) void ask({ type: 'identifier', username: identifier.username.value.trim() });
 }
 
 document.addEventListener(
   'change',
   (e) => {
+    if (!e.isTrusted) return;
     const input = e.target;
-    if (!(input instanceof HTMLInputElement) || !input.value.trim()) return;
+    if (!(input instanceof HTMLInputElement) || !input.value.trim() || !enteredByUser(input)) return;
     if (findIdentifierFields(document).some((f) => f.username === input)) void ask({ type: 'identifier', username: input.value.trim() });
   },
   true,
 );
 
-document.addEventListener('submit', (e) => reportSubmit(e.target instanceof HTMLFormElement ? e.target : null), true);
+document.addEventListener(
+  'submit',
+  (e) => {
+    if (e.isTrusted) reportSubmit(e.target instanceof HTMLFormElement ? e.target : null);
+  },
+  true,
+);
 document.addEventListener(
   'click',
   (e) => {
+    if (!e.isTrusted) return;
     const el = e.target instanceof Element ? e.target.closest('button[type="submit"], button:not([type]), input[type="submit"]') : null;
     if (!el || e.composedPath().includes(host)) return;
     const form = (el as HTMLButtonElement).form ?? null;

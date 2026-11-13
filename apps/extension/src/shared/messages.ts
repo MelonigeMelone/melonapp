@@ -52,7 +52,12 @@ export type ContentRequest =
   | { type: 'choose'; vaultId: string; id: string }
   | { type: 'otp'; vaultId: string; id: string };
 
-export type FrameRequest = { type: 'closeSavePrompt' } | { type: 'resizeSavePrompt'; height: number } | { type: 'neverSave' };
+export type FrameRequest =
+  | { type: 'closeSavePrompt' }
+  | { type: 'resizeSavePrompt'; height: number }
+  | { type: 'neverSave' }
+  | { type: 'savePromptPending' }
+  | { type: 'dismissSavePrompt' };
 
 export type MatchesResponse = { locked: true } | { locked: false; matches: Match[] };
 
@@ -68,3 +73,5 @@ export const FLOWS_KEY = 'flows';
 export const FLOW_MAX_AGE_MS = 5 * 60_000;
 export const AUTO_LOCK_MINUTES = 30;
 export const PROMPT_MAX_AGE_MS = 5 * 60_000;
+export const PENDING_KEEP_MS = 10 * 60_000;
+export const SAVE_PROMPT_ARM_MS = 600;

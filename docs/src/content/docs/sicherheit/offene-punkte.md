@@ -30,6 +30,7 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Entschlüsselte Einträge liegen im Haupt-Thread der Web-App | gewollt, siehe [ADR 0007](/melonapp/entscheidungen/0007-schluessel-im-worker/). Schutz durch CSP und Auto-Lock. |
 | Desktop-App: CSP erlaubt `style-src 'unsafe-inline'` | Tauris CSP ist fest, ein Nonce je Aufruf geht nicht. Die App lädt nur eingebauten Code. Mit Pigment CSS entfällt es ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)). |
 | Erweiterung hält Logins und Bereichs-Schlüssel in `storage.session` | bewusst, siehe [ADR 0013](/melonapp/entscheidungen/0013-browser-erweiterung/). Später für Chromium: Offscreen-Dokument. |
+| Erweiterung: Eine Seite mit eingeschleustem Skript kann getippte Zeichen im Passwortfeld umordnen oder löschen, bevor die Speicher-Karte kommt | Nur aus Zeichen, die man selbst getippt hat, nur für Logins dieser Seite, ein Versuch pro Absenden. Beim Aktualisieren bleibt das alte Passwort im Verlauf. |
 | Erweiterung leert die Zwischenablage nicht automatisch | Ausfüllen statt Kopieren nutzen |
 | Erweiterung nicht in Chrome Web Store / Mozilla Add-ons | Veröffentlichen mit Signatur, später → [#45](https://github.com/MelonigeMelone/melonapp/issues/45) |
 | 2FA-Schlüssel liegen im selben Tresor wie die Passwörter | bewusst, siehe [ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/). Wichtige Konten bei Bedarf mit separater Authenticator-App. |

@@ -47,8 +47,10 @@ Zeit. Ein Entsperren mit Master-Passwort bei jedem Klick wäre unbenutzbar.
   Browser-Prozess auslesen kann, kommt an die Daten. Gegen Websites, andere Erweiterungen und
   Festplatten-Zugriff schützt `storage.session` (nur im Speicher, nur für eigene Seiten).
 - Auto-Lock nach 30 Minuten ohne Nutzung und beim Schließen des Browsers.
-- Eine Website könnte die Karte überdecken und so einen Klick auf „Speichern“ erzwingen. Schlimmstenfalls
-  landet dann ein Login im eigenen Bereich, nichts wird preisgegeben.
+- Eine Website könnte die Karte überdecken und so einen Klick auf „Speichern“ oder „Aktualisieren“ erzwingen.
+  Weil nur selbst eingegebene Passwörter einen Vorschlag auslösen und die Knöpfe erst nach 600 ms
+  Sichtbarkeit reagieren, landet so höchstens das Passwort im Tresor, das man gerade selbst getippt hat.
+  Nichts wird preisgegeben.
 - Die Zwischenablage wird im Popup nicht automatisch geleert, weil das Popup dafür zu kurz lebt.
   Ausfüllen ist deshalb der empfohlene Weg.
 - Der Generator existiert zweimal (Rust und TypeScript). Beide sind getestet. Schlüssel erzeugt der

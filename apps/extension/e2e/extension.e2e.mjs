@@ -160,6 +160,24 @@ const clickMelon = async (role, text) => {
 const clickIcon = () => clickMelon('button', ICON_NAME);
 const clickItem = (text) => clickMelon('button', text);
 
+const savePrompt = async (timeout = 15000) => {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    const frame = site.frames().find((f) => f.url().includes('/save.html'));
+    if (frame) return frame;
+    await site.waitForTimeout(100);
+  }
+  throw new Error('save prompt not shown');
+};
+const savePromptShown = () => site.frames().some((f) => f.url().includes('/save.html'));
+const savePromptGone = async (timeout = 10000) => {
+  const end = Date.now() + timeout;
+  while (savePromptShown()) {
+    if (Date.now() > end) throw new Error('save prompt still shown');
+    await site.waitForTimeout(100);
+  }
+};
+
 const valueOf = async (selector, expected) => {
   await site.waitForFunction(([sel, want]) => document.querySelector(sel)?.value === want, [selector, expected], { timeout: 5000 }).catch(() => undefined);
   return site.locator(selector).inputValue();
@@ -178,7 +196,7 @@ await step('fill a matching site only after a click', async () => {
   if (a.x < b.x + b.width && b.x < a.x + a.width) throw new Error('melon icon covers the page\'s own icon');
   await site.locator('#eye').click();
   await site.waitForTimeout(400);
-  if (await site.locator('iframe[name="melonapp-save"]').count()) throw new Error('show-password click triggered a save prompt');
+  if (savePromptShown()) throw new Error('show-password click triggered a save prompt');
   await site.locator('#user').focus();
   await findInMelon('button', ICON_NAME);
   await site.screenshot({ path: `${OUT}/ext-2a-icon.png`, clip: { x: 0, y: 0, width: 520, height: 260 } });
@@ -253,6 +271,62 @@ await step('other domains get nothing, not even the icon', async () => {
   if (!leaked) throw new Error('service worker unreachable');
 });
 
+await step('page scripts can neither trigger the save prompt nor keep the extension unlocked', async () => {
+  current = site;
+  await site.goto('https://evil.example.test/');
+  await site.evaluate(() => {
+    const form = document.querySelector('form');
+    form.addEventListener('submit', (e) => e.preventDefault());
+    document.querySelector('#user').value = 'opfer@example.test';
+    document.querySelector('#pw').value = 'geratenes-passwort';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    form.requestSubmit();
+    document.querySelector('button[type="submit"]').click();
+  });
+  await site.evaluate(() => {
+    const pw = document.querySelector('#pw');
+    pw.value = '';
+    pw.focus();
+    document.execCommand('insertText', false, 'per-skript-eingefuegt');
+  });
+  await site.getByRole('button', { name: 'Weiter' }).click();
+  await site.evaluate(() => {
+    const pw = document.querySelector('#pw');
+    pw.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      pw.select();
+      document.execCommand('insertText', false, 'beim-enter-getauscht');
+    });
+  });
+  await site.locator('#pw').press('Enter');
+  await site.waitForTimeout(2500);
+  if (savePromptShown()) throw new Error('a scripted submit showed the save prompt');
+  const stored = await sw.evaluate(() => chrome.storage.session.get('pendingSave'));
+  if (stored.pendingSave?.['evil.example.test']) throw new Error('a scripted submit stored a password');
+
+  const old = Date.now() - 29 * 60_000;
+  await sw.evaluate(async (at) => {
+    const { snapshot } = await chrome.storage.session.get('snapshot');
+    await chrome.storage.session.set({ snapshot: { ...snapshot, lastUsed: at } });
+  }, old);
+  await site.goto('https://login.example.test/');
+  await site.evaluate(async () => {
+    const pw = document.querySelector('#pw');
+    for (let i = 0; i < 3; i++) {
+      pw.blur();
+      pw.focus();
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  });
+  await site.waitForTimeout(800);
+  const { snapshot } = await sw.evaluate(() => chrome.storage.session.get('snapshot'));
+  if (snapshot.lastUsed !== old) throw new Error('page focus kept the extension unlocked');
+  await sw.evaluate(async () => {
+    const { snapshot } = await chrome.storage.session.get('snapshot');
+    await chrome.storage.session.set({ snapshot: { ...snapshot, lastUsed: Date.now() } });
+  });
+});
+
 await step('two-step login: e-mail page first, then password page', async () => {
   current = site;
   await site.goto('https://twostep.login.example.test/');
@@ -272,22 +346,22 @@ await step('two-step login: e-mail page first, then password page', async () => 
 
 await step('two-step sign-up remembers the e-mail for saving', async () => {
   await site.goto('https://twostep.new.example.test/');
-  await site.locator('#email').fill('zwei@example.test');
+  await site.locator('#email').pressSequentially('zwei@example.test');
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/password/);
-  await site.locator('#pw').fill('zwei-schritte-passwort');
+  await site.locator('#pw').pressSequentially('zwei-schritte-passwort');
   await site.getByRole('button', { name: 'Anmelden' }).click();
   await site.waitForURL(/done/);
-  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  const prompt = await savePrompt();
   await prompt.getByText('Neuen Login für twostep.new.example.test speichern?').waitFor({ timeout: 15000 });
   await prompt.getByText('zwei@example.test').waitFor();
   await prompt.getByRole('button', { name: 'Nicht jetzt' }).click();
-  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
+  await savePromptGone();
 });
 
 await step('generate a password on sign-up and save the new login', async () => {
   await site.goto('https://signup.example.test/');
-  await site.locator('#user').fill('neu@example.test');
+  await site.locator('#user').pressSequentially('neu@example.test');
   await site.locator('#pw').focus();
   await clickIcon();
   await clickItem('Sicheres Passwort vorschlagen');
@@ -297,13 +371,14 @@ await step('generate a password on sign-up and save the new login', async () => 
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/done/);
 
-  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  const prompt = await savePrompt();
   await prompt.getByText('Neuen Login für signup.example.test speichern?').waitFor({ timeout: 15000 });
   await prompt.getByText('neu@example.test').waitFor();
+  if (await site.evaluate(() => document.querySelectorAll('iframe').length)) throw new Error('the page can see the save prompt');
   await site.screenshot({ path: `${OUT}/ext-3-save-in-page.png` });
   await prompt.getByRole('button', { name: 'Speichern' }).click();
   await prompt.getByText('Gespeichert.').waitFor({ timeout: 15000 });
-  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
+  await savePromptGone();
 
   current = web;
   await web.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -317,22 +392,22 @@ await step('generate a password on sign-up and save the new login', async () => 
 await step('a changed password offers an update, and "never" silences the site', async () => {
   current = site;
   await site.goto('https://login.example.test/');
-  await site.locator('#user').fill('mia@example.test');
-  await site.locator('#pw').fill('neues-passwort-2');
+  await site.locator('#user').pressSequentially('mia@example.test');
+  await site.locator('#pw').pressSequentially('neues-passwort-2');
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/done/);
-  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  const prompt = await savePrompt();
   await prompt.getByText('Passwort für login.example.test aktualisieren?').waitFor({ timeout: 15000 });
   await prompt.getByRole('button', { name: 'Nie für diese Seite' }).click();
-  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
+  await savePromptGone();
 
   await site.goto('https://login.example.test/');
-  await site.locator('#user').fill('mia@example.test');
-  await site.locator('#pw').fill('noch-ein-passwort-3');
+  await site.locator('#user').pressSequentially('mia@example.test');
+  await site.locator('#pw').pressSequentially('noch-ein-passwort-3');
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/done/);
   await site.waitForTimeout(2500);
-  if (await site.locator('iframe[name="melonapp-save"]').count()) throw new Error('prompt shown despite "never"');
+  if (savePromptShown()) throw new Error('prompt shown despite "never"');
 });
 
 await step('the settings page lists the silenced site and can bring the prompt back', async () => {
@@ -349,14 +424,14 @@ await step('the settings page lists the silenced site and can bring the prompt b
 
   current = site;
   await site.goto('https://login.example.test/');
-  await site.locator('#user').fill('mia@example.test');
-  await site.locator('#pw').fill('wieder-gefragt-4');
+  await site.locator('#user').pressSequentially('mia@example.test');
+  await site.locator('#pw').pressSequentially('wieder-gefragt-4');
   await site.getByRole('button', { name: 'Weiter' }).click();
   await site.waitForURL(/done/);
-  const prompt = site.frameLocator('iframe[name="melonapp-save"]');
+  const prompt = await savePrompt();
   await prompt.getByText('Passwort für login.example.test aktualisieren?').waitFor({ timeout: 15000 });
   await prompt.getByRole('button', { name: 'Nie für diese Seite' }).click();
-  await site.locator('iframe[name="melonapp-save"]').waitFor({ state: 'detached', timeout: 10000 });
+  await savePromptGone();
 });
 
 await step('locking the extension stops autofill', async () => {

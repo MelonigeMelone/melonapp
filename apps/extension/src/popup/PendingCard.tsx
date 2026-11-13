@@ -47,7 +47,7 @@ export function PendingCard({
       } else {
         await unlocked.manager.saveItem(space, null, itemFromPending(pending));
       }
-      await dismissPending();
+      await dismissPending(pending);
       onDone(await refresh(unlocked), true);
     } catch (e) {
       setError(describeError(e));
@@ -80,7 +80,7 @@ export function PendingCard({
           <Button variant="contained" size="small" loading={busy} onClick={() => void save()} disabled={!existing && !space}>
             {existing ? 'Aktualisieren' : 'Speichern'}
           </Button>
-          <Button size="small" onClick={() => void dismissPending().then(() => onDone(unlocked, false))} disabled={busy}>
+          <Button size="small" onClick={() => void dismissPending(pending).then(() => onDone(unlocked, false))} disabled={busy}>
             Nicht jetzt
           </Button>
           {onNever && (

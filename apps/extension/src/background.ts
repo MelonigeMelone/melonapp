@@ -1,6 +1,6 @@
 import { parseTotp, totpCode } from '@web/vault/totp';
 import { generatePassword } from './shared/generator';
-import { anyUrlMatches, hostOf, siteOf } from './shared/match';
+import { anyUrlMatches, hostOf } from './shared/match';
 import {
   AUTO_LOCK_MINUTES,
   FLOW_MAX_AGE_MS,
@@ -17,12 +17,13 @@ import {
   type TabMessage,
 } from './shared/messages';
 import { addNever, neverHosts } from './shared/never';
+import { dropPending, loadPending, prunePending, putPending } from './shared/pending';
 
 async function snapshot(): Promise<Snapshot | null> {
   const s = (await chrome.storage.session.get(SESSION_KEY))[SESSION_KEY] as Snapshot | undefined;
   if (!s) return null;
   if (Date.now() - s.lastUsed > AUTO_LOCK_MINUTES * 60_000) {
-    await chrome.storage.session.remove(SESSION_KEY);
+    await chrome.storage.session.remove([SESSION_KEY, PENDING_KEY]);
     return null;
   }
   return s;
@@ -37,8 +38,10 @@ async function setBadge(pending: boolean) {
   if (pending) await chrome.action.setBadgeBackgroundColor({ color: '#5B45F0' });
 }
 
-async function pending(): Promise<PendingSave | null> {
-  return ((await chrome.storage.session.get(PENDING_KEY))[PENDING_KEY] as PendingSave | undefined) ?? null;
+async function pendingFor(pageUrl: string | undefined): Promise<PendingSave | null> {
+  const host = pageUrl ? hostOf(pageUrl) : null;
+  const p = host ? (await loadPending())[host] : undefined;
+  return p && Date.now() - p.at < PROMPT_MAX_AGE_MS ? p : null;
 }
 
 const extensionOrigin = chrome.runtime.getURL('');
@@ -49,11 +52,11 @@ async function flows(): Promise<Record<string, Flow>> {
 
 async function flowFor(tabId: number, pageUrl: string): Promise<Flow | null> {
   const f = (await flows())[String(tabId)];
-  return f && f.site === siteOf(pageUrl) && Date.now() - f.at < FLOW_MAX_AGE_MS ? f : null;
+  return f && f.site === hostOf(pageUrl) && Date.now() - f.at < FLOW_MAX_AGE_MS ? f : null;
 }
 
 async function updateFlow(tabId: number, pageUrl: string, patch: Partial<Flow>) {
-  const site = siteOf(pageUrl);
+  const site = hostOf(pageUrl);
   if (!site) return;
   const all = await flows();
   const previous = all[String(tabId)];
@@ -70,11 +73,19 @@ async function handleFrame(msg: FrameRequest, sender: chrome.runtime.MessageSend
       return send({ type: 'closeSave' });
     case 'resizeSavePrompt':
       return send({ type: 'resizeSave', height: Math.min(Math.max(msg.height, 80), 480) });
+    case 'savePromptPending':
+      return sender.frameId === 0 ? null : pendingFor(sender.tab?.url);
+    case 'dismissSavePrompt': {
+      const host = sender.tab?.url ? hostOf(sender.tab.url) : null;
+      if (host && sender.frameId !== 0) await dropPending(host);
+      return send({ type: 'closeSave' });
+    }
     case 'neverSave': {
-      const p = await pending();
-      const host = p ? hostOf(p.url) : null;
-      if (host) await addNever(host);
-      await chrome.storage.session.remove(PENDING_KEY);
+      const host = sender.tab?.url ? hostOf(sender.tab.url) : null;
+      if (host && sender.frameId !== 0 && (await pendingFor(sender.tab?.url))) {
+        await addNever(host);
+        await dropPending(host);
+      }
       return send({ type: 'closeSave' });
     }
   }
@@ -88,7 +99,6 @@ async function handle(msg: ContentRequest, sender: chrome.runtime.MessageSender)
     case 'matches': {
       const s = await snapshot();
       if (!s) return { locked: true } satisfies MatchesResponse;
-      await touch(s);
       const flow = await flowFor(sender.tab.id ?? -1, pageUrl);
       const matches = s.logins
         .filter((l) => (l.password || l.totp) && anyUrlMatches(pageUrl, l.urls))
@@ -138,19 +148,17 @@ async function handle(msg: ContentRequest, sender: chrome.runtime.MessageSender)
       const known = s?.logins.some(
         (l) => anyUrlMatches(pageUrl, l.urls) && l.password === msg.password && (!username || l.username === username),
       );
-      if (known) return null;
-      const pending: PendingSave = { url: pageUrl, username, password: msg.password, at: Date.now() };
-      await chrome.storage.session.set({ [PENDING_KEY]: pending });
-      await setBadge(true);
+      if (known) {
+        await dropPending(host);
+        return null;
+      }
+      await putPending(host, { url: pageUrl, username, password: msg.password, at: Date.now() });
       return null;
     }
     case 'generate':
       return { password: generatePassword() };
-    case 'pendingForPage': {
-      const p = await pending();
-      const show = !!p && hostOf(p.url) === hostOf(pageUrl) && Date.now() - p.at < PROMPT_MAX_AGE_MS;
-      return { show };
-    }
+    case 'pendingForPage':
+      return { show: (await pendingFor(pageUrl)) !== null };
   }
 }
 
@@ -164,9 +172,10 @@ chrome.runtime.onMessage.addListener((msg: ContentRequest | FrameRequest, sender
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && PENDING_KEY in changes) void setBadge(changes[PENDING_KEY]?.newValue !== undefined);
+  if (area === 'session' && SESSION_KEY in changes && changes[SESSION_KEY]?.newValue === undefined) void chrome.storage.session.remove(PENDING_KEY);
 });
 
 chrome.alarms.create('auto-lock', { periodInMinutes: 1 });
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'auto-lock') void snapshot();
+  if (alarm.name === 'auto-lock') void snapshot().then(prunePending);
 });

@@ -25,11 +25,13 @@ import { count } from '@web/layout';
 import { describeError } from '@web/session';
 import { parseTotp, totpCode } from '@web/vault/totp';
 import { anyUrlMatches, hostOf } from '../shared/match';
-import { neverHosts, onNeverChange, removeNever } from '../shared/never';
+import { addNever, neverHosts, onNeverChange, removeNever } from '../shared/never';
 import type { Login, PendingSave, TabMessage } from '../shared/messages';
 import { PendingCard } from './PendingCard';
 import {
   activeTab,
+  dismissPending,
+  InsecureServerError,
   loadPrefs,
   lockAll,
   normalizeServer,
@@ -61,7 +63,7 @@ function UnlockForm({ onUnlocked }: { onUnlocked: (u: Unlocked) => void }) {
       onUnlocked(await unlock(normalizeServer(server), email.trim(), password));
       setPassword('');
     } catch (err) {
-      setError(describeError(err));
+      setError(err instanceof InsecureServerError ? 'Der Server muss über https erreichbar sein. http geht nur für localhost.' : describeError(err));
     } finally {
       setBusy(false);
     }
@@ -144,8 +146,10 @@ function Vault({ unlocked, onLock, onChange }: { unlocked: Unlocked; onLock: () 
   const { snapshot } = unlocked;
 
   useEffect(() => {
-    void activeTab().then(setTab);
-    void pendingSave().then(setPending);
+    void activeTab().then(async (t) => {
+      setTab(t);
+      setPending(await pendingSave(t?.url ? hostOf(t.url) : null));
+    });
   }, [unlocked]);
 
   useEffect(() => {
@@ -200,7 +204,10 @@ function Vault({ unlocked, onLock, onChange }: { unlocked: Unlocked; onLock: () 
             setPending(null);
             onChange(u);
           }}
-          onNever={() => void chrome.runtime.sendMessage({ type: 'neverSave' }).then(() => setPending(null))}
+          onNever={() => {
+            const host = hostOf(pending.url);
+            void (host ? addNever(host) : Promise.resolve()).then(() => dismissPending(pending)).then(() => setPending(null));
+          }}
         />
       )}
 
@@ -283,7 +290,7 @@ export function Popup() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    restore()
+    restore(true)
       .then(setState)
       .catch(async (e: unknown) => {
         if (e instanceof ApiError && e.status === 401) setNotice('Die Sitzung ist abgelaufen. Bitte entsperre erneut.');
