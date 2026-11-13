@@ -88,7 +88,11 @@ lässt sich mit `platform` auch nur macOS oder nur iOS bauen.
   `project.yml` für App und Extension manuelles Signieren mit Apple Distribution, Team,
   Profil und die Build-Nummer (`github.run_number`) ein; XcodeGen erzeugt daraus das
   Projekt. So signiert schon `tauri ios build --archive-only` beide Targets mit ihren
-  Entitlements, und `xcodebuild -exportArchive` exportiert mit denselben Profilen.
+  Entitlements, und `xcodebuild -exportArchive` exportiert mit denselben Profilen. Der
+  Archiv-Schritt bekommt bewusst keinen API-Schlüssel: Mit `APPLE_API_KEY` archiviert Tauri
+  unsigniert und überlässt das Signieren dem Export, der dann nur die Standardrechte des
+  Profils kennt (App Group und AutoFill fehlten). Der Job bricht ab, wenn das Archiv der
+  Extension keine App Group trägt.
   Automatisches Signieren scheidet aus: Es bräuchte Cloud-Signing und damit einen
   Admin-API-Schlüssel, und im ersten Versuch fehlte der Extension danach die App Group.
   Vor dem Upload prüft `scripts/ios-check-ipa.sh` im IPA einzeln die Build-Nummern, den
