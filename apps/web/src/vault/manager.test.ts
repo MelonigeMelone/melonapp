@@ -62,11 +62,16 @@ class FakeServer {
       addMember: async (_id: string, body: { user_id: string }) => {
         this.sealedFor.push(body.user_id);
       },
-      rotate: async (id: string, body: { members: { user_id: string }[] }) => {
+      rotate: async (id: string, body: { encrypted_meta: string; members: { user_id: string }[] }) => {
         this.rotations += 1;
         this.sealedFor.push(...body.members.map((m) => m.user_id));
-        this.vault(id).rotation_needed = false;
+        const v = this.vault(id);
+        v.rotation_needed = false;
+        v.encrypted_meta = body.encrypted_meta;
       },
+      createInvite: async () => ({ id: 'inv-1', token: 'token', expires_in_days: 7 }),
+      listInvites: async () => ({ invites: [{ id: 'inv-1', email: 'eve@example.test', role: 'editor', expires_in_hours: 100 }] }),
+      deleteInvite: async () => undefined,
     } as unknown as Api;
   }
 }
@@ -139,11 +144,84 @@ describe('verified security codes in the vaults manager', () => {
     expect(manager.getSnapshot().verified[MIA]).toBeUndefined();
   });
 
-  it('shares with unverified people as before', async () => {
+  it('shares with unverified members it already lists', async () => {
     const { server, manager } = setup();
+    await manager.sync();
     miaWaitsForKey(server);
     await manager.sync();
     expect(server.sealedFor).toContain(MIA);
+  });
+
+  it('someone still waiting from before the member list existed needs a checked code', async () => {
+    const { server, manager } = setup();
+    miaWaitsForKey(server);
+    await manager.sync();
+    expect(server.sealedFor).not.toContain(MIA);
+    await manager.setVerified(MIA, 'MIA-KEY');
+    expect(server.sealedFor).toContain(MIA);
+  });
+
+  it('does not hand the vault key to a member the server invents', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    server.family().members.push(member(EVE, 'EVE-KEY', false));
+    await manager.sync();
+    expect(server.sealedFor).not.toContain(EVE);
+  });
+
+  it('does not seal a rotated key for a member the server invents', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    server.family().members.push(member(EVE, 'EVE-KEY', true));
+    server.family().rotation_needed = true;
+    await expect(manager.sync()).rejects.toMatchObject({ code: 'member_unconfirmed' });
+    expect(server.rotations).toBe(0);
+    expect(server.sealedFor).not.toContain(EVE);
+  });
+
+  it('grants invited people automatically and records them as members', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    await manager.invite('family', ' Eve@Example.test ', 'editor');
+    server.family().members.push(member(EVE, 'EVE-KEY', false));
+    await manager.sync();
+    expect(server.sealedFor).toContain(EVE);
+    const trust = JSON.parse(server.family().encrypted_meta).trust;
+    expect(trust.members).toContain(EVE);
+    expect(trust.invited).toEqual([]);
+  });
+
+  it('a revoked invitation no longer grants access', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    await manager.invite('family', 'eve@example.test', 'editor');
+    await manager.revokeInvite('family', 'inv-1');
+    server.family().members.push(member(EVE, 'EVE-KEY', false));
+    await manager.sync();
+    expect(server.sealedFor).not.toContain(EVE);
+  });
+
+  it('grants people whose code was checked even without an invitation', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    await manager.setVerified(EVE, 'EVE-KEY');
+    server.family().members.push(member(EVE, 'EVE-KEY', false));
+    await manager.sync();
+    expect(server.sealedFor).toContain(EVE);
+  });
+
+  it('refuses a replayed or removed member list', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    const old = server.family().encrypted_meta;
+    await manager.invite('family', 'lea@example.test', 'editor');
+    server.family().encrypted_meta = old;
+    server.family().members.push(member(EVE, 'EVE-KEY', true));
+    server.family().rotation_needed = true;
+    await expect(manager.sync()).rejects.toMatchObject({ code: 'members_unavailable' });
+    server.family().encrypted_meta = JSON.stringify({ name: 'Familie' });
+    await expect(manager.sync()).rejects.toMatchObject({ code: 'members_unavailable' });
+    expect(server.rotations).toBe(0);
   });
 
   it('does not hand the vault key to a swapped key when granting access', async () => {
@@ -161,6 +239,7 @@ describe('verified security codes in the vaults manager', () => {
     await first.manager.setVerified(MIA, 'MIA-KEY');
     const { server, manager } = setup(seen);
     server.vault('personal').encrypted_meta = first.server.vault('personal').encrypted_meta;
+    server.family().encrypted_meta = first.server.family().encrypted_meta;
     server.vaults.reverse();
     swapMiasKey(server);
     miaWaitsForKey(server);
@@ -265,6 +344,50 @@ describe('verified security codes in the vaults manager', () => {
     expect(manager.getSnapshot().verifiedReady).toBe(true);
     expect(Object.keys(manager.getSnapshot().verified)).toEqual([MIA]);
     expect(server.sealedFor).toContain(MIA);
+  });
+
+  it('never hands the key of the personal vault to a member the server adds', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    const personal = server.vault('personal');
+    personal.personal = false;
+    personal.members.push(member(EVE, 'EVE-KEY', false));
+    await manager.sync();
+    expect(server.sealedFor).not.toContain(EVE);
+    personal.members[1] = member(EVE, 'EVE-KEY', true);
+    personal.rotation_needed = true;
+    await expect(manager.sync()).rejects.toMatchObject({ code: 'member_unconfirmed' });
+    expect(server.rotations).toBe(0);
+  });
+
+  it('removing a member takes it off the encrypted member list', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    await manager.removeMember('family', MIA);
+    expect(JSON.parse(server.family().encrypted_meta).trust.members).toEqual([ME]);
+  });
+
+  it('a removed waiting member is not granted when the server brings it back', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    await manager.invite('family', 'eve@example.test', 'editor');
+    server.family().members.push(member(EVE, 'EVE-KEY', false));
+    (manager as unknown as { api: Api }).api = {
+      ...server.api(),
+      grantKey: async () => undefined,
+      removeMember: async () => {
+        server.family().members = server.family().members.filter((m) => m.user_id !== EVE);
+      },
+    } as Api;
+    await manager.sync();
+    expect(JSON.parse(server.family().encrypted_meta).trust.members).toContain(EVE);
+    await manager.removeMember('family', EVE);
+    (manager as unknown as { api: Api }).api = server.api();
+    server.sealedFor = [];
+    server.family().members.push(member(EVE, 'EVE-KEY', false));
+    await manager.sync();
+    expect(server.sealedFor).not.toContain(EVE);
+    expect(JSON.parse(server.family().encrypted_meta).trust.members).toEqual([ME, MIA]);
   });
 
   it('the extension popup never shares keys and still syncs without the account key', async () => {

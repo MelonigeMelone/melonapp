@@ -4,6 +4,7 @@ import { cryptoCall } from './crypto/client';
 import { deviceName } from './device';
 import { newId } from './vault/item';
 import { VaultsManager } from './vault/manager';
+import { initialTrust } from './vault/trust';
 
 export interface Account {
   kdf: Kdf;
@@ -59,7 +60,7 @@ export async function register(email: string, password: string, inviteToken: str
     const account = await cryptoCall('createAccount', {
       userId,
       personalVaultId,
-      meta: JSON.stringify({ name: 'Persönlich' }),
+      meta: JSON.stringify({ name: 'Persönlich', trust: initialTrust(userId) }),
     });
     await api.register({
       user_id: userId,
@@ -189,6 +190,10 @@ const messages: Record<string, string> = {
   vault_not_found: 'Diesen Bereich gibt es nicht mehr, oder du hast keinen Zugriff mehr.',
   public_key_mismatch:
     'Der Server hat für dein Konto einen falschen öffentlichen Schlüssel gemeldet. Die Anmeldung wurde abgebrochen. Prüfe den Server, bevor du weitermachst.',
+  member_unconfirmed:
+    'Ein Mitglied dieses Bereichs wurde weder von einem Besitzer hinzugefügt noch ist sein Sicherheitscode geprüft. Der neue Schlüssel wird erst erstellt, wenn du seinen Code prüfst oder es entfernst.',
+  members_unavailable:
+    'Die verschlüsselte Mitgliederliste eines Bereichs fehlt oder ist älter als zuletzt auf diesem Gerät gesehen. Bis das geklärt ist, gibt die App in diesem Bereich keine Schlüssel weiter. Prüfe den Server.',
 };
 
 export function describeError(e: unknown): string {

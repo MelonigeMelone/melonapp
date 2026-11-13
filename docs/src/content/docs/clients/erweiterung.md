@@ -7,7 +7,7 @@ sidebar:
 
 `apps/extension`: eine Manifest-V3-Erweiterung für **Chrome, Edge, Brave, Opera / Opera GX** (alle
 Chromium), **Firefox** und **Safari auf dem Mac**. Auf dem iPhone übernimmt der AutoFill-Anbieter
-das Ausfüllen in Safari ([ADR 0025](/melonapp/entscheidungen/0025-safari-erweiterung-nur-mac/)).
+das Ausfüllen in Safari ([ADR 0026](/melonapp/entscheidungen/0026-safari-erweiterung-nur-mac/)).
 
 ## Installieren
 

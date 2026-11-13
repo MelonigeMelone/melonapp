@@ -1,5 +1,5 @@
 ---
-title: "0025: Safari-Erweiterung nur auf dem Mac, eingebettet in die Mac-App"
+title: "0026: Safari-Erweiterung nur auf dem Mac, eingebettet in die Mac-App"
 description: Die vorhandene Browser-Erweiterung läuft als Safari Web Extension in MelonApp.app; auf dem iPhone deckt der AutoFill-Anbieter Safari ab.
 ---
 

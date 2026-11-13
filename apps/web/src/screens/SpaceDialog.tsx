@@ -248,7 +248,11 @@ export function SpaceDialog({
                 >
                   <ListItemText
                     primary={m.user_id === me ? `${m.email} (du)` : m.email}
-                    secondary={m.has_key ? undefined : 'Wartet auf Freigabe durch einen Besitzer'}
+                    secondary={
+                      m.has_key
+                        ? undefined
+                        : 'Wartet auf Freigabe. Eingeladene Personen werden automatisch freigegeben, alle anderen erst nach geprüftem Sicherheitscode.'
+                    }
                     slotProps={{ primary: { sx: { overflowWrap: 'anywhere' } } }}
                   />
                   {m.user_id !== me && verifyState(verified, m.user_id, m.public_key) === 'verified' && (

@@ -4,6 +4,7 @@ import { newId, type Item, type VaultItem } from './item';
 import { storedLog, type SeenLog } from './seen';
 import { isConflict, VaultStore } from './store';
 import { expired, fromTrash, isTrashed, toTrash } from './trash';
+import { initialTrust, isInvited, normalizeEmail, parseTrust, withTrust, type Trust, type TrustList } from './trust';
 import { changeMarks, emptyMarks, MARKS_PURPOSE, metaName, parseMarks, parseMeta, verifyState, type Marks, type Meta, type Verified } from './verified';
 
 type Call = <M extends keyof CryptoMethods>(
@@ -48,6 +49,7 @@ interface Entry {
 
 const PERSONAL_NAME = 'Persönlich';
 const MARKS_SEEN = '#verified';
+const trustSeen = (vaultId: string) => `#trust:${vaultId}`;
 
 export class VaultsManager {
   private vaults = new Map<string, Entry>();
@@ -149,7 +151,7 @@ export class VaultsManager {
     this.marks = await this.loadMarks();
     this.marksLoads += 1;
     for (const entry of this.vaults.values()) {
-      if (!this.shareKeys || !entry.store || entry.remote.role !== 'owner' || entry.remote.personal) continue;
+      if (!this.shareKeys || !entry.store || entry.remote.role !== 'owner') continue;
       try {
         await this.ownerDuties(entry);
       } catch (e) {
@@ -206,14 +208,76 @@ export class VaultsManager {
     }
   }
 
+  private loadTrust(entry: Entry): Trust | 'legacy' | null {
+    const key = trustSeen(entry.remote.id);
+    const highest = this.seen.get(key);
+    const trust = parseTrust(entry.meta);
+    if (!trust) return highest === 0 && entry.meta.trust === undefined ? 'legacy' : null;
+    if (trust.seq < highest) return null;
+    this.seen.raise(key, trust.seq);
+    return trust;
+  }
+
+  private currentTrust(entry: Entry): Trust {
+    const loaded = this.loadTrust(entry);
+    if (loaded === 'legacy') {
+      return { seq: 0, members: entry.remote.members.filter((m) => m.has_key).map((m) => m.user_id), invited: [] };
+    }
+    if (!loaded) throw new ApiError(409, 'members_unavailable');
+    return loaded;
+  }
+
+  private nextTrustSeq(entry: Entry, trust: Trust): number {
+    return Math.max(trust.seq, this.seen.get(trustSeen(entry.remote.id))) + 1;
+  }
+
+  private async putTrust(entry: Entry, trust: Trust, list: TrustList) {
+    const seq = this.nextTrustSeq(entry, trust);
+    const meta = withTrust(entry.meta, list, seq, this.now());
+    const encrypted = await this.crypto('encryptMeta', { vaultId: entry.remote.id, plaintext: JSON.stringify(meta) });
+    await this.api.updateVault(entry.remote.id, { encrypted_meta: encrypted, key_version: entry.remote.key_version });
+    entry.meta = meta;
+    this.seen.raise(trustSeen(entry.remote.id), seq);
+  }
+
+  private async updateTrust(vaultId: string, change: (trust: Trust) => TrustList) {
+    await this.sync().catch(() => undefined);
+    const entry = this.requireEntry(vaultId);
+    const trust = this.currentTrust(entry);
+    await this.putTrust(entry, trust, change(trust));
+  }
+
+  private isVerified(m: RemoteMember): boolean {
+    return this.marks !== null && verifyState(this.marks.marks, m.user_id, m.public_key) === 'verified';
+  }
+
   private async ownerDuties(entry: Entry) {
     const { remote } = entry;
+    if (this.loadTrust(entry) === 'legacy') {
+      const legacy = this.currentTrust(entry);
+      await this.putTrust(entry, legacy, legacy);
+    }
+    if (remote.personal) return;
+    const trust = this.currentTrust(entry);
     if (remote.rotation_needed) {
       await this.rotate(remote.id, []);
       return;
     }
-    for (const m of remote.members.filter((m) => !m.has_key)) {
-      this.requireTrusted(m.user_id, m.public_key);
+    const now = this.now();
+    const grant = remote.members.filter(
+      (m) => !m.has_key && (trust.members.includes(m.user_id) || isInvited(trust, m.email, now) || this.isVerified(m)),
+    );
+    if (grant.length === 0) return;
+    for (const m of grant) this.requireTrusted(m.user_id, m.public_key);
+    const granted = new Set(grant.map((m) => m.user_id));
+    const emails = new Set(grant.map((m) => normalizeEmail(m.email)));
+    if (grant.some((m) => !trust.members.includes(m.user_id))) {
+      await this.putTrust(entry, trust, {
+        members: [...trust.members, ...granted],
+        invited: trust.invited.filter((i) => !emails.has(i.email)),
+      });
+    }
+    for (const m of grant) {
       const sealed = await this.crypto('sealFor', { vaultId: remote.id, publicKey: m.public_key, userId: m.user_id });
       await this.api.grantKey(remote.id, m.user_id, { encrypted_vault_key: sealed, key_version: remote.key_version });
       m.has_key = true;
@@ -226,12 +290,25 @@ export class VaultsManager {
     if (!entry?.store) throw new Error('vault_key_missing');
     await entry.store.sync();
     const keep = entry.remote.members.filter((m) => m.has_key && !removeUserIds.includes(m.user_id));
+    const trust = this.currentTrust(entry);
+    if (keep.some((m) => !trust.members.includes(m.user_id) && !this.isVerified(m))) throw new ApiError(409, 'member_unconfirmed');
     for (const m of keep) this.requireTrusted(m.user_id, m.public_key);
+    const listed = new Set(entry.remote.members.map((m) => m.user_id));
+    const trustSeq = this.nextTrustSeq(entry, trust);
+    const meta = withTrust(
+      entry.meta,
+      {
+        members: [...trust.members, ...keep.map((m) => m.user_id)].filter((id) => listed.has(id) && !removeUserIds.includes(id)),
+        invited: trust.invited.filter((i) => !removeUserIds.includes(i.by)),
+      },
+      trustSeq,
+      this.now(),
+    );
     const current = entry.store.rotationItems();
     const revisions = new Map(current.map((v) => [v.id, v.revision]));
     const rotated = await this.crypto('rotate', {
       vaultId,
-      meta: JSON.stringify(entry.meta),
+      meta: JSON.stringify(meta),
       members: keep.map((m) => ({ userId: m.user_id, publicKey: m.public_key })),
       items: current.map(({ id, plaintext }) => ({ id, plaintext })),
     });
@@ -243,6 +320,7 @@ export class VaultsManager {
         items: rotated.items.map((i) => ({ ...i, base_revision: revisions.get(i.id) ?? 0 })),
         remove_user_ids: removeUserIds,
       });
+      this.seen.raise(trustSeen(vaultId), trustSeq);
     } catch (e) {
       if (!retry || !isConflict(e)) throw e;
       const { vaults } = await this.api.listVaults();
@@ -284,7 +362,11 @@ export class VaultsManager {
 
   async createVault(name: string): Promise<string> {
     const vaultId = newId();
-    const created = await this.crypto('newVault', { vaultId, userId: this.userId, meta: JSON.stringify({ name }) });
+    const created = await this.crypto('newVault', {
+      vaultId,
+      userId: this.userId,
+      meta: JSON.stringify({ name, trust: initialTrust(this.userId) }),
+    });
     await this.api.createVault({
       id: vaultId,
       encrypted_meta: created.encryptedMeta,
@@ -404,6 +486,7 @@ export class VaultsManager {
   async addKnownMember(vaultId: string, user: FoundUser, role: Role) {
     const entry = this.requireEntry(vaultId);
     this.requireTrusted(user.user_id, user.public_key);
+    await this.updateTrust(vaultId, (t) => ({ members: [...t.members, user.user_id], invited: t.invited }));
     const sealed = await this.crypto('sealFor', { vaultId, publicKey: user.public_key, userId: user.user_id });
     await this.api.addMember(vaultId, {
       user_id: user.user_id,
@@ -416,6 +499,12 @@ export class VaultsManager {
 
   async invite(vaultId: string, email: string, role: Role): Promise<{ token: string; expiresInDays: number }> {
     const invite = await this.api.createInvite(vaultId, email, role);
+    const wanted = normalizeEmail(email);
+    const until = new Date(this.now().getTime() + invite.expires_in_days * 86_400_000).toISOString();
+    await this.updateTrust(vaultId, (t) => ({
+      members: t.members,
+      invited: [...t.invited.filter((i) => i.email !== wanted), { email: wanted, until, by: this.userId }],
+    }));
     return { token: invite.token, expiresInDays: invite.expires_in_days };
   }
 
@@ -432,6 +521,10 @@ export class VaultsManager {
     } else {
       try {
         await this.api.removeMember(vaultId, userId);
+        await this.updateTrust(vaultId, (t) => ({
+          members: t.members.filter((id) => id !== userId),
+          invited: t.invited.filter((i) => i.by !== userId && (!member || i.email !== normalizeEmail(member.email))),
+        }));
       } catch (e) {
         if (!(e instanceof ApiError && e.code === 'rotation_required')) throw e;
         await this.rotate(vaultId, [userId]);
@@ -445,6 +538,11 @@ export class VaultsManager {
   }
 
   async revokeInvite(vaultId: string, inviteId: string) {
+    const { invites } = await this.api.listInvites(vaultId);
     await this.api.deleteInvite(vaultId, inviteId);
+    const revoked = invites.find((i) => i.id === inviteId);
+    if (!revoked) return;
+    const email = normalizeEmail(revoked.email);
+    await this.updateTrust(vaultId, (t) => ({ members: t.members, invited: t.invited.filter((i) => i.email !== email) }));
   }
 }

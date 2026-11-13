@@ -89,7 +89,7 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   nutzen. Der Workflow fand dabei selbst einen Fehler: Ohne Signatur im Archiv fehlten der
   Extension App Group und AutoFill-Recht; die IPA-Prüfung blockierte den Upload.
 - **Safari-Erweiterung (Mac)** ([#31](https://github.com/MelonigeMelone/melonapp/issues/31),
-  [ADR 0025](/melonapp/entscheidungen/0025-safari-erweiterung-nur-mac/)), 13. November 2026:
+  [ADR 0026](/melonapp/entscheidungen/0026-safari-erweiterung-nur-mac/)), 13. November 2026:
   lokal mit Developer ID signierter Build, „Nicht signierte Erweiterungen erlauben“ aus.
   MelonApp erscheint nach einmaligem Start in Safaris Erweiterungsliste, Anmeldung mit Argon2
   im Popup und Ausfüllen auf einer Login-Seite funktionieren. Der notarisierte Release-Build
