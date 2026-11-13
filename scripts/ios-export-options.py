@@ -1,4 +1,5 @@
 import datetime
+import json
 import pathlib
 import plistlib
 import shutil
@@ -38,6 +39,7 @@ for name, bundle in bundles.items():
         shutil.copyfile(source, target / f"melon-{data['UUID']}.mobileprovision")
     profiles[bundle] = data["Name"]
 
+(root / "profiles.json").write_text(json.dumps(profiles))
 (root / "ExportOptions.plist").write_bytes(
     plistlib.dumps(
         {

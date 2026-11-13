@@ -139,11 +139,10 @@ jobs:
           printf '%s' "$IOS_PROVISIONING_PROFILE_APP" | base64 --decode > "$RUNNER_TEMP/apple/app.mobileprovision"
           printf '%s' "$IOS_PROVISIONING_PROFILE_AUTOFILL" | base64 --decode > "$RUNNER_TEMP/apple/autofill.mobileprovision"
           python3 scripts/ios-export-options.py "$RUNNER_TEMP/apple" "${{ secrets.APPLE_TEAM_ID }}"
-      - name: Build number
+      - name: Build number and release signing
         run: |
           build="${{ github.run_number }}"
-          sed -i '' "s/CFBundleVersion: \"[^\"]*\"/CFBundleVersion: \"$build\"/" apps/desktop/src-tauri/gen/apple/project.yml
-          test "$(grep -c "CFBundleVersion: \"$build\"" apps/desktop/src-tauri/gen/apple/project.yml)" = 2
+          ruby scripts/ios-release-signing.rb apps/desktop/src-tauri/gen/apple/project.yml "${{ secrets.APPLE_TEAM_ID }}" "$RUNNER_TEMP/apple/profiles.json" "$build"
           echo "MELON_BUILD=$build" >> "$GITHUB_ENV"
       - run: bash scripts/build-apple-ffi.sh iphoneos
       - run: xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
