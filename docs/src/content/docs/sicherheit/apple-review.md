@@ -81,6 +81,13 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
 - **Passkeys** ([#28](https://github.com/MelonigeMelone/melonapp/issues/28)): Registrierung und Anmeldung gegen webauthn.io, Abbruch,
   Hintergrundwechsel, erneute Anmeldung und Ablehnung bei anderem RP (webauthn.me)
   bestanden, nachdem BE/BS gesetzt wurden ([ADR 0016](/melonapp/entscheidungen/0016-ios-autofill-und-passkeys/)).
+- **Verteilbare Builds** ([#30](https://github.com/MelonigeMelone/melonapp/issues/30),
+  [ADR 0024](/melonapp/entscheidungen/0024-apple-verteilung/)), 13. November 2026: Das
+  notarisierte DMG aus dem Release-Workflow startet nach Download ohne Gatekeeper-Warnung,
+  Anmeldung und Touch ID funktionieren (Touch ID nach Signaturwechsel einmal neu
+  einrichten). Build 0.1.0 (8) aus TestFlight lässt sich auf dem iPhone installieren und
+  nutzen. Der Workflow fand dabei selbst einen Fehler: Ohne Signatur im Archiv fehlten der
+  Extension App Group und AutoFill-Recht; die IPA-Prüfung blockierte den Upload.
 - **Design** ([#58](https://github.com/MelonigeMelone/melonapp/issues/58)): Extension hell/dunkel und App-Icon im Simulator geprüft;
   Kontrast des gefüllten Buttons im Dunkelmodus korrigiert.
 
@@ -98,10 +105,7 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   Anmeldung danach aus der Tresor-Kopie). Wiederherstellung auf einem zweiten Gerät
   (anmelden, Face ID einrichten, AutoFill veröffentlichen) vom Nutzer bestätigt. Gelöschte Passkeys verschwinden aus den iOS-Vorschlägen erst beim
   nächsten entsperrten AutoFill-Vorgang.
-- Release-Workflow für Notarisierung und TestFlight ([#30](https://github.com/MelonigeMelone/melonapp/issues/30),
-  [ADR 0024](/melonapp/entscheidungen/0024-apple-verteilung/)) ist eingerichtet; Installation
-  aus TestFlight und Start des DMG ohne Gatekeeper-Warnung sind noch zu bestätigen. Die
-  Safari-Web-Erweiterung ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) steht aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
+- Die Safari-Web-Erweiterung ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) steht aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
   biometrische Aussagen gelten nur für die Hardware-Abnahme oben.
 
 ## Statusanzeige der Biometrie-Einstellungen
