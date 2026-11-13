@@ -92,8 +92,9 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   [ADR 0026](/melonapp/entscheidungen/0026-safari-erweiterung-nur-mac/)), 13. November 2026:
   lokal mit Developer ID signierter Build, „Nicht signierte Erweiterungen erlauben“ aus.
   MelonApp erscheint nach einmaligem Start in Safaris Erweiterungsliste, Anmeldung mit Argon2
-  im Popup und Ausfüllen auf einer Login-Seite funktionieren. Der notarisierte Release-Build
-  ist noch zu prüfen.
+  im Popup und Ausfüllen auf einer Login-Seite funktionieren. Ebenso mit dem notarisierten
+  DMG aus dem Release-Workflow (Run 43416889869): startet ohne Gatekeeper-Warnung, Extension
+  aktivierbar, Anmeldung und Ausfüllen funktionieren.
 - **Design** ([#58](https://github.com/MelonigeMelone/melonapp/issues/58)): Extension hell/dunkel und App-Icon im Simulator geprüft;
   Kontrast des gefüllten Buttons im Dunkelmodus korrigiert.
 
