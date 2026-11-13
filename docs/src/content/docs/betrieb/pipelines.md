@@ -80,16 +80,18 @@ lässt sich mit `platform` auch nur macOS oder nur iOS bauen.
   `stapler` und `spctl`, dass Gatekeeper App und DMG annimmt. Das DMG hängt am
   GitHub-Release des Tags und liegt bei manuellen Läufen als Artefakt vor. Tauris eigene
   Notarisierung wird nicht genutzt, weil sie beim ersten Netzwerkfehler abbricht.
-- **iOS:** Build-Nummer = `github.run_number` für App und Extension. Tauri setzt das Team
-  nur für die App; die Extension erhält es über `${APPLE_DEVELOPMENT_TEAM}` in
-  `project.yml` beim Generieren. Tauri erstellt nur das Archiv; `xcodebuild -exportArchive`
-  signiert es danach manuell mit Apple Distribution und den beiden App-Store-Profilen.
-  `scripts/ios-export-options.py` prüft vorher Team, App-ID, Ablaufdatum und dass es
-  App-Store-Profile ohne Geräteliste und ohne `get-task-allow` sind. Automatisches
-  Signieren beim Export bräuchte Cloud-Signing und damit einen Admin-API-Schlüssel. Vor dem Upload prüft der Job im IPA die
-  Build-Nummern, den Privacy-Manifest beider Targets, die App Group der Extension und
-  dass die Extension nur Systembibliotheken lädt (`scripts/ios-check-ipa.sh`, meldet jede
-  Prüfung einzeln). `altool` lädt nach TestFlight hoch.
+- **iOS:** `scripts/ios-export-options.py` prüft die beiden App-Store-Profile (Team,
+  App-ID, Ablaufdatum, keine Geräteliste, kein `get-task-allow`), installiert sie und
+  schreibt die Export-Optionen. `scripts/ios-release-signing.rb` trägt danach nur im CI in
+  `project.yml` für App und Extension manuelles Signieren mit Apple Distribution, Team,
+  Profil und die Build-Nummer (`github.run_number`) ein; XcodeGen erzeugt daraus das
+  Projekt. So signiert schon `tauri ios build --archive-only` beide Targets mit ihren
+  Entitlements, und `xcodebuild -exportArchive` exportiert mit denselben Profilen.
+  Automatisches Signieren scheidet aus: Es bräuchte Cloud-Signing und damit einen
+  Admin-API-Schlüssel, und im ersten Versuch fehlte der Extension danach die App Group.
+  Vor dem Upload prüft `scripts/ios-check-ipa.sh` im IPA einzeln die Build-Nummern, den
+  Privacy-Manifest beider Targets, die App Group der Extension und dass die Extension
+  nur Systembibliotheken lädt. `altool` lädt nach TestFlight hoch.
 
 Secrets im Environment `apple-release` (nur `main` und Tags `v*`):
 
