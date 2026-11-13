@@ -183,7 +183,12 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           API_PRIVATE_KEYS_DIR: ${{ runner.temp }}/apple/private_keys
-        run: xcrun altool --upload-app --type ios --file "$MELON_IPA" --apiKey "$APPLE_API_KEY" --apiIssuer "$APPLE_API_ISSUER"
+        run: |
+          status=0
+          output=$(xcrun altool --upload-app --type ios --file "$MELON_IPA" --apiKey "$APPLE_API_KEY" --apiIssuer "$APPLE_API_ISSUER" 2>&1) || status=$?
+          printf '%s\n' "$output"
+          test "$status" = 0
+          grep -q "UPLOAD SUCCEEDED" <<<"$output"
       - if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/apple/signing.keychain-db" 2>/dev/null || true

@@ -97,7 +97,8 @@ lässt sich mit `platform` auch nur macOS oder nur iOS bauen.
   Admin-API-Schlüssel, und im ersten Versuch fehlte der Extension danach die App Group.
   Vor dem Upload prüft `scripts/ios-check-ipa.sh` im IPA einzeln die Build-Nummern, den
   Privacy-Manifest beider Targets, die App Group der Extension und dass die Extension
-  nur Systembibliotheken lädt. `altool` lädt nach TestFlight hoch.
+  nur Systembibliotheken lädt. `altool` lädt nach TestFlight hoch; weil es bei abgelehnten
+  Uploads mit 0 endet, prüft der Schritt zusätzlich auf „UPLOAD SUCCEEDED“.
 
 Secrets im Environment `apple-release` (nur `main` und Tags `v*`):
 

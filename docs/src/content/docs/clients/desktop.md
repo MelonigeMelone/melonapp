@@ -168,6 +168,10 @@ Für signierte Gerätebuilds `APPLE_DEVELOPMENT_TEAM` beim `xcodegen generate` u
 `tauri ios build` setzen: Tauri trägt das Team nur in die App ein, die Extension bekommt
 es aus `project.yml`. Ohne die Variable bleibt das Team im generierten Projekt leer.
 
+Die iOS-App-Icons entstehen aus `assets/icon-ios.svg` (das Logo ohne abgerundete Ecken, iOS
+maskiert selbst) mit `bash scripts/ios-icons.sh` (braucht `rsvg-convert` aus `librsvg`).
+App Store Connect lehnt Icons mit Alphakanal ab; das Skript bricht ab, wenn eines einen hat.
+
 Nicht erneut `tauri ios init` ausführen, um eigene Extension-Einstellungen zu erhalten.
 Die Quelle des Xcode-Projekts ist `project.yml`; generierte UniFFI-Bindings und Libraries
 werden nicht eingecheckt. Nach einem frischen Checkout zunächst `build-apple-ffi.sh`
