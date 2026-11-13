@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const calls = vi.hoisted(() => ({ crypto: [] as string[], logout: [] as string[], serverKey: 'OWN-KEY' }));
+const calls = vi.hoisted(() => ({ crypto: [] as string[], logout: [] as string[], serverKey: 'OWN-KEY', kdf: null as null | { memory_kib: number; iterations: number; parallelism: number } }));
 
 vi.mock('./crypto/client', () => ({
   cryptoCall: vi.fn(async (method: string) => {
@@ -18,7 +18,7 @@ vi.mock('./api', async (importOriginal) => {
   return {
     ...original,
     api: {
-      prelogin: async () => ({ kdf: original.DEFAULT_KDF, salt: 'salt' }),
+      prelogin: async () => ({ kdf: calls.kdf ?? original.DEFAULT_KDF, salt: 'salt' }),
       login: async () => ({
         user_id: 'me',
         token: 'token',
@@ -41,6 +41,23 @@ describe('login', () => {
   beforeEach(() => {
     calls.crypto = [];
     calls.logout = [];
+    calls.kdf = null;
+  });
+
+  it('refuses weaker key derivation than the apps use before deriving or sending anything', async () => {
+    for (const kdf of [
+      { memory_kib: 19456, iterations: 2, parallelism: 1 },
+      { memory_kib: 65536, iterations: 2, parallelism: 4 },
+      { memory_kib: 32768, iterations: 3, parallelism: 4 },
+      { memory_kib: 2 ** 32 + 19456, iterations: 2 ** 32 + 2, parallelism: 1 },
+      { memory_kib: 65536.5, iterations: 3, parallelism: 4 },
+      { memory_kib: 65536, iterations: 3, parallelism: 0 },
+    ]) {
+      calls.kdf = kdf;
+      const error = await login('me@example.test', 'pw').catch((e: unknown) => e);
+      expect((error as InstanceType<typeof ApiError>).code).toBe('weak_kdf');
+    }
+    expect(calls.crypto).not.toContain('derive');
   });
 
   it('keeps the public key that belongs to the decrypted private key', async () => {

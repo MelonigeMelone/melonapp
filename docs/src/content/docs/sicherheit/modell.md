@@ -73,7 +73,8 @@ gewechselt und die wichtigen Passwörter sollten geändert werden.
 ## Was ein Angreifer mit der Datenbank anfangen kann
 
 Er muss ein Master-Passwort offline erraten. Jeder Versuch kostet eine volle
-Argon2id-Ableitung mit 64 MiB. Ein starkes Master-Passwort (5–6 zufällige Wörter) ist damit
+Argon2id-Ableitung mit 64 MiB. Auch ein übernommener Server kann die Apps nicht dazu bringen, mit
+schwächeren Parametern abzuleiten: Sie brechen die Anmeldung dann ab. Ein starkes Master-Passwort (5–6 zufällige Wörter) ist damit
 praktisch nicht zu knacken.
 
 ## Öffentliche Schlüssel prüfen: Sicherheitscode

@@ -49,6 +49,13 @@ Parameter von den Standardwerten abweichen oder deren Salt sich nach einem Passw
 ändert. Für eine private Instanz ist das akzeptiert. Das Secret deshalb nur wechseln, wenn es
 bekannt geworden ist.
 
+**Prüfung in der App:** Die Apps legen Konten nur mit den Standardwerten an (64 MiB, 3 Durchläufe).
+Liefert `prelogin` weniger Speicher oder weniger Durchläufe, bricht die App ab, bevor sie den
+Auth-Key ableitet oder sendet (`weak_kdf`). Ein übernommener Server kann so keinen billiger zu
+ratenden Auth-Key erschleichen. Das Salt kommt weiter vom Server. Ein Server, der allen dasselbe
+Salt gibt, bekommt Auth-Keys zum vollen Preis, kann aber mehrere Konten mit einer Rechnung prüfen.
+Für eine Familien-Instanz ist das akzeptiert.
+
 ## Login
 
 - **Gleiche Laufzeit:** Auch bei unbekanntem Konto oder kaputtem Auth-Key läuft genau eine

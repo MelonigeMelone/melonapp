@@ -73,6 +73,7 @@ function withAccountKey<T>(r: { password: string; salt: string; kdf: { memory_ki
 const handlers: CryptoMethods = {
   derive({ password, salt, kdf }) {
     dropDerived();
+    if (![kdf.memory_kib, kdf.iterations, kdf.parallelism].every((n) => Number.isSafeInteger(n) && n > 0 && n <= 0xffffffff)) fail('invalid_kdf');
     derived = deriveKeys(password, salt, kdf.memory_kib, kdf.iterations, kdf.parallelism);
     return derived.authKey;
   },

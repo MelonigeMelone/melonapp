@@ -54,6 +54,7 @@ const MARKS_SEEN = '#verified';
 const KEYRING_SEEN = '#keys';
 const PERSONAL_KEY_SEEN = '#personal-key';
 const trustSeen = (vaultId: string) => `#trust:${vaultId}`;
+const versionSeen = (vaultId: string) => `#version:${vaultId}`;
 
 export class VaultsManager {
   private vaults = new Map<string, Entry>();
@@ -187,6 +188,10 @@ export class VaultsManager {
       return;
     }
     const version = remote.member_key_version;
+    if (Math.min(version, remote.key_version) < this.seen.get(versionSeen(remote.id))) {
+      entry.store = null;
+      throw new ApiError(409, 'vault_key_rolled_back');
+    }
     let fresh = false;
     if (!(await this.crypto('hasVault', { vaultId: remote.id, keyVersion: version }))) {
       try {
@@ -196,6 +201,7 @@ export class VaultsManager {
         throw e;
       }
     }
+    this.seen.raise(versionSeen(remote.id), version);
     entry.meta = parseMeta(await this.crypto('decryptMeta', { vaultId: remote.id, data: remote.encrypted_meta }));
     if (!remote.personal) this.noteGranters(entry, fresh);
     if (rotated) entry.store?.reset();
@@ -322,6 +328,7 @@ export class VaultsManager {
       remove_user_ids: [],
     });
     this.seen.raise(PERSONAL_KEY_SEEN, 1);
+    this.seen.raise(versionSeen(entry.remote.id), entry.remote.key_version + 1);
   }
 
   private makeStore(vaultId: string): VaultStore {
@@ -421,7 +428,8 @@ export class VaultsManager {
     }
     if (remote.personal) return;
     const trust = this.currentTrust(entry);
-    if (remote.rotation_needed) {
+    const listed = new Set(remote.members.map((m) => m.user_id));
+    if (remote.rotation_needed || trust.members.some((id) => !listed.has(id))) {
       await this.rotate(remote.id, []);
       return;
     }
@@ -467,6 +475,9 @@ export class VaultsManager {
       this.now(),
     );
     const own = await this.myKey();
+    const target = entry.remote.key_version + 1;
+    if (entry.remote.key_version < this.seen.get(versionSeen(vaultId))) throw new ApiError(409, 'vault_key_rolled_back');
+    if (!(await this.crypto('hasVault', { vaultId, keyVersion: entry.remote.key_version }))) throw new ApiError(409, 'key_rotated');
     const current = entry.store.rotationItems();
     const revisions = new Map(current.map((v) => [v.id, v.revision]));
     const rotated = await this.crypto('rotate', {
@@ -477,18 +488,22 @@ export class VaultsManager {
     });
     try {
       await this.api.rotate(vaultId, {
-        key_version: entry.remote.key_version + 1,
+        key_version: target,
         encrypted_meta: rotated.encryptedMeta,
         members: rotated.members,
         items: rotated.items.map((i) => ({ ...i, base_revision: revisions.get(i.id) ?? 0 })),
         remove_user_ids: removeUserIds,
       });
       this.seen.raise(trustSeen(vaultId), trustSeq);
+      this.seen.raise(versionSeen(vaultId), target);
     } catch (e) {
       if (!retry || !isConflict(e)) throw e;
       const { vaults } = await this.api.listVaults();
       const fresh = vaults.find((v) => v.id === vaultId);
-      if (!fresh) return;
+      if (!fresh) throw new ApiError(404, 'vault_not_found');
+      if (Math.min(fresh.key_version, fresh.member_key_version ?? 0) < Math.max(entry.remote.key_version, this.seen.get(versionSeen(vaultId)))) {
+        throw new ApiError(409, 'vault_key_rolled_back');
+      }
       entry.remote = fresh;
       return this.rotate(vaultId, removeUserIds, false);
     }
@@ -680,8 +695,11 @@ export class VaultsManager {
 
   async removeMember(vaultId: string, userId: string) {
     await this.sync();
-    const member = this.requireEntry(vaultId).remote.members.find((m) => m.user_id === userId);
-    if (member?.has_key) {
+    const entry = this.requireEntry(vaultId);
+    const member = entry.remote.members.find((m) => m.user_id === userId);
+    const trust = this.loadTrust(entry);
+    const hadKey = !!member?.has_key || (trust !== null && trust !== 'legacy' && trust.members.includes(userId));
+    if (hadKey) {
       await this.rotate(vaultId, [userId]);
     } else {
       try {

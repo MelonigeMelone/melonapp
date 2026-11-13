@@ -141,9 +141,16 @@ Bei jedem Sync erledigt die App eines Besitzers, was nur ein Besitzer kann:
    verschlüsseln und hinterlegen (`PUT …/members/{user}/key`). Nur für Mitglieder aus der
    verschlüsselten Liste `trust` im Tresor-Meta, mit gültiger Einladung oder geprüftem Code
    ([ADR 0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/), `vault/trust.ts`).
-2. **Schlüssel wechseln**, wenn jemand den Tresor verlassen hat (`rotation_needed`). Mitglieder,
-   die weder in `trust.members` stehen noch geprüft sind, stoppen den Wechsel
-   (`member_unconfirmed`).
+2. **Schlüssel wechseln**, wenn jemand den Tresor verlassen hat (`rotation_needed`) oder wenn
+   jemand aus `trust.members` nicht mehr in der Mitgliederliste des Servers steht. So hilft es
+   nichts, wenn der Server `rotation_needed` verschweigt. Mitglieder, die weder in `trust.members`
+   stehen noch geprüft sind, stoppen den Wechsel (`member_unconfirmed`).
+
+Beim Entfernen wechselt die App den Schlüssel, wenn die Person laut Server **oder** laut
+`trust.members` den Schlüssel hatte. Nach jedem Wechsel und jedem Öffnen merkt sich das Gerät die
+höchste Schlüsselversion je Tresor (`#version:<id>`). Meldet der Server danach eine kleinere,
+etwa weil er einen Wechsel nur bestätigt und nicht gespeichert hat, schließt die App den Tresor
+(`vault_key_rolled_back`) und schreibt nichts mehr mit dem alten Schlüssel.
 3. **Liste anlegen:** Bestehende Tresore ohne `trust` bekommen sie einmal aus den Mitgliedern mit
    Schlüssel. Fehlt sie danach oder ist ihr `seq` älter als zuletzt gesehen, verteilt die App in
    dem Tresor keine Schlüssel (`members_unavailable`).

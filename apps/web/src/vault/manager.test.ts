@@ -451,6 +451,68 @@ describe('verified security codes in the vaults manager', () => {
   });
 });
 
+describe('removing members and key changes the server cannot fake', () => {
+  const errorOf = (promise: Promise<unknown>) =>
+    promise.then(
+      () => null,
+      (e: unknown) => (e instanceof ApiError ? e.code : e instanceof Error ? e.message : String(e)),
+    );
+
+  it('a key change the server swallows stops writing with the old key', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    const api = (manager as unknown as { api: Api }).api;
+    (manager as unknown as { api: Api }).api = { ...api, rotate: async () => undefined } as Api;
+    await manager.removeMember('family', MIA).catch(() => undefined);
+    (manager as unknown as { api: Api }).api = api;
+    expect(server.family().key_version).toBe(1);
+    expect(await errorOf(manager.sync())).toBe('vault_key_rolled_back');
+    const item = { type: 'login', title: 'Neu', fields: [], sections: [] } as unknown as Parameters<VaultsManager['saveItem']>[2];
+    expect(await errorOf(manager.saveItem('family', null, item))).toBe('vault_key_pending');
+  });
+
+  it('a fake conflict that points back to an older key version cannot slip in a swallowed key change', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    Object.assign(server.family(), { key_version: 2, member_key_version: 2, encrypted_vault_key: 'seal:MIA-KEY:v2' });
+    await manager.sync();
+    const api = (manager as unknown as { api: Api }).api;
+    let calls = 0;
+    (manager as unknown as { api: Api }).api = {
+      ...api,
+      listVaults: async () => {
+        const list = await api.listVaults();
+        if (calls > 0) for (const v of list.vaults) if (v.id === 'family') Object.assign(v, { key_version: 1, member_key_version: 1 });
+        return list;
+      },
+      rotate: async () => {
+        calls += 1;
+        if (calls === 1) throw new ApiError(409, 'members_changed');
+      },
+    } as Api;
+    expect(await errorOf(manager.removeMember('family', MIA))).toBe('vault_key_rolled_back');
+    expect(calls).toBe(1);
+  });
+
+  it('removing someone who had the key changes it even if the server says they never had it', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    miaWaitsForKey(server);
+    const other = setup(memoryLog(), false, server).manager;
+    await other.removeMember('family', MIA).catch(() => undefined);
+    expect(server.rotations).toBe(1);
+  });
+
+  it('someone the server quietly drops from the list still triggers a key change', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    server.family().members = server.family().members.filter((m) => m.user_id !== MIA);
+    await manager.sync();
+    expect(server.rotations).toBe(1);
+    expect(JSON.parse(server.family().encrypted_meta).trust.members).toEqual([ME]);
+  });
+});
+
 describe('authenticated vault keys in the vaults manager', () => {
   function errorOf(promise: Promise<unknown>) {
     return promise.then(

@@ -86,7 +86,8 @@ Export. Nach dem Entfernen sollte man die wichtigen Passwörter in dem Bereich �
 Die App weist darauf hin.
 
 Verlässt jemand einen Bereich selbst, erneuert die App eines Besitzers den Schlüssel beim
-nächsten Öffnen automatisch.
+nächsten Öffnen automatisch. Das gilt auch, wenn der Server es nicht meldet: Fehlt jemand aus der
+verschlüsselten Mitgliederliste beim Server, wechselt die App den Schlüssel trotzdem.
 
 ## Eintragstypen und eigene Felder
 

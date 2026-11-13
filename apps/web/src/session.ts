@@ -25,8 +25,19 @@ export function open(email: string, userId: string, token: string, account: Acco
   return { email, userId, token, vaults: new VaultsManager(userId, authed(token), cryptoCall), ...account };
 }
 
+const within = (value: unknown, min: number, max: number) => Number.isSafeInteger(value) && (value as number) >= min && (value as number) <= max;
+
+export function weakKdf(kdf: Kdf): boolean {
+  return !(
+    within(kdf.memory_kib, DEFAULT_KDF.memory_kib, 1024 * 1024) &&
+    within(kdf.iterations, DEFAULT_KDF.iterations, 32) &&
+    within(kdf.parallelism, 1, 16)
+  );
+}
+
 export async function login(email: string, password: string): Promise<Session> {
   const pre = await api.prelogin(email);
+  if (weakKdf(pre.kdf)) throw new ApiError(409, 'weak_kdf');
   const authKey = await cryptoCall('derive', { password, salt: pre.salt, kdf: pre.kdf });
   try {
     const res = await api.login({ email, auth_key: authKey, device: deviceName() });
@@ -192,6 +203,7 @@ const messages: Record<string, string> = {
     'Der Server hat für dein Konto einen falschen öffentlichen Schlüssel gemeldet. Die Anmeldung wurde abgebrochen. Prüfe den Server, bevor du weitermachst.',
   member_unconfirmed:
     'Ein Mitglied dieses Bereichs wurde weder von einem Besitzer hinzugefügt noch ist sein Sicherheitscode geprüft. Der neue Schlüssel wird erst erstellt, wenn du seinen Code prüfst oder es entfernst.',
+  weak_kdf: 'Der Server verlangt schwächere Schlüsselparameter als üblich. Die Anmeldung wurde abgebrochen, bevor etwas vom Passwort gesendet wurde.',
   members_unavailable:
     'Die verschlüsselte Mitgliederliste eines Bereichs fehlt oder ist älter als zuletzt auf diesem Gerät gesehen. Bis das geklärt ist, gibt die App in diesem Bereich keine Schlüssel weiter. Prüfe den Server.',
 };
