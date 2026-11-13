@@ -154,7 +154,7 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/apple/private_keys/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
-        run: npm run tauri -w desktop -- ios build --target aarch64 --export-method app-store-connect --archive-only --ci --config "{\"bundle\":{\"iOS\":{\"bundleVersion\":\"$MELON_BUILD\"}}}"
+        run: npm run tauri -w desktop -- ios build -v --target aarch64 --export-method app-store-connect --archive-only --ci --config "{\"bundle\":{\"iOS\":{\"bundleVersion\":\"$MELON_BUILD\"}}}"
       - name: Export with the App Store profiles
         run: |
           xcodebuild -exportArchive \
