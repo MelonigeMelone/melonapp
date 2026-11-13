@@ -138,8 +138,15 @@ zurückhält oder Einträge weglässt, fällt so ebenfalls nicht auf.
 Bei jedem Sync erledigt die App eines Besitzers, was nur ein Besitzer kann:
 
 1. **Wartende Mitglieder freischalten:** Tresor-Schlüssel für deren öffentlichen Schlüssel
-   verschlüsseln und hinterlegen (`PUT …/members/{user}/key`).
-2. **Schlüssel wechseln**, wenn jemand den Tresor verlassen hat (`rotation_needed`).
+   verschlüsseln und hinterlegen (`PUT …/members/{user}/key`). Nur für Mitglieder aus der
+   verschlüsselten Liste `trust` im Tresor-Meta, mit gültiger Einladung oder geprüftem Code
+   ([ADR 0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/), `vault/trust.ts`).
+2. **Schlüssel wechseln**, wenn jemand den Tresor verlassen hat (`rotation_needed`). Mitglieder,
+   die weder in `trust.members` stehen noch geprüft sind, stoppen den Wechsel
+   (`member_unconfirmed`).
+3. **Liste anlegen:** Bestehende Tresore ohne `trust` bekommen sie einmal aus den Mitgliedern mit
+   Schlüssel. Fehlt sie danach oder ist ihr `seq` älter als zuletzt gesehen, verteilt die App in
+   dem Tresor keine Schlüssel (`members_unavailable`).
 
 ### Konflikte
 

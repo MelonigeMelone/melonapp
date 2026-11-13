@@ -36,5 +36,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0022](/melonapp/entscheidungen/0022-backups-mit-age/) | Backups verschlüsselt mit age, Schlüssel offline | angenommen |
 | [0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/) | Passkeys als verschlüsselte Tresor-Einträge | angenommen |
 | [0024](/melonapp/entscheidungen/0024-apple-verteilung/) | Apple-Apps über Developer ID und TestFlight verteilen | angenommen |
+| [0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/) | Verschlüsselte Mitgliederliste für Schlüssel-Freigaben | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.

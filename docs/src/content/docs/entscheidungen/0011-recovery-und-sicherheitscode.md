@@ -58,7 +58,7 @@ Telefon vorlesen.
 - **Gebunden an den Schlüssel:** Liefert der Server später einen anderen öffentlichen Schlüssel
   für diese Person, zeigt die App „Code geändert“ und gibt ihr keinen Tresor-Schlüssel mehr
   (Freigabe nach Einladung, Hinzufügen, Schlüsselwechsel brechen mit `key_changed` ab), bis man
-  den neuen Code geprüft hat. Ungeprüfte Personen verhalten sich wie bisher.
+  den neuen Code geprüft hat. Ungeprüfte Personen verhalten sich wie bisher, sofern sie eingeladen wurden oder in der verschlüsselten Mitgliederliste stehen ([ADR 0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/)).
 - **Im Zweifel nichts weitergeben:** Die Liste wird bei jedem Sync geladen, **bevor** Schlüssel
   verteilt werden. Als persönlich zählt nur ein Tresor, in dem man allein Besitzer ist, und nur
   wenn es genau einen solchen gibt. Fehlt die Liste, obwohl dieses Gerät schon eine gesehen hat,

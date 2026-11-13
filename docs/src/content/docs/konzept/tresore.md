@@ -65,6 +65,11 @@ verschickt selbst keine E-Mails.
 3. Sobald ein Besitzer die App das nächste Mal öffnet, erledigt die App das automatisch.
    Danach sieht das neue Mitglied den Bereich.
 
+Die App merkt sich jede Einladung verschlüsselt im Bereich. Automatisch freigegeben wird nur, wer
+eingeladen wurde, schon in der verschlüsselten Mitgliederliste steht oder einen geprüften Code hat.
+Taucht jemand anderes als wartendes Mitglied auf, gibt die App den Schlüssel erst, wenn du seinen
+Code geprüft hast ([ADR 0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/)).
+
 ## Jemanden entfernen
 
 Wer einmal Mitglied war, hatte den Bereichs-Schlüssel. Deshalb bekommt der Bereich beim

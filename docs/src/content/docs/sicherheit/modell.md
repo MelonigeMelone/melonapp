@@ -88,6 +88,10 @@ könnte ein Server beiden Seiten denselben falschen Schlüssel zeigen, und die C
 ([ADR 0011](/melonapp/entscheidungen/0011-recovery-und-sicherheitscode/)).
 
 Eingeladene Personen werden automatisch freigeschaltet. Ihren Code prüft man danach im Tresor-Dialog.
+Wen die App automatisch freischaltet, entscheidet eine verschlüsselte Mitglieder- und
+Einladungsliste im Tresor, nicht die Mitgliederliste des Servers. Erfundene Mitglieder bekommen
+den Schlüssel erst nach geprüftem Code
+([ADR 0025](/melonapp/entscheidungen/0025-verschluesselte-mitgliederliste/)).
 
 Geprüfte Codes merkt sich die App verschlüsselt im persönlichen Tresor, gebunden an den
 öffentlichen Schlüssel. Tauscht der Server den Schlüssel einer geprüften Person später aus, zeigt
