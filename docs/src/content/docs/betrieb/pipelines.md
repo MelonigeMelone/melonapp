@@ -76,7 +76,11 @@ getrennten Tauri-Workspace.
   GitHub-Release des Tags und liegt bei manuellen Läufen als Artefakt vor.
 - **iOS:** Build-Nummer = `github.run_number` für App und Extension. Tauri setzt das Team
   nur für die App; die Extension erhält es über `${APPLE_DEVELOPMENT_TEAM}` in
-  `project.yml` beim Generieren. Xcode signiert automatisch mit dem API-Schlüssel. Vor dem Upload prüft der Job im IPA die
+  `project.yml` beim Generieren. Tauri erstellt nur das Archiv; `xcodebuild -exportArchive`
+  signiert es danach manuell mit Apple Distribution und den beiden App-Store-Profilen.
+  `scripts/ios-export-options.py` prüft vorher Team, App-ID, Ablaufdatum und dass es
+  App-Store-Profile ohne Geräteliste und ohne `get-task-allow` sind. Automatisches
+  Signieren beim Export bräuchte Cloud-Signing und damit einen Admin-API-Schlüssel. Vor dem Upload prüft der Job im IPA die
   Build-Nummern, den Privacy-Manifest beider Targets, die App Group der Extension und
   dass die Extension nur Systembibliotheken lädt. `altool` lädt nach TestFlight hoch.
 
@@ -88,6 +92,7 @@ Secrets im Environment `apple-release` (nur `main` und Tags `v*`):
 | `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` | Developer ID Application als `.p12` (Base64) | Dezember 2027 |
 | `MACOS_PROVISIONING_PROFILE` | Developer-ID-Profil für `de.melonigemelone.app` (Base64) | 2044, gilt nur mit gültigem Zertifikat |
 | `IOS_CERTIFICATE`, `IOS_CERTIFICATE_PASSWORD` | Apple Distribution als `.p12` (Base64) | November 2027 |
+| `IOS_PROVISIONING_PROFILE_APP`, `IOS_PROVISIONING_PROFILE_AUTOFILL` | App-Store-Profile „MelonApp App Store“ und „MelonApp AutoFill App Store“ (Base64) | siehe Profil, gilt nur mit gültigem Zertifikat |
 | `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_KEY_P8` | App-Store-Connect-API-Schlüssel, Rolle App Manager | nie, widerrufbar |
 
 Ein Zertifikat ersetzen: in Xcode oder im Developer-Portal neu erzeugen, aus dem

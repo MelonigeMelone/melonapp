@@ -17,8 +17,10 @@ Geheimnisse der Lieferkette: Wer sie hat, kann eine manipulierte App als echte a
 - **macOS:** Signatur mit „Developer ID Application“, eingebettetes Developer-ID-
   Provisioning-Profil (nötig für die Data Protection Keychain), Notarisierung und
   Stapling durch Apple, Verteilung als DMG im GitHub-Release. Kein Mac App Store.
-- **iOS:** Signatur mit „Apple Distribution“, Profile verwaltet Xcode automatisch über
-  den App-Store-Connect-API-Schlüssel, Upload nach TestFlight.
+- **iOS:** Signatur mit „Apple Distribution“ und festen App-Store-Profilen für App und
+  Extension, Upload nach TestFlight mit dem App-Store-Connect-API-Schlüssel. Automatisches
+  Signieren beim Export scheidet aus, weil es Cloud-Signing und damit einen
+  Admin-Schlüssel verlangt.
 - `apple-release.yml` läuft nur bei Versions-Tags `v*` und manuell, analog zu
   [ADR 0020](/melonapp/entscheidungen/0020-deploy-per-tag/). Der Tag muss der Version in
   `tauri.conf.json` entsprechen, die iOS-Build-Nummer ist die Laufnummer des Workflows.
