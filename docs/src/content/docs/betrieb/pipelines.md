@@ -67,7 +67,8 @@ getrennten Tauri-Workspace.
 `apple-release.yml` erzeugt verteilbare Apple-Builds
 ([ADR 0024](/melonapp/entscheidungen/0024-apple-verteilung/)). Er startet bei einem Tag
 `v*`, der zur Version in `apps/desktop/src-tauri/tauri.conf.json` passen muss, oder manuell
-(Actions → Apple release → Run workflow) für einen TestFlight-Build ohne Release.
+(Actions → Apple release → Run workflow) für einen TestFlight-Build ohne Release; dort
+lässt sich mit `platform` auch nur macOS oder nur iOS bauen.
 
 - **macOS:** `scripts/apple-keychain.sh` legt die Developer-ID-Identität in einen
   temporären Schlüsselbund. `scripts/build-macos-signed.sh --bundles app` signiert und bettet
@@ -87,7 +88,8 @@ getrennten Tauri-Workspace.
   App-Store-Profile ohne Geräteliste und ohne `get-task-allow` sind. Automatisches
   Signieren beim Export bräuchte Cloud-Signing und damit einen Admin-API-Schlüssel. Vor dem Upload prüft der Job im IPA die
   Build-Nummern, den Privacy-Manifest beider Targets, die App Group der Extension und
-  dass die Extension nur Systembibliotheken lädt. `altool` lädt nach TestFlight hoch.
+  dass die Extension nur Systembibliotheken lädt (`scripts/ios-check-ipa.sh`, meldet jede
+  Prüfung einzeln). `altool` lädt nach TestFlight hoch.
 
 Secrets im Environment `apple-release` (nur `main` und Tags `v*`):
 
