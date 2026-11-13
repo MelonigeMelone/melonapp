@@ -69,11 +69,16 @@ getrennten Tauri-Workspace.
 `v*`, der zur Version in `apps/desktop/src-tauri/tauri.conf.json` passen muss, oder manuell
 (Actions → Apple release → Run workflow) für einen TestFlight-Build ohne Release.
 
-- **macOS:** `scripts/build-macos-signed.sh --bundles app,dmg` signiert mit Developer ID,
-  bettet das Profil ein und lässt Tauri die App notarisieren und stapeln. Das DMG wird
-  anschließend mit `notarytool` notarisiert und gestapelt. Danach prüfen `stapler` und
-  `spctl`, dass Gatekeeper App und DMG annimmt. Das DMG hängt am
-  GitHub-Release des Tags und liegt bei manuellen Läufen als Artefakt vor.
+- **macOS:** `scripts/apple-keychain.sh` legt die Developer-ID-Identität in einen
+  temporären Schlüsselbund. `scripts/build-macos-signed.sh --bundles app` signiert und bettet
+  das Profil ein. `scripts/apple-notarize.sh` reicht die App bei Apple ein, fragt den Status
+  minütlich ab und übersteht dabei Netzwerkabbrüche (bis zu vier Stunden; die erste
+  Notarisierung eines neuen Teams dauerte über zwei Stunden), gibt bei Ablehnung Apples
+  Protokoll aus und heftet das Ticket an. `scripts/macos-dmg.sh` baut daraus ein signiertes
+  DMG mit Verknüpfung zu „Programme“, das ebenfalls notarisiert wird. Danach prüfen
+  `stapler` und `spctl`, dass Gatekeeper App und DMG annimmt. Das DMG hängt am
+  GitHub-Release des Tags und liegt bei manuellen Läufen als Artefakt vor. Tauris eigene
+  Notarisierung wird nicht genutzt, weil sie beim ersten Netzwerkfehler abbricht.
 - **iOS:** Build-Nummer = `github.run_number` für App und Extension. Tauri setzt das Team
   nur für die App; die Extension erhält es über `${APPLE_DEVELOPMENT_TEAM}` in
   `project.yml` beim Generieren. Tauri erstellt nur das Archiv; `xcodebuild -exportArchive`
