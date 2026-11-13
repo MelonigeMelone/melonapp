@@ -28,8 +28,16 @@ build_number() {
 }
 app_group() {
   local entitlements
-  entitlements=$(codesign -d --entitlements - --xml "$extension" 2>/dev/null || true)
-  grep -q group.de.melonigemelone.app <<<"$entitlements"
+  entitlements="$(codesign -d --entitlements - --xml "$extension" 2>/dev/null || true)
+$(codesign -d --entitlements :- "$extension" 2>/dev/null || true)
+$(codesign -d --entitlements - "$extension" 2>&1 || true)"
+  if grep -q group.de.melonigemelone.app <<<"$entitlements"; then
+    return 0
+  fi
+  echo "  entitlements of $(basename "$extension"):"
+  codesign -d --entitlements - "$extension" 2>&1 | sed 's/^/    /' || true
+  codesign -dvv "$extension" 2>&1 | grep -E 'Authority|Identifier|TeamIdentifier' | sed 's/^/    /' || true
+  return 1
 }
 check "extension links only system libraries" only_system_libraries
 check "app build number" build_number "$app"
