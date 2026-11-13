@@ -68,7 +68,9 @@ den Befehl `save_export`. Rust prüft den Namen (`melonapp-export-…` mit `.mel
 der Befehl nie an; geschrieben wird nur an die im Dialog bestätigte Stelle, mit Modus 0600 und
 `sync_all`. Für JavaScript sind weder Dialog- noch Dateisystem-Berechtigungen freigegeben.
 
-Das Sheet nimmt dem Fenster den Fokus. Solange es offen ist, sperrt dieser Fokusverlust nicht.
+Es ist immer nur ein Speichern-Dialog offen, ein zweiter Aufruf endet mit `export_busy`. Das
+Sheet nimmt dem Fenster den Fokus. Solange es offen ist, sperrt dieser Fokusverlust nicht; die
+Markierung dafür hebt ein Guard beim Verlassen des Befehls auf, auch bei einem Fehler.
 Nach dem Schließen wartet der Befehl bis zu einer Sekunde auf den Fokus und sperrt sonst sofort,
 etwa wenn man währenddessen in eine andere App gewechselt ist. Der Fünf-Minuten-Timer läuft
 weiter. Auf iOS antwortet der Befehl mit `export_unsupported`.

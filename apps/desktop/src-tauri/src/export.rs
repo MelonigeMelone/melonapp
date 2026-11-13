@@ -5,14 +5,27 @@ pub const MAX_EXPORT_BYTES: usize = 128 * 1024 * 1024;
 #[derive(Default)]
 pub struct SaveDialog(AtomicBool);
 
+#[cfg(any(desktop, test))]
+pub struct OpenDialog<'a>(&'a SaveDialog);
+
+#[cfg(any(desktop, test))]
+impl Drop for OpenDialog<'_> {
+    fn drop(&mut self) {
+        self.0.0.store(false, Ordering::SeqCst);
+    }
+}
+
 impl SaveDialog {
     pub fn is_open(&self) -> bool {
         self.0.load(Ordering::SeqCst)
     }
 
     #[cfg(any(desktop, test))]
-    fn set(&self, open: bool) {
-        self.0.store(open, Ordering::SeqCst);
+    fn open(&self) -> Option<OpenDialog<'_>> {
+        self.0
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .ok()
+            .map(|_| OpenDialog(self))
     }
 }
 
@@ -83,7 +96,9 @@ pub async fn save_export(
     let csv = name.ends_with(".csv");
     tauri::async_runtime::spawn_blocking(move || {
         let dialog = app.state::<SaveDialog>();
-        dialog.set(true);
+        let Some(open) = dialog.open() else {
+            return Err("export_busy".to_owned());
+        };
         let picked = app
             .dialog()
             .file()
@@ -94,7 +109,7 @@ pub async fn save_export(
                 &[if csv { "csv" } else { "json" }],
             )
             .blocking_save_file();
-        dialog.set(false);
+        drop(open);
         relock_unless_focused(&app, &window);
         let Some(picked) = picked else {
             return Ok(None);
@@ -155,12 +170,27 @@ mod tests {
     }
 
     #[test]
-    fn save_dialog_flag_toggles() {
+    fn only_one_save_dialog_at_a_time_and_closing_clears_it() {
         let dialog = SaveDialog::default();
         assert!(!dialog.is_open());
-        dialog.set(true);
+        let first = dialog.open().expect("first dialog");
         assert!(dialog.is_open());
-        dialog.set(false);
+        assert!(dialog.open().is_none());
+        drop(first);
+        assert!(!dialog.is_open());
+        let again = dialog.open().expect("dialog after close");
+        drop(again);
+        assert!(!dialog.is_open());
+    }
+
+    #[test]
+    fn a_panic_while_the_dialog_is_open_clears_the_flag() {
+        let dialog = SaveDialog::default();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _open = dialog.open().expect("dialog");
+            panic!("dialog failed");
+        }));
+        assert!(result.is_err());
         assert!(!dialog.is_open());
     }
 }
