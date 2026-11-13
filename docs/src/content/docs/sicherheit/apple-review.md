@@ -88,6 +88,12 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   einrichten). Build 0.1.0 (8) aus TestFlight lässt sich auf dem iPhone installieren und
   nutzen. Der Workflow fand dabei selbst einen Fehler: Ohne Signatur im Archiv fehlten der
   Extension App Group und AutoFill-Recht; die IPA-Prüfung blockierte den Upload.
+- **Safari-Erweiterung (Mac)** ([#31](https://github.com/MelonigeMelone/melonapp/issues/31),
+  [ADR 0026](/melonapp/entscheidungen/0026-safari-erweiterung-nur-mac/)), 13. November 2026:
+  lokal mit Developer ID signierter Build, „Nicht signierte Erweiterungen erlauben“ aus.
+  MelonApp erscheint nach einmaligem Start in Safaris Erweiterungsliste, Anmeldung mit Argon2
+  im Popup und Ausfüllen auf einer Login-Seite funktionieren. Der notarisierte Release-Build
+  ist noch zu prüfen.
 - **Design** ([#58](https://github.com/MelonigeMelone/melonapp/issues/58)): Extension hell/dunkel und App-Icon im Simulator geprüft;
   Kontrast des gefüllten Buttons im Dunkelmodus korrigiert.
 
@@ -105,7 +111,7 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   Anmeldung danach aus der Tresor-Kopie). Wiederherstellung auf einem zweiten Gerät
   (anmelden, Face ID einrichten, AutoFill veröffentlichen) vom Nutzer bestätigt. Gelöschte Passkeys verschwinden aus den iOS-Vorschlägen erst beim
   nächsten entsperrten AutoFill-Vorgang.
-- Die Safari-Web-Erweiterung ([#31](https://github.com/MelonigeMelone/melonapp/issues/31)) steht aus. Im Simulator zeigt die Extension keinen Face-ID-Dialog;
+- Im Simulator zeigt die AutoFill-Extension keinen Face-ID-Dialog;
   biometrische Aussagen gelten nur für die Hardware-Abnahme oben.
 
 ## Statusanzeige der Biometrie-Einstellungen

@@ -21,7 +21,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
-          targets: aarch64-apple-ios-sim
+          targets: aarch64-apple-ios-sim,wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -43,6 +43,11 @@ jobs:
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --lib
       - run: bash scripts/test-apple-swift.sh
       - run: npm run tauri -w desktop -- build
+      - run: bash scripts/build-wasm.sh
+      - run: npm run build -w extension
+      - run: bash scripts/build-safari-extension.sh
+        env:
+          APPLE_SIGNING_IDENTITY: '-'
       - run: bash scripts/build-apple-ffi.sh iphonesimulator
       - run: xcodegen generate --spec apps/desktop/src-tauri/gen/apple/project.yml
       - run: npm run tauri -w desktop -- ios build --target aarch64-sim --no-sign --ci

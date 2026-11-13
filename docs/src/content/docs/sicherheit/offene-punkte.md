@@ -32,7 +32,7 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Datenleck-Abgleich nutzt einen fremden Dienst (Have I Been Pwned) | nur auf Knopfdruck, k-Anonymität. Später optional: eigene Kopie der Hash-Liste auf dem Server. |
 | Ein kompromittierter Server kann Änderungen zurückhalten oder Einträge weglassen, und neue Geräte erkennen zurückgespielte Versionen nicht | Rückschritte bekannter Einträge erkennen die Apps bereits ([Rollback-Erkennung](/melonapp/clients/web/#rollback-erkennung)). Vollständig nur mit einem signierten Gesamtstand je Tresor lösbar. |
 | Web-App wird vom eigenen Server ausgeliefert | ein übernommener Server könnte manipulierten Code ausliefern. Erweiterung und kommende Apps sind davon nicht betroffen. |
-| Erweiterung in Firefox: kein `trackVisibility` | Firefox meldet nicht, ob ein Element verdeckt ist. Dort greifen nur die Stil-Prüfungen und `elementFromPoint`. Ein darübergelegtes Element mit `pointer-events: none` wird nicht erkannt (siehe [Erweiterung](/melonapp/clients/erweiterung/#schutzmaßnahmen)). |
+| Erweiterung in Firefox und Safari: kein `trackVisibility` | Firefox und Safari melden nicht, ob ein Element verdeckt ist. Dort greifen nur die Stil-Prüfungen und `elementFromPoint`. Ein darübergelegtes Element mit `pointer-events: none` wird nicht erkannt (siehe [Erweiterung](/melonapp/clients/erweiterung/#schutzmaßnahmen)). |
 
 ## Native Apple-Clients
 

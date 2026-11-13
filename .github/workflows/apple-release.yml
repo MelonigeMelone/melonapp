@@ -32,11 +32,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
+          targets: wasm32-unknown-unknown
+      - name: Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n 1)
+          test -n "$xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
+      - run: brew install xcodegen
+      - run: bash scripts/build-wasm.sh
       - run: npm ci
+      - run: npm run build -w extension
       - name: Tag matches app version
         if: startsWith(github.ref, 'refs/tags/')
         run: test "v$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)" = "$GITHUB_REF_NAME"
@@ -51,11 +61,17 @@ jobs:
           bash scripts/apple-keychain.sh "$RUNNER_TEMP/apple"
           printf '%s\n' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/apple/AuthKey.p8"
           printf '%s' "$MACOS_PROVISIONING_PROFILE" | base64 --decode > "$RUNNER_TEMP/apple/MelonApp.provisionprofile"
+      - name: Safari extension
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: Developer ID Application
+        run: bash scripts/build-safari-extension.sh
       - name: Build and sign
         env:
           APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_SIGNING_IDENTITY: Developer ID Application
           APPLE_PROVISIONING_PROFILE: ${{ runner.temp }}/apple/MelonApp.provisionprofile
+          MELON_SAFARI_APPEX: apps/desktop/src-tauri/target/safari/MelonSafari.appex
         run: bash scripts/build-macos-signed.sh --bundles app
       - name: Notarize the app
         env:

@@ -1,0 +1,44 @@
+name: MelonSafari
+options:
+  deploymentTarget:
+    macOS: "14.0"
+targets:
+  MelonSafari:
+    type: app-extension
+    platform: macOS
+    scheme: {}
+    sources:
+      - path: SafariWebExtensionHandler.swift
+    info:
+      path: build/Info.plist
+      properties:
+        CFBundleDisplayName: MelonApp
+        CFBundleShortVersionString: ${MELON_VERSION}
+        CFBundleVersion: ${MELON_VERSION}
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableDescription: Logins aus deiner MelonApp in Safari ausfüllen und neue speichern.
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+    entitlements:
+      path: build/MelonSafari.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.melonigemelone.app.safari
+        PRODUCT_NAME: MelonSafari
+        SWIFT_VERSION: "5.0"
+        ENABLE_HARDENED_RUNTIME: true
+        ENABLE_USER_SCRIPT_SANDBOXING: false
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: false
+        OTHER_CODE_SIGN_FLAGS: --timestamp
+        SKIP_INSTALL: true
+    postCompileScripts:
+      - name: Web extension resources
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          test -f "$MELON_WEB_EXTENSION/manifest.json"
+          ditto "$MELON_WEB_EXTENSION" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"

@@ -6,12 +6,13 @@ sidebar:
 ---
 
 `apps/extension`: eine Manifest-V3-Erweiterung für **Chrome, Edge, Brave, Opera / Opera GX** (alle
-Chromium) und **Firefox**. Safari folgt mit der iPhone-App, weil es Xcode und einen Mac braucht.
+Chromium), **Firefox** und **Safari auf dem Mac**. Auf dem iPhone übernimmt der AutoFill-Anbieter
+das Ausfüllen in Safari ([ADR 0026](/melonapp/entscheidungen/0026-safari-erweiterung-nur-mac/)).
 
 ## Installieren
 
 Die fertigen Builds hängen an jedem CI-Lauf als Artefakt **`melonapp-extension`** (GitHub → Actions →
-neuester Lauf von „CI“ → Artifacts). Darin liegen die Ordner `chromium/` und `firefox/`. Lokal baut sie
+neuester Lauf von „CI“ → Artifacts). Darin liegen die Ordner `chromium/`, `safari/` und `firefox/`. Lokal baut sie
 `npm run build -w extension` nach `apps/extension/build/`.
 
 | Browser | Schritte |
@@ -19,6 +20,11 @@ neuester Lauf von „CI“ → Artifacts). Darin liegen die Ordner `chromium/` u
 | Chrome, Edge, Brave | `chrome://extensions` (bzw. `edge://`, `brave://`) → Entwicklermodus an → „Entpackte Erweiterung laden“ → Ordner `chromium` |
 | **Opera GX**, Opera | `opera://extensions` → Entwicklermodus (oben rechts) an → „Entpackte Erweiterung laden“ → Ordner `chromium` |
 | Firefox | `about:debugging#/runtime/this-firefox` → „Temporäres Add-on laden“ → `firefox/manifest.json`. Danach unter `about:addons` → MelonApp → Berechtigungen „Auf Daten aller Websites zugreifen“ erlauben. |
+| Safari (Mac) | In der Mac-App enthalten: MelonApp aus dem DMG installieren und einmal öffnen → Safari → Einstellungen → Erweiterungen → **MelonApp** anhaken → Websitezugriff „Auf allen Websites immer erlauben“ |
+
+Zum Ausprobieren ohne App: Safari → Einstellungen → Erweitert → „Funktionen für Webentwickler
+anzeigen“, dann unter Entwickler „Nicht signierte Erweiterungen erlauben“ und im Menü Entwickler →
+„Temporäre Erweiterung hinzufügen …“ → Ordner `safari`.
 
 Temporäre Add-ons verschwinden in Firefox beim Neustart. Dauerhaft geht es erst über eine
 signierte Version (Mozilla Add-ons), ebenso der Chrome Web Store. Beides ist für später geplant.
@@ -74,8 +80,18 @@ apps/extension/src
 ```
 
 Der Build erzeugt drei Teile: Popup, Speicher-Karte und Einstellungsseite (Vite), `background.js` und `content.js` (je ein IIFE-Bündel),
-dazu `scripts/package.mjs` mit den Manifesten für Chromium und Firefox und PNG-Symbolen aus dem
-Melonen-SVG.
+dazu `scripts/package.mjs` mit den Manifesten für Chromium, Safari und Firefox und PNG-Symbolen aus
+dem Melonen-SVG.
+
+### Safari
+
+`scripts/build-safari-extension.sh` erzeugt aus `apps/desktop/apple/Safari/project.yml` (XcodeGen)
+die App-Extension `MelonSafari.appex`: ein leerer `SafariWebExtensionHandler` in Swift, die Dateien
+aus `build/safari` als Ressourcen, nur die Sandbox-Berechtigung, Hardened Runtime. Mit
+`APPLE_SIGNING_IDENTITY=-` entsteht ein unsignierter Build (CI), sonst signiert das Skript mit
+Team und Identität. `scripts/build-macos-signed.sh` bettet die Extension über `MELON_SAFARI_APPEX`
+unter `Contents/PlugIns/` ein; Tauri signiert danach nur die äußere App, die Signatur der
+Extension bleibt erhalten. Safari findet die Extension, sobald die App einmal gestartet wurde.
 
 ### Entsperrter Zustand
 
