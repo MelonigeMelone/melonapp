@@ -503,6 +503,39 @@ describe('removing members and key changes the server cannot fake', () => {
     expect(server.rotations).toBe(1);
   });
 
+  it('a sync that started before my own key change does not look like a rollback', async () => {
+    const { server, manager } = setup();
+    await manager.sync();
+    const api = (manager as unknown as { api: Api }).api;
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let hold = false;
+    let background: Promise<unknown> = Promise.resolve();
+    (manager as unknown as { api: Api }).api = {
+      ...api,
+      listVaults: async () => {
+        const list = await api.listVaults();
+        if (hold) {
+          hold = false;
+          await gate;
+        }
+        return list;
+      },
+      rotate: async (...args: Parameters<Api['rotate']>) => {
+        hold = true;
+        background = errorOf(manager.sync());
+        await api.rotate(...args);
+        release();
+      },
+    } as Api;
+    expect(await errorOf(manager.removeMember('family', MIA))).toBeNull();
+    expect(await background).toBeNull();
+    expect(server.family().key_version).toBe(2);
+    expect(await errorOf(manager.sync())).toBeNull();
+  });
+
   it('someone the server quietly drops from the list still triggers a key change', async () => {
     const { server, manager } = setup();
     await manager.sync();
