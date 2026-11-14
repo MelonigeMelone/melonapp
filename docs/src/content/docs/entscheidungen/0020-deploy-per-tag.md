@@ -24,8 +24,10 @@ gehen, und vor jedem Update muss ein Backup liegen.
   erlaubt nur Admins, `v*`-Tags zu setzen. Das Environment `production` gibt seine Secrets nur an
   `v*`-Tags, und der Job deployt nur Commits, die auf `main` liegen.
 - **`bin/melon-update` auf dem Server** holt Compose-Datei, Caddyfile und Skripte vom Tag,
-  macht ein Backup, legt die Images in `.env` auf die Version fest, startet neu, prüft
-  `/health` und geht bei einem Fehler auf den alten Stand zurück.
+  prüft per `cosign`, dass beide Images vom Workflow dieses Repos für genau diesen Tag gebaut
+  wurden, macht ein Backup, legt die Images in `.env` auf ihren Digest fest, startet neu, prüft
+  `/health` und geht bei einem Fehler auf den alten Stand zurück. Hat die neue Version die
+  Datenbank schon migriert, bleibt der Server stattdessen gestoppt, bis das Backup eingespielt ist.
 - **GitHub-Environment `production`** hält die drei Secrets. Ohne sie baut ein Tag nur Images.
 
 ## Alternativen

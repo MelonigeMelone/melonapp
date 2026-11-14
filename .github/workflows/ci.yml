@@ -17,13 +17,14 @@ env:
 
 jobs:
   scripts:
-    name: Server scripts (shellcheck, backup and restore)
+    name: Server scripts (shellcheck, backup, restore and update)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: shellcheck -e SC1091 deploy/bin/* deploy/test/*.sh
       - run: sudo apt-get update -q && sudo apt-get install -yq age
       - run: bash deploy/test/backup-restore.sh
+      - run: bash deploy/test/update.sh
 
   rust:
     name: Format, lint, test

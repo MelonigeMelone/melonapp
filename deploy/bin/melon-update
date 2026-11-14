@@ -10,11 +10,38 @@ fi
 exec 9> .update.lock
 flock -n 9 || { echo "another update is running" >&2; exit 1; }
 
+repo="${MELON_PROVENANCE_REPO:-MelonigeMelone/melonapp}"
+registry="${MELON_REGISTRY:-ghcr.io/melonigemelone}"
+cosign="ghcr.io/sigstore/cosign/cosign:v2.6.1@sha256:68839b7f13dac5a6744a5d8818e984dd39183374e37855c19e14d623d9bc9037"
 source="${MELON_UPDATE_SOURCE:-https://raw.githubusercontent.com/MelonigeMelone/melonapp}/v$version/deploy"
 files=(docker-compose.yml Caddyfile bin/melon-update bin/melon-backup bin/melon-restore bin/melon-deploy-ssh)
 
 for f in "${files[@]}"; do
   curl -fsSL --max-time 30 "$source/$f" -o "$f.new"
+done
+
+digest() {
+  local image="$registry/$1"
+  docker pull -q "$image:$version" > /dev/null
+  docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image:$version" | grep -m1 "^$image@sha256:"
+}
+
+verify() {
+  local identity="^https://github\\.com/${repo//./\\.}/\\.github/workflows/docker\\.yml@refs/tags/v${version//./\\.}\$"
+  docker run --rm "$cosign" verify-attestation --new-bundle-format \
+    --type https://slsa.dev/provenance/v1 \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    --certificate-identity-regexp "$identity" "$1" > /dev/null 2>&1
+}
+
+server_image="$(digest melonapp-server)" || { echo "image melonapp-server:$version not found" >&2; rm -f ./*.new bin/*.new; exit 1; }
+web_image="$(digest melonapp-web)" || { echo "image melonapp-web:$version not found" >&2; rm -f ./*.new bin/*.new; exit 1; }
+for image in "$server_image" "$web_image"; do
+  if ! verify "$image"; then
+    echo "$image was not built by $repo for v$version, nothing changed" >&2
+    rm -f ./*.new bin/*.new
+    exit 1
+  fi
 done
 
 bin/melon-backup --local
@@ -31,12 +58,16 @@ pin() {
     echo "$1=$2" >> .env
   fi
 }
-pin MELON_IMAGE "ghcr.io/melonigemelone/melonapp-server:$version"
-pin MELON_WEB_IMAGE "ghcr.io/melonigemelone/melonapp-web:$version"
+pin MELON_IMAGE "$server_image"
+pin MELON_WEB_IMAGE "$web_image"
 for f in "${files[@]}"; do
   mv "$f.new" "$f"
 done
 chmod +x bin/*
+
+schema() {
+  docker compose exec -T db psql -tAqU melon -d melon -c "select coalesce(max(version), 0) from _sqlx_migrations" 2> /dev/null | tr -d '[:space:]'
+}
 
 healthy() {
   for _ in $(seq 1 30); do
@@ -48,7 +79,8 @@ healthy() {
   return 1
 }
 
-if docker compose pull && docker compose up -d --no-build --remove-orphans && healthy; then
+before="$(schema || true)"
+if docker compose pull -q && docker compose up -d --no-build --remove-orphans && healthy; then
   rm -f ./*.previous bin/*.previous
   echo "running $version"
   if [[ -f backup.env ]] && { ! command -v age > /dev/null || [[ ! -f "$(source ./backup.env; echo "${BACKUP_RECIPIENTS:-backup.recipients}")" ]]; }; then
@@ -57,10 +89,17 @@ if docker compose pull && docker compose up -d --no-build --remove-orphans && he
   exit 0
 fi
 
-echo "update to $version failed, going back" >&2
+after="$(schema || true)"
+echo "update to $version failed" >&2
 for f in "${files[@]}" .env; do
   if [[ -f "$f.previous" ]]; then mv "$f.previous" "$f"; fi
 done
-docker compose up -d --no-build --remove-orphans || true
-echo "if the database was already migrated, restore the backup from before the update with bin/melon-restore" >&2
+if [[ -n "$before" && "$before" == "$after" ]]; then
+  echo "going back to the previous version" >&2
+  docker compose up -d --no-build --remove-orphans || true
+  exit 1
+fi
+docker compose stop server || true
+echo "the database may already be migrated ($before -> $after), so the old version is not started again." >&2
+echo "restore the backup from before the update, which starts the old version again: bin/melon-restore <newest backups/melon-….dump> --yes" >&2
 exit 1

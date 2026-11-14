@@ -52,7 +52,7 @@ docker compose up -d --no-build
 | `MELON_SERVER_SECRET` | `openssl rand -hex 32` |
 | `MELON_ALLOW_REGISTRATION` | zum Anlegen der Konten `true`, danach `false` und `docker compose up -d` |
 | `MELON_CORS_ORIGINS` | nur für die Browser-Erweiterung (M4) nötig. Die Web-App läuft auf derselben Domain. |
-| `MELON_IMAGE` | `ghcr.io/melonigemelone/melonapp-server:latest`, ab dem ersten Update eine feste Version (setzt `bin/melon-update`) |
+| `MELON_IMAGE` | `ghcr.io/melonigemelone/melonapp-server:latest`, ab dem ersten Update ein fester Digest (`…@sha256:…`, setzt `bin/melon-update`) |
 | `MELON_WEB_IMAGE` | `ghcr.io/melonigemelone/melonapp-web:latest` (Caddy + Web-App), ebenso |
 
 Alle Variablen des Servers: [Konfiguration](/melonapp/server/konfiguration/).
@@ -77,12 +77,22 @@ git tag v1.2.0 && git push origin v1.2.0
 
 1. `docker-compose.yml`, `Caddyfile` und `bin/*` **von genau diesem Tag** holen. Schlägt das
    fehl, bleibt alles unverändert.
-2. Backup (`bin/melon-backup`).
-3. Die Images in `.env` auf `:<x.y.z>` festlegen, `docker compose pull` und `up -d`.
-4. Bis zu 60 Sekunden auf `/health` warten.
-5. Klappt etwas nicht: alte Dateien und alte `.env` zurück, alte Version wieder starten, der
-   Workflow wird rot. Hat die neue Version die Datenbank schon migriert, das Backup aus
-   Schritt 2 mit `bin/melon-restore` einspielen.
+2. Die Images `:<x.y.z>` holen und ihren Digest bestimmen. Ein Tag in der Registry lässt sich
+   überschreiben, ein Digest nicht.
+3. Die Herkunft beider Images prüfen: `cosign verify-attestation` (als Container, festgelegt per
+   Digest) verlangt eine Provenance-Attestation, die der Workflow `docker.yml` dieses Repos für
+   genau den Tag `v<x.y.z>` signiert hat. Ein Image, das jemand mit Schreibrechten auf die
+   Registry ausgetauscht hat, besteht das nicht. Dann bricht das Update ab und nichts ändert sich.
+4. Backup (`bin/melon-backup`).
+5. Die Images in `.env` auf die geprüften Digests festlegen (`…@sha256:…`), `docker compose pull`
+   und `up -d`.
+6. Bis zu 60 Sekunden auf `/health` warten.
+7. Klappt etwas nicht, kommen alte Dateien und alte `.env` zurück, und der Workflow wird rot.
+   Danach kommt es auf die Datenbank an:
+   - **Unverändert** (gleiche letzte Migration wie vorher): Die alte Version startet wieder.
+   - **Schon migriert:** Die alte Version startet **nicht**, denn sie liefe gegen ein Schema, das sie
+     nicht kennt. Der Server bleibt gestoppt. `bin/melon-restore <Backup aus Schritt 4> --yes`
+     spielt den alten Stand ein und startet die alte Version.
 
 Ein zweites Update gleichzeitig wird abgelehnt (`flock`). Von Hand geht dasselbe mit
 `bin/melon-update 1.2.0` auf dem Server. Vorabversionen (`v1.2.0-rc1`) bauen nur Images.
@@ -108,13 +118,18 @@ Ein zweites Update gleichzeitig wird abgelehnt (`flock`). Von Hand geht dasselbe
    ```sh
    gh secret set DEPLOY_SSH_KEY --env production < melon-deploy
    gh secret set DEPLOY_HOST --env production --body app.example.com
-   ssh-keyscan app.example.com | gh secret set DEPLOY_KNOWN_HOSTS --env production
+   ssh-keyscan -t ed25519 app.example.com > known_hosts
+   ssh-keygen -lf known_hosts
+   gh secret set DEPLOY_KNOWN_HOSTS --env production < known_hosts
    ```
 
-   `ssh-keyscan` unter Windows (OpenSSH 9.5) bricht bei aktuellen Servern mit `unsupported KEX
-   method` ab und liefert nichts, das Secret ist dann leer und der erste Deploy scheitert mit
-   `Host key verification failed`. Dann den Befehl in Git Bash oder auf dem Server ausführen und
-   den Fingerabdruck mit `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` auf dem Server vergleichen.
+   Erst die Datei schreiben, dann das Secret daraus setzen. Unter PowerShell kam die Pipe
+   `ssh-keyscan … | gh secret set` leer an, und `ssh-keyscan` unter Windows (OpenSSH 9.5) bricht bei
+   aktuellen Servern mit `unsupported KEX method` ab. Ein leeres Secret lässt den ersten Deploy mit
+   `Host key verification failed` scheitern. Deshalb: `ssh-keygen -lf known_hosts` muss eine Zeile
+   mit `ED25519` zeigen, und dieser Fingerabdruck muss mit
+   `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` auf dem Server übereinstimmen. Ist die Datei
+   leer, den Befehl in Git Bash oder auf dem Server ausführen.
 4. Die lokale Datei `melon-deploy` löschen.
 5. Port 22 muss für GitHub erreichbar sein. Steht in der Firewall nur die eigene IP, kommt der
    Workflow nicht durch. Port 22 für alle ist in Ordnung, solange nur SSH-Schlüssel erlaubt sind.
