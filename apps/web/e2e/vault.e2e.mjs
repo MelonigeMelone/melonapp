@@ -517,8 +517,8 @@ await step('devices: see the other device and sign it out', async () => {
 
   await other.evaluate(() => window.dispatchEvent(new Event('focus')));
   await other.getByText('Deine Sitzung ist abgelaufen', { exact: false }).waitFor({ timeout: 15000 });
-  expect401 = false;
   await other.context().close();
+  expect401 = false;
 });
 
 await step('security code and master password change', async () => {
