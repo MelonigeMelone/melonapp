@@ -87,7 +87,7 @@ jobs:
           done
       - name: Report the database image
         run: |
-          image=$(sed -n 's/^ *image: *(postgres:.*)$//p' deploy/docker-compose.yml)
+          image=$(sed -n 's/^ *image: *\(postgres:.*\)$/\1/p' deploy/docker-compose.yml)
           docker run --rm "$TRIVY" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$image"
 
   secrets:
