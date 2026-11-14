@@ -27,6 +27,7 @@ sidebar:
 | Neues Modul | `konzept/module.md`, Eintrag in `modules/registry.ts` |
 | Browser-Erweiterung | `clients/erweiterung.md` |
 | Workflow | `betrieb/pipelines.md` |
+| Neue Version (Tag) | Abschnitt in `betrieb/aenderungen.md`, derselbe Text kommt ins GitHub-Release |
 | Neuer Sicherheitstest | Tabelle in `sicherheit/pruefungen.md` |
 | Bekannte Lücke | `sicherheit/offene-punkte.md`, und ein Issue, wenn sie behoben werden soll |
 
