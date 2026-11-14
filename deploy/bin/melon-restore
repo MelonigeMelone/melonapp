@@ -32,5 +32,6 @@ docker compose exec -T db psql -U melon -d postgres -v ON_ERROR_STOP=1 \
   -c "DROP DATABASE IF EXISTS melon WITH (FORCE)" \
   -c "CREATE DATABASE melon OWNER melon"
 docker compose exec -T db pg_restore -U melon -d melon --no-owner --exit-on-error < "$dump"
+docker compose up --no-deps --exit-code-from db-setup db-setup > /dev/null
 docker compose start server
 echo "restored ${1}"
