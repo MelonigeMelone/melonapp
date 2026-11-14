@@ -82,13 +82,13 @@ jobs:
       - name: Fail on fixable high or critical vulnerabilities
         run: |
           for image in melonapp-server:scan melonapp-web:scan; do
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" "$TRIVY" image \
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" "$TRIVY" image --scanners vuln \
               --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile /repo/.trivyignore.yaml "$image"
           done
       - name: Report the database image
         run: |
-          image=$(grep -oE 'postgres:[^ ]+' deploy/docker-compose.yml)
-          docker run --rm "$TRIVY" image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$image"
+          image=$(sed -n 's/^ *image: *(postgres:.*)$//p' deploy/docker-compose.yml)
+          docker run --rm "$TRIVY" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$image"
 
   secrets:
     name: Leaked secrets (gitleaks)
