@@ -9,7 +9,7 @@ sidebar:
 
 | Variable | Pflicht | Standard | Bedeutung |
 |---|---|---|---|
-| `MELON_DATABASE_URL` | ✓ | – | PostgreSQL-URL |
+| `MELON_DATABASE_URL` | ✓ | – | PostgreSQL-URL. Im Compose-Setup mit der Rolle `melon_app` ohne Superuser-Rechte ([Selbst hosten](/melonapp/betrieb/selbst-hosten/#aufbau)). Der Server braucht nur Rechte auf die eigene Datenbank, auch für Migrationen. |
 | `MELON_SERVER_SECRET` | ✓ | – | mind. 32 Zeichen, erzeugt die Fake-Salts. Erzeugen mit `openssl rand -base64 48`. Ändert es sich, ändern sich die Fake-Salts. Wer vorher und nachher `prelogin` abfragt, erkennt dann echte Konten. Deshalb nur wechseln, wenn es bekannt geworden ist. |
 | `MELON_BIND` | | `0.0.0.0:8080` | Adresse und Port |
 | `MELON_ALLOW_REGISTRATION` | | `false` | `true`/`1`/`yes` öffnet die Registrierung. Danach wieder ausschalten. |

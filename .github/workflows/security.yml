@@ -87,8 +87,9 @@ jobs:
           done
       - name: Report the database image
         run: |
-          image=$(sed -n 's/^ *image: *\(postgres:.*\)$/\1/p' deploy/docker-compose.yml)
-          docker run --rm "$TRIVY" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$image"
+          for image in $(sed -n 's/^ *image: *\(postgres:.*\)$/\1/p' deploy/docker-compose.yml | sort -u); do
+            docker run --rm "$TRIVY" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$image"
+          done
 
   secrets:
     name: Leaked secrets (gitleaks)

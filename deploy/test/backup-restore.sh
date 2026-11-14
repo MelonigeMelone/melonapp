@@ -84,6 +84,8 @@ if bin/melon-restore "$work/tampered.age" --yes --identity "$work/key.txt" > /de
 bin/melon-restore "$sealed" --yes --identity "$work/key.txt" > /dev/null 2>&1
 [[ "$(sql 'select v from canary')" == original ]] || fail "encrypted restore did not bring the data back"
 [[ -z "$(find backups -name 'restore-*')" ]] || fail "decrypted temp file left behind"
+[[ "$(sql "select count(*) from pg_tables where schemaname = 'public' and tableowner <> 'melon_app'")" == 0 ]] || fail "restored tables do not belong to melon_app"
+[[ "$(sql "select rolsuper from pg_roles where rolname = 'melon_app'")" == f ]] || fail "melon_app is a superuser"
 
 before="$(pings | wc -l)"
 bin/melon-backup --local > /dev/null

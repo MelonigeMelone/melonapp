@@ -13,7 +13,7 @@ Docker Compose. Warum nicht Kubernetes, steht in [ADR 0004](/melonapp/entscheidu
 ```text
 Internet ─► Caddy :443 (TLS, HSTS)  ─┬─ /api/*, /health ─► melon-server :8080 ─► PostgreSQL
             Image melonapp-web       └─ alles andere ───► Web-App (statisch, /srv)
-            Netz "web"                   Netz "web" + "internal"   nur Netz "internal"
+            Netz "web" + "internal"      nur Netz "internal"       nur Netz "internal"
 ```
 
 Die Web-App und die API laufen unter derselben Domain. CORS ist dafür nicht nötig.
@@ -22,9 +22,24 @@ Dafür erzeugt Caddy je Aufruf einen Nonce (`templates` für `index.html`). Wer 
 Reverse Proxy vor die Web-App setzt, muss `index.html` ungecacht durchreichen und den
 CSP-Header von Caddy übernehmen ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)).
 
-- Die Datenbank hängt nur im internen Netz und ist von außen nicht erreichbar.
+- Datenbank und Server hängen nur im internen Netz (`internal: true`). Von außen sind sie nicht
+  erreichbar, und sie selbst erreichen das Internet nicht. Eingeschleuster Code im Server könnte
+  also nichts nach draußen schicken. Nur Caddy hängt zusätzlich im Netz `web`.
+- Der Server verbindet sich als eigene Rolle `melon_app` ohne Superuser-Rechte. Sie besitzt nur
+  die Datenbank `melon` und ihre Tabellen, darf also migrieren, aber keine Rollen anlegen, keine
+  anderen Datenbanken sehen und keine Superuser-Funktionen wie `COPY … PROGRAM` nutzen. Der
+  Einmal-Dienst `db-setup` legt sie bei jedem Start an (Passwort wie `POSTGRES_PASSWORD`) und
+  überträgt ihr die Tabellen, auch bei bestehenden Installationen. `melon` bleibt der
+  Superuser für Backups und Restore. `bin/melon-restore` lässt `db-setup` nach dem Einspielen
+  erneut laufen.
 - Der Server-Container läuft schreibgeschützt (`read_only`), ohne Linux-Capabilities und mit
   `no-new-privileges`. Das Image ist distroless (Debian 13): kein Shell, kein Paketmanager, Nutzer `nonroot`.
+- Caddy läuft als Nutzer 1000 statt root, schreibgeschützt, ohne Capabilities und mit
+  `no-new-privileges`. Die Ports 80 und 443 darf er trotzdem öffnen
+  (`net.ipv4.ip_unprivileged_port_start=0` gilt nur in seinem Container). Der Einmal-Dienst
+  `caddy-volumes` gibt die Volumes für Zertifikate und Einstellungen vorher Nutzer 1000.
+- PostgreSQL läuft schreibgeschützt bis auf sein Datenverzeichnis, mit `no-new-privileges` und nur
+  den Capabilities, die der Start braucht, um auf den Nutzer `postgres` zu wechseln.
 - Alle Basis-Images (Rust, Node, distroless, Caddy, PostgreSQL) sind per Digest festgelegt. Ein
   geänderter Tag bei Docker Hub ändert also nichts am Build. Dependabot hebt Tag und Digest
   wöchentlich gemeinsam an.
