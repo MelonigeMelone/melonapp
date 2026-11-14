@@ -54,10 +54,11 @@ pinned="$(setting MELON_IMAGE)"
 
 source_with
 python3 - "$work/src/v$version/deploy/docker-compose.yml" <<'PY'
-import sys
+import re, sys
 path = sys.argv[1]
 text = open(path).read()
-text = text.replace("MELON_DATABASE_URL: postgres://melon:${POSTGRES_PASSWORD}@db:5432/melon", "MELON_DATABASE_URL: postgres://melon:wrong@db:5432/melon")
+text, count = re.subn(r"(MELON_DATABASE_URL: postgres://[a-z_]+):\$\{POSTGRES_PASSWORD\}@", r"\1:wrong@", text)
+assert count == 1, "database URL not found"
 open(path, "w").write(text)
 PY
 if bin/melon-update "$version" > "$work/out" 2>&1; then
@@ -65,16 +66,17 @@ if bin/melon-update "$version" > "$work/out" 2>&1; then
 fi
 grep -q "going back to the previous version" "$work/out" || fail "no rollback without a migration: $(cat "$work/out")"
 [[ "$(setting MELON_IMAGE)" == "$pinned" ]] || fail ".env not restored"
-grep -qF "postgres://melon:\${POSTGRES_PASSWORD}@db" docker-compose.yml || fail "compose file not restored"
+grep -qF ":\${POSTGRES_PASSWORD}@db:5432/melon" docker-compose.yml || fail "compose file not restored"
 for _ in $(seq 1 30); do healthy && break; sleep 2; done
 healthy || fail "previous version not running after rollback"
 
 source_with
 python3 - "$work/src/v$version/deploy/docker-compose.yml" <<'PY'
-import sys
+import re, sys
 path = sys.argv[1]
 text = open(path).read()
-text = text.replace("MELON_DATABASE_URL: postgres://melon:${POSTGRES_PASSWORD}@db:5432/melon", "MELON_DATABASE_URL: postgres://melon:wrong@db:5432/melon")
+text, count = re.subn(r"(MELON_DATABASE_URL: postgres://[a-z_]+):\$\{POSTGRES_PASSWORD\}@", r"\1:wrong@", text)
+assert count == 1, "database URL not found"
 text = text.replace("\nvolumes:\n", """
   migrated:
     image: postgres:17-alpine
