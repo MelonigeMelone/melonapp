@@ -68,6 +68,28 @@ jobs:
           name: fuzz-${{ matrix.target }}
           path: fuzz/artifacts
 
+  images:
+    name: Container images (trivy)
+    runs-on: ubuntu-latest
+    env:
+      TRIVY: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build server and web images
+        run: |
+          docker build -t melonapp-server:scan -f Dockerfile .
+          docker build -t melonapp-web:scan -f apps/web/Dockerfile .
+      - name: Fail on fixable high or critical vulnerabilities
+        run: |
+          for image in melonapp-server:scan melonapp-web:scan; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" "$TRIVY" image --scanners vuln \
+              --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --ignorefile /repo/.trivyignore.yaml "$image"
+          done
+      - name: Report the database image
+        run: |
+          image=$(sed -n 's/^ *image: *\(postgres:.*\)$/\1/p' deploy/docker-compose.yml)
+          docker run --rm "$TRIVY" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$image"
+
   secrets:
     name: Leaked secrets (gitleaks)
     runs-on: ubuntu-latest

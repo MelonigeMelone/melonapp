@@ -24,7 +24,10 @@ CSP-Header von Caddy übernehmen ([ADR 0019](/melonapp/entscheidungen/0019-csp-n
 
 - Die Datenbank hängt nur im internen Netz und ist von außen nicht erreichbar.
 - Der Server-Container läuft schreibgeschützt (`read_only`), ohne Linux-Capabilities und mit
-  `no-new-privileges`. Das Image ist distroless: kein Shell, kein Paketmanager, Nutzer `nonroot`.
+  `no-new-privileges`. Das Image ist distroless (Debian 13): kein Shell, kein Paketmanager, Nutzer `nonroot`.
+- Alle Basis-Images (Rust, Node, distroless, Caddy, PostgreSQL) sind per Digest festgelegt. Ein
+  geänderter Tag bei Docker Hub ändert also nichts am Build. Dependabot hebt Tag und Digest
+  wöchentlich gemeinsam an.
 - Caddy holt und erneuert das TLS-Zertifikat automatisch.
 
 ## Einrichten
