@@ -2239,7 +2239,7 @@ dependencies = [
 
 [[package]]
 name = "melon-crypto"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "argon2",
  "base64 0.23.1",
@@ -2261,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "melon-desktop"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.22.1",
  "melon-crypto",
@@ -2281,7 +2281,7 @@ dependencies = [
 
 [[package]]
 name = "melon-native"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "melon-crypto",
