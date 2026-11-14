@@ -74,6 +74,14 @@ await step('open app', async () => {
   await shot(a, '1-auth');
 });
 
+await step('the crypto worker runs under a CSP and nothing is spell-checked', async () => {
+  const scripts = await a.evaluate(() => [...document.querySelectorAll('script[src]')].map((e) => e.src));
+  if (!scripts.length) throw new Error('no script assets found');
+  const csp = await a.evaluate(async (src) => (await fetch(src)).headers.get('content-security-policy'), scripts[0]);
+  if (!csp || !csp.includes("connect-src 'self'") || !csp.includes("default-src 'none'")) throw new Error(`assets lack a CSP: ${csp}`);
+  if (await a.evaluate(() => document.documentElement.spellcheck)) throw new Error('spell check is on');
+});
+
 await step('alice registers', async () => {
   await a.getByRole('tab', { name: 'Konto erstellen' }).click();
   await a.getByLabel('E-Mail').fill(alice.email);

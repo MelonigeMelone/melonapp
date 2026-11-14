@@ -88,7 +88,10 @@ describe('item model', () => {
     expect(safeHref(f('url', 'javascript:alert(1)'))).toBeNull();
     expect(safeHref(f('url', 'data:text/html,x'))).toBeNull();
     expect(safeHref(f('email', 'a@b.de'))).toBe('mailto:a@b.de');
-    expect(safeHref(f('email', 'a@b.de?x=javascript:'))).toBe('mailto:a@b.de?x=javascript:');
+    expect(safeHref(f('email', 'a@b.de?x=javascript:'))).toBeNull();
+    expect(safeHref(f('email', 'support@bank.de?cc=security&subject=Konto&body=bitte%20einloggen'))).toBeNull();
+    expect(safeHref(f('email', 'support%40bank.de@evil.example'))).toBeNull();
+    expect(safeHref(f('email', 'a.b+tag@sub.example.de'))).toBe('mailto:a.b+tag@sub.example.de');
     expect(safeHref(f('phone', '+49 (30) 123-45'))).toBe('tel:+493012345');
     expect(safeHref(f('phone', 'javascript:1'))).toBeNull();
     expect(safeHref(f('text', 'https://x.de'))).toBeNull();

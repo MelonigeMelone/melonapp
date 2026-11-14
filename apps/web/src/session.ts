@@ -1,4 +1,5 @@
 import { nativePlatform } from './platform';
+import { clearClipboardNow } from './clipboard';
 import { api, ApiError, authed, DEFAULT_KDF, NetworkError, type Kdf } from './api';
 import { cryptoCall } from './crypto/client';
 import { deviceName } from './device';
@@ -167,6 +168,7 @@ export async function recoverAccount(email: string, recoveryKey: string, newPass
 }
 
 export async function lock(session: Session | null) {
+  void clearClipboardNow();
   await cryptoCall('lock');
   if (!session) return;
   const platform = nativePlatform();

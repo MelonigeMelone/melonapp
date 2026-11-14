@@ -35,6 +35,7 @@ Bis die Krypto extern geprüft ist, ist MelonApp ein Hobby-Projekt und kein gepr
 | Erweiterung hält Logins und Bereichs-Schlüssel in `storage.session` | bewusst, siehe [ADR 0013](/melonapp/entscheidungen/0013-browser-erweiterung/). Später für Chromium: Offscreen-Dokument. |
 | Erweiterung: Eine Seite mit eingeschleustem Skript kann getippte Zeichen im Passwortfeld umordnen oder löschen, bevor die Speicher-Karte kommt | Nur aus Zeichen, die man selbst getippt hat, nur für Logins dieser Seite, ein Versuch pro Absenden. Beim Aktualisieren bleibt das alte Passwort im Verlauf. |
 | Erweiterung leert die Zwischenablage nicht automatisch | Ausfüllen statt Kopieren nutzen |
+| Safari und die Mac-App leeren die Zwischenablage nicht automatisch | WebKit erlaubt Schreiben in die Zwischenablage nur direkt nach einem Klick oder Tastendruck. Leeren beim nächsten Klick würde Kopiertes aus anderen Apps löschen, bevor man es einfügen kann. Später: native Zwischenablage in der Mac-App. Bis dahin Ausfüllen nutzen. |
 | Erweiterung nicht in Chrome Web Store / Mozilla Add-ons | Veröffentlichen mit Signatur, später → [#45](https://github.com/MelonigeMelone/melonapp/issues/45) |
 | 2FA-Schlüssel liegen im selben Tresor wie die Passwörter | bewusst, siehe [ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/). Wichtige Konten bei Bedarf mit separater Authenticator-App. |
 | Datenleck-Abgleich nutzt einen fremden Dienst (Have I Been Pwned) | nur auf Knopfdruck, k-Anonymität. Später optional: eigene Kopie der Hash-Liste auf dem Server. |

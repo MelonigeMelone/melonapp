@@ -95,7 +95,7 @@ den Konto-Schlüssel nur kurz und gibt ihn sofort wieder frei.
   aus dem Briefkasten). Ihr Schlüsselfeld `privateKey` blendet die Detailansicht aus
   (`visibleFields`), der Editor zeigt die Passkey-Felder nicht, und „Neu“ bietet den Typ nicht an
   (`CREATABLE_TYPES`). Siehe [ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/).
-- Links entstehen nur für `http(s):`, `mailto:` und `tel:` (`safeHref`).
+- Links entstehen nur für `http(s):`, `mailto:` mit einfacher Adresse und `tel:` (`safeHref`).
 
 ## Sync
 
@@ -338,10 +338,12 @@ einzeln oder zusammen abmelden ([Authentifizierung](/melonapp/server/authentifiz
 | Maßnahme | Warum |
 |---|---|
 | Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' https://api.pwnedpasswords.com`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. Die einzige fremde Adresse ist der Datenleck-Abgleich ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)). `style-src 'self' 'nonce-…'`: Caddy erzeugt je Aufruf einen Nonce, nur Emotions Style-Elemente tragen ihn. Eingeschleustes CSS wird blockiert ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)). |
-| Links in Einträgen nur mit `http(s):`, `mailto:`, `tel:` | verhindert `javascript:`-Links in gespeicherten Feldern |
+| Eigene CSP für alles unter `/assets/` (`default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'`) | Der Krypto-Worker bekommt seine CSP aus den Headern seiner eigenen Datei, nicht von der Seite. Ohne diesen Header könnte Code im Worker, wo die Schlüssel liegen, beliebige Server erreichen. |
+| Links in Einträgen nur mit `http(s):`, `mailto:`, `tel:`. `mailto:` nur für eine einfache Adresse ohne `?`, `&`, `#`, `%`, `/` oder `:` | verhindert `javascript:`-Links in gespeicherten Feldern und `mailto:`-Links, die heimlich weitere Empfänger, Betreff oder Text mitbringen |
 | Einladungs-Token im URL-Fragment (`/#/invite/…`) | landet nie in Server- oder Proxy-Logs |
 | Auto-Lock nach 5 Minuten ohne Eingabe (einstellbar 1 bis 30 Minuten, nicht abschaltbar) | Schlüssel liegen nicht unbegrenzt im Speicher |
-| Zwischenablage wird 30 s nach dem Kopieren geleert, wenn sie noch das Passwort enthält | Passwörter bleiben nicht im Clipboard-Verlauf |
+| Zwischenablage wird 30 s nach dem Kopieren geleert, wenn sie noch das Passwort enthält. Hat die App dann keinen Fokus (man hat zum Einfügen gewechselt), holt sie das nach, sobald man zurückkommt. Sperren leert sofort. Das gilt für Passwörter, Feldwerte und den Recovery-Key. In Safari und der Mac-App klappt das Leeren nicht ([offene Punkte](/melonapp/sicherheit/offene-punkte/)). | Passwörter bleiben nicht dauerhaft in der Zwischenablage. Den Verlauf des Betriebssystems (Windows: Win+V, Cloud-Zwischenablage) kann eine Web-App nicht steuern: Was kopiert wird, kann dort landen. Ausfüllen per Erweiterung umgeht das. |
+| Rechtschreibprüfung überall aus (`spellcheck="false"` am `<html>`) | Erweiterte Rechtschreibprüfung von Chrome und Edge schickt Text an Google oder Microsoft. Sonst könnten Notizen, sichtbar gemachte Passwörter oder Namen dorthin gehen. Gilt auch für Desktop-App und Erweiterung. |
 | Kein Token, kein Schlüssel im `localStorage` | nach Neuladen ist der Tresor gesperrt. Gemerkt wird nur die E-Mail. |
 | Schriften lokal gebündelt | keine Anfragen an Google Fonts oder andere Dritte |
 | Passwortfelder mit `autocomplete="new-password"` | der Browser-Passwortmanager soll Tresor-Inhalte nicht übernehmen |

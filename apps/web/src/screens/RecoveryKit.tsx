@@ -1,4 +1,5 @@
 import Alert from '@mui/material/Alert';
+import { copySecret } from '../clipboard';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Dialog from '@mui/material/Dialog';
@@ -128,7 +129,7 @@ export function RecoveryKitDialog({
                 <Button variant="outlined" startIcon={<DownloadIcon />} onClick={download}>
                   Als Datei speichern
                 </Button>
-                <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={() => void navigator.clipboard.writeText(recoveryKey)}>
+                <Button variant="outlined" startIcon={<ContentCopyIcon />} onClick={() => void copySecret(recoveryKey)}>
                   Kopieren
                 </Button>
               </Stack>

@@ -264,7 +264,7 @@ export function normalizeUrl(input: string): string {
 export function safeHref(field: Field): string | null {
   const v = field.value.trim();
   if (!v) return null;
-  if (field.kind === 'email') return /^[^\s@]+@[^\s@]+$/.test(v) ? `mailto:${v}` : null;
+  if (field.kind === 'email') return /^[^\s@?&#%/\\:]+@[^\s@?&#%/\\:]+$/.test(v) ? `mailto:${v}` : null;
   if (field.kind === 'phone') return /^[+0-9 ()/-]{3,}$/.test(v) ? `tel:${v.replace(/[^+0-9]/g, '')}` : null;
   if (field.kind !== 'url') return null;
   try {
