@@ -63,6 +63,7 @@ export class VaultsManager {
   private snapshot: Snapshot = { vaults: [], offers: [], items: [], trash: [], verified: {}, verifiedReady: false };
   private offers: Offer[] = [];
   private running: Promise<void> | null = null;
+  private queue: Promise<unknown> = Promise.resolve();
   private marks: Marks | null = null;
   private marksLoads = 0;
   private keyring: Keyring | null = null;
@@ -122,10 +123,19 @@ export class VaultsManager {
   }
 
   sync(): Promise<void> {
-    this.running ??= this.pull().finally(() => {
+    this.running ??= this.exclusive(() => this.pull()).finally(() => {
       this.running = null;
     });
     return this.running;
+  }
+
+  private exclusive<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(work, work);
+    this.queue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   private async pull() {
@@ -413,7 +423,7 @@ export class VaultsManager {
   }
 
   private async updateTrust(vaultId: string, change: (trust: Trust) => TrustList) {
-    await this.sync().catch(() => undefined);
+    await this.pull().catch(() => undefined);
     const entry = this.requireEntry(vaultId);
     const trust = this.currentTrust(entry);
     await this.putTrust(entry, trust, change(trust));
@@ -541,34 +551,38 @@ export class VaultsManager {
     this.emit();
   }
 
-  async createVault(name: string): Promise<string> {
-    const vaultId = newId();
-    const created = await this.crypto('newVault', {
-      vaultId,
-      userId: this.userId,
-      meta: JSON.stringify({ name, trust: initialTrust(this.userId) }),
+  createVault(name: string): Promise<string> {
+    return this.exclusive(async () => {
+      const vaultId = newId();
+      const created = await this.crypto('newVault', {
+        vaultId,
+        userId: this.userId,
+        meta: JSON.stringify({ name, trust: initialTrust(this.userId) }),
+      });
+      await this.api.createVault({
+        id: vaultId,
+        encrypted_meta: created.encryptedMeta,
+        encrypted_vault_key: created.encryptedVaultKey,
+      });
+      await this.pull();
+      return vaultId;
     });
-    await this.api.createVault({
-      id: vaultId,
-      encrypted_meta: created.encryptedMeta,
-      encrypted_vault_key: created.encryptedVaultKey,
-    });
-    await this.sync();
-    return vaultId;
   }
 
-  async renameVault(vaultId: string, name: string) {
-    await this.writeMeta(vaultId, (meta) => ({ ...meta, name }));
+  renameVault(vaultId: string, name: string) {
+    return this.exclusive(async () => {
+      await this.writeMeta(vaultId, (meta) => ({ ...meta, name }));
+    });
   }
 
   private async writeMeta(vaultId: string, change: (meta: Meta) => Meta) {
-    await this.sync().catch(() => undefined);
+    await this.pull().catch(() => undefined);
     const entry = this.requireEntry(vaultId);
     if (entry.oldPersonalKey) throw new ApiError(403, 'vault_key_pending');
     const meta = change(entry.meta);
     const encrypted = await this.crypto('encryptMeta', { vaultId, plaintext: JSON.stringify(meta) });
     await this.api.updateVault(vaultId, { encrypted_meta: encrypted, key_version: entry.remote.key_version });
-    await this.sync();
+    await this.pull();
   }
 
   private requireTrusted(userId: string, publicKey: string) {
@@ -609,7 +623,7 @@ export class VaultsManager {
 
   private async freshPersonal(): Promise<Entry> {
     const before = this.marksLoads;
-    await this.sync().catch(() => undefined);
+    await this.pull().catch(() => undefined);
     const personal = this.personalEntry();
     if (!personal || this.marksLoads === before) throw new ApiError(409, 'verifications_unavailable');
     return personal;
@@ -620,46 +634,58 @@ export class VaultsManager {
     await this.writeMeta(personal.remote.id, (meta) => ({ ...meta, verified: sealed }));
   }
 
-  async setVerified(userId: string, publicKey: string | null) {
-    const personal = await this.freshPersonal();
-    if (!this.marks) throw new ApiError(409, 'verifications_unavailable');
-    const base = { ...this.marks, counter: Math.max(this.marks.counter, this.seen.get(MARKS_SEEN)) };
-    await this.writeMarks(personal, changeMarks(base, userId, publicKey ? { publicKey, at: this.now().toISOString() } : null));
+  setVerified(userId: string, publicKey: string | null) {
+    return this.exclusive(async () => {
+      const personal = await this.freshPersonal();
+      if (!this.marks) throw new ApiError(409, 'verifications_unavailable');
+      const base = { ...this.marks, counter: Math.max(this.marks.counter, this.seen.get(MARKS_SEEN)) };
+      await this.writeMarks(personal, changeMarks(base, userId, publicKey ? { publicKey, at: this.now().toISOString() } : null));
+    });
   }
 
-  async adoptStoredMarks() {
-    const personal = await this.freshPersonal();
-    const sealed = personal.meta.verified;
-    let stored: Marks | null = null;
-    if (typeof sealed === 'string') {
-      try {
-        stored = parseMarks(await this.crypto('openPrivate', { userId: this.userId, purpose: MARKS_PURPOSE, data: sealed }));
-      } catch {
-        stored = null;
+  adoptStoredMarks() {
+    return this.exclusive(async () => {
+      const personal = await this.freshPersonal();
+      const sealed = personal.meta.verified;
+      let stored: Marks | null = null;
+      if (typeof sealed === 'string') {
+        try {
+          stored = parseMarks(await this.crypto('openPrivate', { userId: this.userId, purpose: MARKS_PURPOSE, data: sealed }));
+        } catch {
+          stored = null;
+        }
       }
-    }
-    const marks = stored ?? emptyMarks();
-    await this.writeMarks(personal, { counter: Math.max(marks.counter, this.seen.get(MARKS_SEEN)) + 1, marks: marks.marks });
+      const marks = stored ?? emptyMarks();
+      await this.writeMarks(personal, { counter: Math.max(marks.counter, this.seen.get(MARKS_SEEN)) + 1, marks: marks.marks });
+    });
   }
 
-  async deleteVault(vaultId: string) {
-    await this.api.deleteVault(vaultId);
-    await this.sync();
+  deleteVault(vaultId: string) {
+    return this.exclusive(async () => {
+      await this.api.deleteVault(vaultId);
+      await this.pull();
+    });
   }
 
-  async acceptOffer(vaultId: string) {
-    await this.api.acceptOffer(vaultId);
-    await this.sync();
+  acceptOffer(vaultId: string) {
+    return this.exclusive(async () => {
+      await this.api.acceptOffer(vaultId);
+      await this.pull();
+    });
   }
 
-  async declineOffer(vaultId: string) {
-    await this.api.declineOffer(vaultId);
-    await this.sync();
+  declineOffer(vaultId: string) {
+    return this.exclusive(async () => {
+      await this.api.declineOffer(vaultId);
+      await this.pull();
+    });
   }
 
-  async leaveVault(vaultId: string) {
-    await this.api.removeMember(vaultId, this.userId);
-    await this.sync();
+  leaveVault(vaultId: string) {
+    return this.exclusive(async () => {
+      await this.api.removeMember(vaultId, this.userId);
+      await this.pull();
+    });
   }
 
   fingerprint(publicKey: string): Promise<string> {
@@ -676,69 +702,79 @@ export class VaultsManager {
     }
   }
 
-  async addKnownMember(vaultId: string, user: FoundUser, role: Role) {
-    const entry = this.requireEntry(vaultId);
-    this.requireTrusted(user.user_id, user.public_key);
-    await this.updateTrust(vaultId, (t) => ({ members: [...t.members, user.user_id], invited: t.invited }));
-    const sealed = await this.crypto('sealFor', { vaultId, publicKey: user.public_key, userId: user.user_id });
-    await this.api.addMember(vaultId, {
-      user_id: user.user_id,
-      role,
-      encrypted_vault_key: sealed,
-      key_version: entry.remote.key_version,
+  addKnownMember(vaultId: string, user: FoundUser, role: Role) {
+    return this.exclusive(async () => {
+      const entry = this.requireEntry(vaultId);
+      this.requireTrusted(user.user_id, user.public_key);
+      await this.updateTrust(vaultId, (t) => ({ members: [...t.members, user.user_id], invited: t.invited }));
+      const sealed = await this.crypto('sealFor', { vaultId, publicKey: user.public_key, userId: user.user_id });
+      await this.api.addMember(vaultId, {
+        user_id: user.user_id,
+        role,
+        encrypted_vault_key: sealed,
+        key_version: entry.remote.key_version,
+      });
+      await this.pull();
     });
-    await this.sync();
   }
 
-  async invite(vaultId: string, email: string, role: Role): Promise<{ token: string; expiresInDays: number }> {
-    const invite = await this.api.createInvite(vaultId, email, role);
-    const wanted = normalizeEmail(email);
-    const until = new Date(this.now().getTime() + invite.expires_in_days * 86_400_000).toISOString();
-    await this.updateTrust(vaultId, (t) => ({
-      members: t.members,
-      invited: [...t.invited.filter((i) => i.email !== wanted), { email: wanted, until, by: this.userId }],
-    }));
-    return { token: invite.token, expiresInDays: invite.expires_in_days };
+  invite(vaultId: string, email: string, role: Role): Promise<{ token: string; expiresInDays: number }> {
+    return this.exclusive(async () => {
+      const invite = await this.api.createInvite(vaultId, email, role);
+      const wanted = normalizeEmail(email);
+      const until = new Date(this.now().getTime() + invite.expires_in_days * 86_400_000).toISOString();
+      await this.updateTrust(vaultId, (t) => ({
+        members: t.members,
+        invited: [...t.invited.filter((i) => i.email !== wanted), { email: wanted, until, by: this.userId }],
+      }));
+      return { token: invite.token, expiresInDays: invite.expires_in_days };
+    });
   }
 
-  async changeRole(vaultId: string, userId: string, role: Role) {
-    await this.api.changeRole(vaultId, userId, role);
-    await this.sync();
+  changeRole(vaultId: string, userId: string, role: Role) {
+    return this.exclusive(async () => {
+      await this.api.changeRole(vaultId, userId, role);
+      await this.pull();
+    });
   }
 
-  async removeMember(vaultId: string, userId: string) {
-    await this.sync();
-    const entry = this.requireEntry(vaultId);
-    const member = entry.remote.members.find((m) => m.user_id === userId);
-    const trust = this.loadTrust(entry);
-    const hadKey = !!member?.has_key || (trust !== null && trust !== 'legacy' && trust.members.includes(userId));
-    if (hadKey) {
-      await this.rotate(vaultId, [userId]);
-    } else {
-      try {
-        await this.api.removeMember(vaultId, userId);
-        await this.updateTrust(vaultId, (t) => ({
-          members: t.members.filter((id) => id !== userId),
-          invited: t.invited.filter((i) => i.by !== userId && (!member || i.email !== normalizeEmail(member.email))),
-        }));
-      } catch (e) {
-        if (!(e instanceof ApiError && e.code === 'rotation_required')) throw e;
+  removeMember(vaultId: string, userId: string) {
+    return this.exclusive(async () => {
+      await this.pull();
+      const entry = this.requireEntry(vaultId);
+      const member = entry.remote.members.find((m) => m.user_id === userId);
+      const trust = this.loadTrust(entry);
+      const hadKey = !!member?.has_key || (trust !== null && trust !== 'legacy' && trust.members.includes(userId));
+      if (hadKey) {
         await this.rotate(vaultId, [userId]);
+      } else {
+        try {
+          await this.api.removeMember(vaultId, userId);
+          await this.updateTrust(vaultId, (t) => ({
+            members: t.members.filter((id) => id !== userId),
+            invited: t.invited.filter((i) => i.by !== userId && (!member || i.email !== normalizeEmail(member.email))),
+          }));
+        } catch (e) {
+          if (!(e instanceof ApiError && e.code === 'rotation_required')) throw e;
+          await this.rotate(vaultId, [userId]);
+        }
       }
-    }
-    await this.sync();
+      await this.pull();
+    });
   }
 
   invites(vaultId: string): Promise<{ invites: InviteInfo[] }> {
     return this.api.listInvites(vaultId);
   }
 
-  async revokeInvite(vaultId: string, inviteId: string) {
-    const { invites } = await this.api.listInvites(vaultId);
-    await this.api.deleteInvite(vaultId, inviteId);
-    const revoked = invites.find((i) => i.id === inviteId);
-    if (!revoked) return;
-    const email = normalizeEmail(revoked.email);
-    await this.updateTrust(vaultId, (t) => ({ members: t.members, invited: t.invited.filter((i) => i.email !== email) }));
+  revokeInvite(vaultId: string, inviteId: string) {
+    return this.exclusive(async () => {
+      const { invites } = await this.api.listInvites(vaultId);
+      await this.api.deleteInvite(vaultId, inviteId);
+      const revoked = invites.find((i) => i.id === inviteId);
+      if (!revoked) return;
+      const email = normalizeEmail(revoked.email);
+      await this.updateTrust(vaultId, (t) => ({ members: t.members, invited: t.invited.filter((i) => i.email !== email) }));
+    });
   }
 }

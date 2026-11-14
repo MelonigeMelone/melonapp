@@ -117,6 +117,12 @@ Revision ausliefern. Deshalb steckt im verschlüsselten Eintrag ein eigener Zäh
   überschreibt ihn also mit dem neueren Stand, und ein Schlüsselwechsel schickt die vollständige,
   vom Server verlangte Liste aller Einträge. Mehrere Tabs mischen ihre Merkwerte (immer der
   höhere gewinnt).
+- Eigene Änderungen an Bereichen (Schlüsselwechsel, Mitgliederliste, Name, Mitglieder,
+  Einladungen, Sicherheitscodes) und der Sync laufen im `VaultsManager` nacheinander
+  (`exclusive`). Ein Sync, der während einer solchen Änderung angestoßen wird, wartet und holt
+  danach frische Daten. Sonst könnte eine Antwort, die der Server noch vor der eigenen Änderung
+  geschickt hat, danach eintreffen und wie ein Rückschritt aussehen (`vault_key_rolled_back`,
+  `members_unavailable`), obwohl der Server nichts falsch gemacht hat.
 - **Alle Apps aktuell halten:** Ältere Versionen von Erweiterung oder Desktop-App kennen `seq`
   nicht und speichern ohne Zähler. Neuere Geräte melden solche Änderungen dann als Rückschritt.
 - Wird ein Server-Backup bewusst zurückgespielt, melden bestehende Geräte alle seitdem
