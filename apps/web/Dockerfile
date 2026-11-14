@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/tools \
     rustup target add wasm32-unknown-unknown && bash scripts/build-wasm.sh
 
-FROM node:22-bookworm@sha256:e13726ca604184d7a91fcacab1fc09eefd642dc28e79ac34e85540dd93b78cfb AS web
+FROM node:25-bookworm@sha256:78839ac448c23517f8eab2e8f7943d9b4f73979eb7f8bed2c73dbf72ff869e7b AS web
 WORKDIR /src
 COPY package.json package-lock.json ./
 COPY docs/package.json docs/
