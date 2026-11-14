@@ -24,4 +24,4 @@ pub use passkey::{
     PasskeyAssertion, PasskeyRegistration, assert_passkey, create_passkey, open_passkey_key,
     seal_passkey_key,
 };
-pub use private::PrivateDataKey;
+pub use private::{PrivateDataKey, derive_device_key};

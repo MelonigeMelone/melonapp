@@ -6,6 +6,7 @@ use crate::{CryptoError, EncString, SymmetricKey};
 
 const SALT: &[u8] = b"melon/v2/private-data";
 const AAD_PREFIX: &[u8] = b"melon/v2/private\0";
+const DEVICE_SALT: &[u8] = b"melon/v2/device-key";
 
 pub struct PrivateDataKey(SymmetricKey);
 
@@ -40,6 +41,17 @@ impl PrivateDataKey {
     }
 }
 
+pub fn derive_device_key(account_key: &SymmetricKey, purpose: &str, scope: &str) -> SymmetricKey {
+    let hk = Hkdf::<Sha256>::new(Some(DEVICE_SALT), account_key.as_bytes());
+    let mut info = purpose.as_bytes().to_vec();
+    info.push(0);
+    info.extend_from_slice(scope.as_bytes());
+    let mut out = Zeroizing::new([0u8; 32]);
+    hk.expand(&info, out.as_mut())
+        .expect("32 bytes is a valid HKDF output length");
+    SymmetricKey::from_bytes(*out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -63,5 +75,29 @@ mod tests {
         let account = SymmetricKey::from_bytes([7; 32]);
         let sealed = PrivateDataKey::derive(&account).seal("me", "verified", b"x");
         assert!(account.decrypt(&sealed, &aad("me", "verified")).is_err());
+    }
+
+    #[test]
+    fn device_keys_are_separate_from_the_account_and_each_other() {
+        let account = SymmetricKey::from_bytes([7; 32]);
+        let autofill = derive_device_key(&account, "autofill", "scope");
+        assert_ne!(autofill.as_bytes(), account.as_bytes());
+        assert_eq!(
+            autofill.as_bytes(),
+            derive_device_key(&account, "autofill", "scope").as_bytes()
+        );
+        for (purpose, scope) in [("biometric", "scope"), ("autofill", "other")] {
+            assert_ne!(
+                autofill.as_bytes(),
+                derive_device_key(&account, purpose, scope).as_bytes()
+            );
+        }
+        let other = SymmetricKey::from_bytes([8; 32]);
+        assert_ne!(
+            autofill.as_bytes(),
+            derive_device_key(&other, "autofill", "scope").as_bytes()
+        );
+        let sealed = account.encrypt(b"x", b"aad");
+        assert!(autofill.decrypt(&sealed, b"aad").is_err());
     }
 }

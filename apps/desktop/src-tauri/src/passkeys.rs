@@ -54,10 +54,6 @@ pub fn synced_name(scope: &str) -> String {
     format!("{scope}.synced.enc")
 }
 
-pub fn synced_scope(scope: &str) -> String {
-    format!("autofill/v1/{scope}/synced")
-}
-
 enum Source {
     Outbox(String),
     Legacy,
@@ -77,14 +73,15 @@ fn source(scope: &str, name: &str) -> Option<Source> {
     .then(|| Source::Outbox(id.to_owned()))
 }
 
-fn open_stored(session: &mut Session, file: &str, stored: &Stored) -> Option<Pending> {
+fn open_stored(session: &mut Session, scope: &str, file: &str, stored: &Stored) -> Option<Pending> {
     let id = STANDARD.decode(&stored.id).ok()?;
     let handle = STANDARD.decode(&stored.user_handle).ok()?;
     if handle.is_empty() || handle.len() > 64 {
         return None;
     }
     let private = session
-        .passkey_open(&stored.rp, &id, &stored.encrypted_key)
+        .autofill_passkey_open(scope, &stored.rp, &id, &stored.encrypted_key)
+        .or_else(|_| session.passkey_open(&stored.rp, &id, &stored.encrypted_key))
         .ok()?;
     Some(Pending {
         file: file.to_owned(),
@@ -115,23 +112,30 @@ fn read_file(
     let ciphertext = fs::read_to_string(&path).ok()?;
     match source {
         Source::Outbox(id) => {
+            let entry = format!("outbox/{id}");
             let plaintext = session
-                .cache_open(&format!("autofill/v1/{scope}/outbox/{id}"), &ciphertext)
+                .autofill_open(scope, &entry, &ciphertext)
+                .or_else(|_| {
+                    session.cache_open(&format!("autofill/v1/{scope}/{entry}"), &ciphertext)
+                })
                 .ok()?;
             let stored: Stored = serde_json::from_slice(&plaintext).ok()?;
             if hex(&STANDARD.decode(&stored.id).ok()?) != *id {
                 return None;
             }
-            open_stored(session, name, &stored).map(|p| vec![p])
+            open_stored(session, scope, name, &stored).map(|p| vec![p])
         }
         Source::Legacy => {
             let plaintext = session
-                .cache_open(&format!("autofill/v1/{scope}/passkeys"), &ciphertext)
+                .autofill_open(scope, "passkeys", &ciphertext)
+                .or_else(|_| {
+                    session.cache_open(&format!("autofill/v1/{scope}/passkeys"), &ciphertext)
+                })
                 .ok()?;
             let stored: Vec<Stored> = serde_json::from_slice(&plaintext).ok()?;
             let mut opened: Vec<Pending> = stored
                 .iter()
-                .filter_map(|s| open_stored(session, name, s))
+                .filter_map(|s| open_stored(session, scope, name, s))
                 .collect();
             if opened.len() != stored.len() {
                 opened.iter_mut().for_each(|p| p.partial = true);
@@ -203,7 +207,8 @@ pub fn seal_synced(
         if handle.is_empty() || handle.len() > 64 || !seen.insert(id.clone()) {
             continue;
         }
-        let Ok(encrypted_key) = session.passkey_seal(&passkey.rp, &id, &private) else {
+        let Ok(encrypted_key) = session.autofill_passkey_seal(scope, &passkey.rp, &id, &private)
+        else {
             continue;
         };
         stored.push(Stored {
@@ -217,7 +222,7 @@ pub fn seal_synced(
     let plaintext =
         zeroize::Zeroizing::new(serde_json::to_vec(&stored).map_err(|_| "invalid_request")?);
     session
-        .cache_seal(&synced_scope(scope), &plaintext)
+        .autofill_seal(scope, "synced", &plaintext)
         .map_err(str::to_owned)
 }
 
@@ -247,10 +252,10 @@ mod tests {
         session
     }
 
-    fn device_key(session: &mut Session) -> SymmetricKey {
+    fn device_key(session: &mut Session, scope: &str) -> SymmetricKey {
         SymmetricKey::from_bytes(
             session
-                .biometric_key()
+                .autofill_key(scope)
                 .unwrap()
                 .as_slice()
                 .try_into()
@@ -259,7 +264,7 @@ mod tests {
     }
 
     fn extension_registers(session: &mut Session, dir: &Path, scope: &str, rp: &str) -> Vec<u8> {
-        let created = create_passkey(&device_key(session), rp).unwrap();
+        let created = create_passkey(&device_key(session, scope), rp).unwrap();
         let stored = Stored {
             id: STANDARD.encode(&created.credential_id),
             rp: rp.to_owned(),
@@ -269,8 +274,9 @@ mod tests {
         };
         let id_hex = hex(&created.credential_id);
         let sealed = session
-            .cache_seal(
-                &format!("autofill/v1/{scope}/outbox/{id_hex}"),
+            .autofill_seal(
+                scope,
+                &format!("outbox/{id_hex}"),
                 &serde_json::to_vec(&stored).unwrap(),
             )
             .unwrap();
@@ -306,16 +312,77 @@ mod tests {
             }],
         )
         .unwrap();
-        let plaintext = session.cache_open(&synced_scope(SCOPE), &sealed).unwrap();
+        let plaintext = session.autofill_open(SCOPE, "synced", &sealed).unwrap();
         let stored: Vec<Stored> = serde_json::from_slice(&plaintext).unwrap();
         assert_eq!(stored.len(), 1);
-        let key = device_key(&mut session);
+        let key = device_key(&mut session, SCOPE);
         assert!(
             assert_passkey(&key, "example.com", &id, &stored[0].encrypted_key, &[3; 32]).is_ok()
         );
 
         acknowledge(dir.path(), SCOPE, std::slice::from_ref(&p.file)).unwrap();
         assert!(pending(&mut session, dir.path(), SCOPE).unwrap().is_empty());
+    }
+
+    #[test]
+    fn synced_copy_for_the_extension_cannot_be_opened_with_the_account_key() {
+        let mut session = account();
+        let sealed = seal_synced(
+            &mut session,
+            SCOPE,
+            &[Synced {
+                rp: "example.com".into(),
+                user_name: "a".into(),
+                credential_id: URL_SAFE_NO_PAD.encode([1; 32]),
+                user_handle: URL_SAFE_NO_PAD.encode(b"h"),
+                private_key: URL_SAFE_NO_PAD.encode([1; 32]),
+            }],
+        )
+        .unwrap();
+        assert!(
+            session
+                .cache_open(&format!("autofill/v1/{SCOPE}/synced"), &sealed)
+                .is_err()
+        );
+        let stored: Vec<Stored> =
+            serde_json::from_slice(&session.autofill_open(SCOPE, "synced", &sealed).unwrap())
+                .unwrap();
+        assert!(
+            session
+                .passkey_open("example.com", &[1; 32], &stored[0].encrypted_key)
+                .is_err()
+        );
+        assert!(session.autofill_open(OTHER, "synced", &sealed).is_err());
+    }
+
+    #[test]
+    fn outbox_files_written_before_the_autofill_key_are_still_imported() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut session = account();
+        let private = [5u8; 32];
+        let id = [6u8; 32];
+        let legacy_key = session.passkey_seal("example.com", &id, &private).unwrap();
+        let stored = Stored {
+            id: STANDARD.encode(id),
+            rp: "example.com".into(),
+            user_name: "old".into(),
+            user_handle: STANDARD.encode(b"h"),
+            encrypted_key: legacy_key,
+        };
+        let sealed = session
+            .cache_seal(
+                &format!("autofill/v1/{SCOPE}/outbox/{}", hex(&id)),
+                &serde_json::to_vec(&stored).unwrap(),
+            )
+            .unwrap();
+        fs::write(dir.path().join(outbox_name(SCOPE, &id)), sealed).unwrap();
+        let found = pending(&mut session, dir.path(), SCOPE).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].user_name, "old");
+        assert_eq!(
+            URL_SAFE_NO_PAD.decode(&found[0].private_key).unwrap(),
+            private
+        );
     }
 
     #[test]
@@ -349,7 +416,7 @@ mod tests {
     fn legacy_device_file_is_imported() {
         let dir = tempfile::tempdir().unwrap();
         let mut session = account();
-        let created = create_passkey(&device_key(&mut session), "example.com").unwrap();
+        let created = create_passkey(&device_key(&mut session, SCOPE), "example.com").unwrap();
         let stored = vec![Stored {
             id: STANDARD.encode(&created.credential_id),
             rp: "example.com".into(),
@@ -358,10 +425,7 @@ mod tests {
             encrypted_key: created.encrypted_key,
         }];
         let sealed = session
-            .cache_seal(
-                &format!("autofill/v1/{SCOPE}/passkeys"),
-                &serde_json::to_vec(&stored).unwrap(),
-            )
+            .autofill_seal(SCOPE, "passkeys", &serde_json::to_vec(&stored).unwrap())
             .unwrap();
         fs::write(dir.path().join(format!("{SCOPE}.passkeys.enc")), sealed).unwrap();
         let found = pending(&mut session, dir.path(), SCOPE).unwrap();
@@ -375,7 +439,7 @@ mod tests {
     fn partly_unreadable_legacy_file_is_marked_partial() {
         let dir = tempfile::tempdir().unwrap();
         let mut session = account();
-        let created = create_passkey(&device_key(&mut session), "example.com").unwrap();
+        let created = create_passkey(&device_key(&mut session, SCOPE), "example.com").unwrap();
         let good = Stored {
             id: STANDARD.encode(&created.credential_id),
             rp: "example.com".into(),
@@ -391,8 +455,9 @@ mod tests {
             encrypted_key: good.encrypted_key.clone(),
         };
         let sealed = session
-            .cache_seal(
-                &format!("autofill/v1/{SCOPE}/passkeys"),
+            .autofill_seal(
+                SCOPE,
+                "passkeys",
                 &serde_json::to_vec(&vec![good, broken]).unwrap(),
             )
             .unwrap();
@@ -474,7 +539,7 @@ mod tests {
         )
         .unwrap();
         let stored: Vec<Stored> =
-            serde_json::from_slice(&session.cache_open(&synced_scope(SCOPE), &sealed).unwrap())
+            serde_json::from_slice(&session.autofill_open(SCOPE, "synced", &sealed).unwrap())
                 .unwrap();
         assert_eq!(stored.len(), 1);
         assert_eq!(STANDARD.decode(&stored[0].id).unwrap(), vec![1; 32]);

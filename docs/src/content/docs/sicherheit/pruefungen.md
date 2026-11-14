@@ -121,6 +121,13 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 |---|---|
 | Biometrischer Snapshot authentifiziert Schlüssel und Kontext; Ergebnis enthält nur UI-Metadaten | `biometric_restore_authenticates_snapshot_and_never_returns_keys` |
 | Server-Adresse erzwingt TLS außer Loopback und lehnt eingebettete Zugangsdaten ab | `platform::tests::server_requires_tls_except_loopback_and_rejects_credentials` |
+| API-Pfade verlassen `/api/v1/` nicht, auch nicht mit `%2e%2e` | `platform::tests::api_paths_cannot_leave_the_api_prefix` |
+| Geräteschlüssel sind vom Kontoschlüssel und voneinander getrennt | `private::tests::device_keys_are_separate_from_the_account_and_each_other` |
+| AutoFill-Schlüssel öffnet weder Identität noch API-Cache und kann keinen Cache fälschen | `autofill_key_cannot_open_the_account` |
+| AutoFill-Dateien öffnen nur mit Scope und Namen | `autofill_files_open_only_with_their_scope_and_name` |
+| Passkeys für die Extension lassen sich nicht mit dem Kontoschlüssel öffnen | `passkeys::tests::synced_copy_for_the_extension_cannot_be_opened_with_the_account_key` |
+| Briefkasten-Dateien von vor dem Update werden weiter übernommen | `passkeys::tests::outbox_files_written_before_the_autofill_key_are_still_imported` |
+| Face-ID-Zustand mit fremdem Kontoschlüssel und alte v1-Zustände werden abgelehnt; alte Zustände des eigenen Kontos werden erkannt | `biometric_restore_authenticates_snapshot_and_never_returns_keys`, `old_biometric_snapshots_under_the_raw_account_key_are_refused` |
 
 | Apple-Extension-Eigenschaft | Test |
 |---|---|

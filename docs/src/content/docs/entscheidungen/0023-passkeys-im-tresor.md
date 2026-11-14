@@ -25,7 +25,8 @@ Passkey nur lokal erzeugen und muss ihn der App übergeben.
   Export und Kontowiederherstellung gelten damit automatisch.
 - **Briefkasten statt gemeinsamer Datei:** Die Extension schreibt jeden neuen Passkey in eine
   eigene Datei `{scope}.outbox.{credential-id-hex}.enc` in der App Group, verschlüsselt mit dem
-  Kontoschlüssel und an Scope und Credential-ID gebunden. Getrennte Dateien vermeiden verlorene
+  AutoFill-Schlüssel ([ADR 0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/))
+  und an Scope und Credential-ID gebunden. Getrennte Dateien vermeiden verlorene
   Schreibvorgänge, wenn App und Extension gleichzeitig laufen.
 - **Übernahme nach dem Entsperren:** Die App liest den Briefkasten (und die alte gerätelokale
   `{scope}.passkeys.enc`), legt fehlende Passkeys im persönlichen Bereich an und löscht eine
@@ -36,7 +37,7 @@ Passkey nur lokal erzeugen und muss ihn der App übergeben.
   lassen. Eine alte Gerätedatei, in der sich nicht jeder Passkey öffnen ließ, bleibt liegen.
 - **Rückweg zur Extension:** Beim Veröffentlichen von AutoFill schreibt die App alle Passkeys
   aus dem Tresor (ohne Papierkorb) als `{scope}.synced.enc`. Jeder private Schlüssel wird
-  dafür in Rust mit dem Kontoschlüssel neu verpackt (AAD mit RP-ID und Credential-ID) und die
+  dafür in Rust mit dem AutoFill-Schlüssel neu verpackt (AAD mit RP-ID und Credential-ID) und die
   Liste zusätzlich als Cache verschlüsselt. Passkeys aus dem persönlichen Bereich kommen zuerst.
   Die Extension vereint Briefkasten, Altdatei und synced in dieser Reihenfolge; bei gleicher
   Credential-ID gewinnt der erste, also immer der auf diesem Gerät erzeugte.

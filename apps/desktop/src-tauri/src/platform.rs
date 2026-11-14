@@ -17,6 +17,10 @@ use tauri::Manager;
 use zeroize::Zeroizing;
 
 const SERVICE: &str = "de.melonigemelone.app.biometric.v1";
+const SERVER_SERVICE: &str = "de.melonigemelone.app.server.v1";
+const NOT_FOUND: i32 = -25300;
+
+static SERVER: Mutex<Option<String>> = Mutex::new(None);
 const ACTIVE_ATTEMPTS: u32 = 20;
 const ACTIVE_DELAY: Duration = Duration::from_millis(100);
 
@@ -79,8 +83,60 @@ fn read(app: &tauri::AppHandle, name: &str) -> Result<String, String> {
     fs::read_to_string(path).map_err(|_| "cache_unavailable".into())
 }
 
-fn server(app: &tauri::AppHandle) -> Result<String, String> {
-    read(app, "server.txt")
+fn server_item() -> PasswordOptions {
+    PasswordOptions::new_generic_password(SERVER_SERVICE, "server")
+}
+
+fn server(_app: &tauri::AppHandle) -> Result<String, String> {
+    let mut cached = SERVER.lock().map_err(|_| "server_unavailable")?;
+    if let Some(value) = cached.as_ref() {
+        return Ok(value.clone());
+    }
+    let stored = passwords::generic_password(server_item()).map_err(|_| "server_not_set")?;
+    let value = validated_server(std::str::from_utf8(&stored).map_err(|_| "invalid_server")?)?;
+    *cached = Some(value.clone());
+    Ok(value)
+}
+
+fn store_server(app: &tauri::AppHandle, value: &str) -> Result<(), String> {
+    let mut cached = SERVER.lock().map_err(|_| "server_unavailable")?;
+    if passwords::delete_generic_password_options(server_item())
+        .is_err_and(|e| e.code() != NOT_FOUND)
+    {
+        return Err("server_unavailable".into());
+    }
+    *cached = None;
+    passwords::set_generic_password_options(value.as_bytes(), server_item())
+        .map_err(|_| "server_unavailable")?;
+    *cached = Some(value.to_owned());
+    let legacy = location(app, "server.txt")?;
+    if legacy.exists() {
+        fs::remove_file(legacy).map_err(|_| "storage_unavailable")?;
+    }
+    Ok(())
+}
+
+fn request_url(base: &str, path: &str) -> Result<reqwest::Url, String> {
+    let route = path.split('?').next().unwrap_or_default();
+    let dot_segment = route.split('/').any(|segment| {
+        let decoded = segment.to_ascii_lowercase().replace("%2e", ".");
+        decoded == "." || decoded == ".."
+    });
+    if !path.starts_with('/')
+        || path.starts_with("//")
+        || path.contains('#')
+        || path.contains('\\')
+        || dot_segment
+    {
+        return Err("invalid_request".into());
+    }
+    let origin = reqwest::Url::parse(base).map_err(|_| "invalid_server")?;
+    let url =
+        reqwest::Url::parse(&format!("{base}/api/v1{path}")).map_err(|_| "invalid_request")?;
+    if url.origin() != origin.origin() || !url.path().starts_with("/api/v1/") {
+        return Err("invalid_request".into());
+    }
+    Ok(url)
 }
 
 fn validated_server(input: &str) -> Result<String, String> {
@@ -100,7 +156,9 @@ fn validated_server(input: &str) -> Result<String, String> {
 
 #[tauri::command]
 pub fn get_server(app: tauri::AppHandle) -> Result<String, String> {
-    Ok(server(&app).unwrap_or_default())
+    Ok(server(&app)
+        .or_else(|_| read(&app, "server.txt").and_then(|legacy| validated_server(legacy.trim())))
+        .unwrap_or_default())
 }
 
 #[tauri::command]
@@ -108,10 +166,11 @@ pub fn set_server(app: tauri::AppHandle, value: String) -> Result<(), String> {
     let value = validated_server(&value)?;
     let state = app.state::<Mutex<Session>>();
     let mut session = state.lock().map_err(|_| "session_unavailable")?;
-    if server(&app).ok().as_ref() != Some(&value) {
-        session.prepare_server_change().map_err(str::to_owned)?;
+    if server(&app).ok().as_ref() == Some(&value) {
+        return Ok(());
     }
-    write(&app, "server.txt", value.as_bytes())
+    session.prepare_server_change().map_err(str::to_owned)?;
+    store_server(&app, &value)
 }
 
 #[derive(Deserialize)]
@@ -133,24 +192,17 @@ pub async fn api_request(
     path: String,
     opts: RequestOptions,
 ) -> Result<Response, String> {
-    if !path.starts_with('/')
-        || path.starts_with("//")
-        || path.contains("..")
-        || path.contains('#')
-        || !matches!(method.as_str(), "GET" | "POST" | "PUT" | "DELETE")
-    {
+    if !matches!(method.as_str(), "GET" | "POST" | "PUT" | "DELETE") {
         return Err("invalid_request".into());
     }
     let base = validated_server(&server(&app)?)?;
+    let url = request_url(&base, &path)?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|_| "network_error")?;
-    let mut request = client.request(
-        method.parse().map_err(|_| "invalid_request")?,
-        format!("{base}/api/v1{path}"),
-    );
+    let mut request = client.request(method.parse().map_err(|_| "invalid_request")?, url);
     if let Some(token) = opts.token {
         request = request.bearer_auth(token);
     }
@@ -208,7 +260,7 @@ pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<
             let state = app.state::<Mutex<Session>>();
             let mut session = state.lock().map_err(|_| "session_unavailable")?;
             (
-                session.biometric_key().map_err(str::to_owned)?,
+                session.biometric_key(&scope).map_err(str::to_owned)?,
                 session
                     .biometric_snapshot(&scope, metadata)
                     .map_err(str::to_owned)?,
@@ -222,7 +274,7 @@ pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<
         let mut config = options(&scope);
         config.set_access_control(access);
         let deletion = passwords::delete_generic_password_options(options(&scope));
-        if deletion.is_err_and(|e| e.code() != -25300) {
+        if deletion.is_err_and(|e| e.code() != NOT_FOUND) {
             return Err("biometric_unavailable".into());
         }
         passwords::set_generic_password_options(&key, config)
@@ -263,6 +315,14 @@ pub async fn biometric_status(app: tauri::AppHandle) -> Result<bool, String> {
         let mut session = state.lock().map_err(|_| "session_unavailable")?;
         if server(&app)? != base {
             return Err("server_changed".into());
+        }
+        if let Some(old) = snapshot.as_deref()
+            && session
+                .biometric_outdated(&scope, old)
+                .map_err(str::to_owned)?
+        {
+            remove_biometric(&app, &scope)?;
+            return Ok(false);
         }
         session
             .biometric_configured(&scope, snapshot.as_deref())
@@ -309,18 +369,23 @@ pub fn biometric_keeps_token(app: tauri::AppHandle, token: String) -> bool {
 #[tauri::command]
 pub fn biometric_disable(app: tauri::AppHandle) -> Result<(), String> {
     let scope = format!("{}/biometric", server(&app)?);
-    if passwords::delete_generic_password_options(options(&scope))
-        .is_err_and(|e| e.code() != -25300)
+    remove_biometric(&app, &scope)?;
+    autofill_remove()
+}
+
+fn remove_biometric(app: &tauri::AppHandle, scope: &str) -> Result<(), String> {
+    if passwords::delete_generic_password_options(options(scope))
+        .is_err_and(|e| e.code() != NOT_FOUND)
     {
         return Err("biometric_unavailable".into());
     }
     for name in ["biometric.enc", "biometric.token"] {
-        let path = location(&app, name)?;
+        let path = location(app, name)?;
         if path.exists() {
             fs::remove_file(path).map_err(|_| "storage_unavailable")?;
         }
     }
-    autofill_remove()
+    Ok(())
 }
 
 #[cfg(not(target_os = "ios"))]
@@ -345,7 +410,7 @@ fn autofill_remove() -> Result<(), String> {
     let mut config = PasswordOptions::new_generic_password("de.melonapp.autofill.v1", scope.trim());
     config.use_protected_keychain();
     config.set_access_group(group);
-    if passwords::delete_generic_password_options(config).is_err_and(|e| e.code() != -25300) {
+    if passwords::delete_generic_password_options(config).is_err_and(|e| e.code() != NOT_FOUND) {
         return Err("autofill_unavailable".into());
     }
     for name in [
@@ -447,6 +512,40 @@ mod tests {
             "https://example.com"
         );
         assert!(validated_server("http://127.0.0.1:8080").is_ok());
+    }
+
+    #[test]
+    fn api_paths_cannot_leave_the_api_prefix() {
+        let base = "https://melon.example";
+        for path in [
+            "/../health",
+            "/%2e%2e/%2e%2e/health",
+            "/%2E%2E/health",
+            "/.%2e/health",
+            "/%2e./health",
+            "/vaults/%2e/../../health",
+            "/vaults/./x",
+            "/..\\..\\health",
+            "//evil.example/x",
+            "/x#y",
+            "health",
+            "@evil.example/x",
+        ] {
+            assert!(request_url(base, path).is_err(), "{path}");
+        }
+        assert_eq!(
+            request_url(base, "/vaults/abc/items?since=1")
+                .unwrap()
+                .as_str(),
+            "https://melon.example/api/v1/vaults/abc/items?since=1"
+        );
+        assert_eq!(
+            request_url(base, "/users/lookup?email=a%40b.de")
+                .unwrap()
+                .path(),
+            "/api/v1/users/lookup"
+        );
+        assert!(request_url("http://127.0.0.1:8080", "/auth/prelogin").is_ok());
     }
 }
 
@@ -550,7 +649,6 @@ pub async fn autofill_publish(
             let group = APP_GROUP;
             let directory = app_group()?;
             let scope = autofill_scope(&app, &user_id)?;
-            let account = format!("autofill/v1/{scope}");
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_err(|_| "clock_error")?
@@ -563,9 +661,9 @@ pub async fn autofill_publish(
                 let state = app.state::<Mutex<Session>>();
                 let mut session = state.lock().map_err(|_| "session_unavailable")?;
                 (
-                    session.biometric_key().map_err(str::to_owned)?,
+                    session.autofill_key(&scope).map_err(str::to_owned)?,
                     session
-                        .cache_seal(&format!("{account}/passwords"), &data)
+                        .autofill_seal(&scope, "passwords", &data)
                         .map_err(str::to_owned)?,
                     crate::passkeys::seal_synced(&mut session, &scope, &passkeys)?,
                 )
@@ -578,7 +676,8 @@ pub async fn autofill_publish(
                 config.set_access_synchronized(Some(false));
                 config
             };
-            if passwords::delete_generic_password_options(item()).is_err_and(|e| e.code() != -25300)
+            if passwords::delete_generic_password_options(item())
+                .is_err_and(|e| e.code() != NOT_FOUND)
             {
                 return Err("biometric_unavailable".into());
             }

@@ -7,8 +7,8 @@ use unicode_normalization::UnicodeNormalization;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use melon_crypto::{
     EncString, KdfParams, KeyPair, PasswordOptions, PrivateDataKey, PublicKey, RecoveryKey,
-    SealOrigin, SealedKey, SymmetricKey, VaultKeyContext, derive_master_key, item_aad,
-    seal_vault_key, unwrap_account_key, vault_key_id, vault_meta_aad, wrap_account_key,
+    SealOrigin, SealedKey, SymmetricKey, VaultKeyContext, derive_device_key, derive_master_key,
+    item_aad, seal_vault_key, unwrap_account_key, vault_key_id, vault_meta_aad, wrap_account_key,
 };
 use serde_json::{Value, json};
 use zeroize::{Zeroize, Zeroizing};
@@ -113,7 +113,11 @@ fn same_password(a: &str, b: &str) -> bool {
 }
 
 fn biometric_aad(scope: &str) -> Vec<u8> {
-    format!("melon/native/biometric/v1/{scope}").into_bytes()
+    format!("melon/native/biometric/v2/{scope}").into_bytes()
+}
+
+fn autofill_aad(scope: &str, name: &str) -> Vec<u8> {
+    format!("melon/native/cache/v1/autofill/v1/{scope}/{name}").into_bytes()
 }
 
 fn wipe(value: &mut Value) {
@@ -201,29 +205,49 @@ impl Session {
         self.vaults.get(id).ok_or("vault_key_missing")
     }
 
-    pub fn biometric_key(&mut self) -> Result<Zeroizing<Vec<u8>>> {
+    fn device_key(&self, purpose: &str, scope: &str) -> Result<SymmetricKey> {
+        Ok(derive_device_key(self.require_account()?, purpose, scope))
+    }
+
+    pub fn biometric_key(&mut self, scope: &str) -> Result<Zeroizing<Vec<u8>>> {
         self.expire();
-        Ok(Zeroizing::new(self.require_account()?.as_bytes().to_vec()))
+        Ok(Zeroizing::new(
+            self.device_key("biometric", scope)?.as_bytes().to_vec(),
+        ))
     }
 
     pub fn biometric_snapshot(&mut self, scope: &str, metadata: Value) -> Result<String> {
         self.expire();
         let account = self.require_account()?;
         let identity = self.identity.as_ref().ok_or("locked")?;
-        let plaintext = Zeroizing::new(
-            serde_json::to_vec(
-                &json!({"identity":identity.seal_with(account).to_string(),"metadata":metadata}),
-            )
-            .map_err(|_| "invalid_request")?,
-        );
+        let key = derive_device_key(account, "biometric", scope);
+        let mut value = json!({"account":STANDARD.encode(account.as_bytes()),"identity":identity.seal_with(account).to_string(),"metadata":metadata});
+        let plaintext = serde_json::to_vec(&value).map(Zeroizing::new);
+        wipe(&mut value);
+        let plaintext = plaintext.map_err(|_| "invalid_request")?;
+        Ok(key.encrypt(&plaintext, &biometric_aad(scope)).to_string())
+    }
+
+    pub fn biometric_outdated(&mut self, scope: &str, snapshot: &str) -> Result<bool> {
+        self.expire();
+        let account = self.require_account()?;
+        if snapshot.len() > 48 * 1024 * 1024 {
+            return Err("cache_too_large");
+        }
+        let Ok(ciphertext) = parse(snapshot) else {
+            return Ok(false);
+        };
         Ok(account
-            .encrypt(&plaintext, &biometric_aad(scope))
-            .to_string())
+            .decrypt(
+                &ciphertext,
+                format!("melon/native/biometric/v1/{scope}").as_bytes(),
+            )
+            .is_ok())
     }
 
     pub fn biometric_configured(&mut self, scope: &str, snapshot: Option<&str>) -> Result<bool> {
         self.expire();
-        let account = self.require_account()?;
+        let key = self.device_key("biometric", scope)?;
         let Some(snapshot) = snapshot else {
             return Ok(false);
         };
@@ -233,7 +257,7 @@ impl Session {
         let Ok(ciphertext) = parse(snapshot) else {
             return Ok(false);
         };
-        Ok(account.decrypt(&ciphertext, &biometric_aad(scope)).is_ok())
+        Ok(key.decrypt(&ciphertext, &biometric_aad(scope)).is_ok())
     }
 
     pub fn biometric_restore(&mut self, key: &[u8], scope: &str, snapshot: &str) -> Result<Value> {
@@ -242,17 +266,96 @@ impl Session {
             return Err("background_locked");
         }
         let bytes: [u8; 32] = key.try_into().map_err(|_| "invalid_key")?;
-        let account = SymmetricKey::from_bytes(bytes);
-        let plaintext = account
+        let wrap = SymmetricKey::from_bytes(bytes);
+        let plaintext = wrap
             .decrypt(&parse(snapshot)?, &biometric_aad(scope))
             .map_err(|_| "decrypt_failed")?;
-        let value: Value = serde_json::from_slice(&plaintext).map_err(|_| "invalid_cache")?;
-        let identity = KeyPair::open_with(&account, &parse(text(&value, "identity")?)?)
-            .map_err(|_| "decrypt_failed")?;
+        let mut value: Value = serde_json::from_slice(&plaintext).map_err(|_| "invalid_cache")?;
+        let result = Self::restored(&wrap, scope, &value);
+        let metadata = value["metadata"].clone();
+        wipe(&mut value);
+        let (account, identity) = result?;
         self.account = Some(account);
         self.identity = Some(identity);
         self.last_activity = Instant::now();
-        Ok(value["metadata"].clone())
+        Ok(metadata)
+    }
+
+    fn restored(
+        wrap: &SymmetricKey,
+        scope: &str,
+        value: &Value,
+    ) -> Result<(SymmetricKey, KeyPair)> {
+        let raw = Zeroizing::new(
+            STANDARD
+                .decode(text(value, "account")?)
+                .map_err(|_| "invalid_cache")?,
+        );
+        let bytes: [u8; 32] = raw.as_slice().try_into().map_err(|_| "invalid_cache")?;
+        let account = SymmetricKey::from_bytes(bytes);
+        if derive_device_key(&account, "biometric", scope).as_bytes() != wrap.as_bytes() {
+            return Err("decrypt_failed");
+        }
+        let identity = KeyPair::open_with(&account, &parse(text(value, "identity")?)?)
+            .map_err(|_| "decrypt_failed")?;
+        Ok((account, identity))
+    }
+
+    pub fn autofill_key(&mut self, scope: &str) -> Result<Zeroizing<Vec<u8>>> {
+        self.expire();
+        Ok(Zeroizing::new(
+            self.device_key("autofill", scope)?.as_bytes().to_vec(),
+        ))
+    }
+
+    pub fn autofill_seal(&mut self, scope: &str, name: &str, plaintext: &[u8]) -> Result<String> {
+        self.expire();
+        if plaintext.len() > 32 * 1024 * 1024 {
+            return Err("cache_too_large");
+        }
+        Ok(self
+            .device_key("autofill", scope)?
+            .encrypt(plaintext, &autofill_aad(scope, name))
+            .to_string())
+    }
+
+    pub fn autofill_open(
+        &mut self,
+        scope: &str,
+        name: &str,
+        ciphertext: &str,
+    ) -> Result<Zeroizing<Vec<u8>>> {
+        self.expire();
+        if ciphertext.len() > 48 * 1024 * 1024 {
+            return Err("cache_too_large");
+        }
+        self.device_key("autofill", scope)?
+            .decrypt(&parse(ciphertext)?, &autofill_aad(scope, name))
+            .map_err(|_| "decrypt_failed")
+    }
+
+    pub fn autofill_passkey_seal(
+        &mut self,
+        scope: &str,
+        rp: &str,
+        id: &[u8],
+        private: &[u8],
+    ) -> Result<String> {
+        self.expire();
+        melon_crypto::seal_passkey_key(&self.device_key("autofill", scope)?, rp, id, private)
+            .map_err(|_| "invalid_passkey")
+    }
+
+    pub fn autofill_passkey_open(
+        &mut self,
+        scope: &str,
+        rp: &str,
+        id: &[u8],
+        encrypted_key: &str,
+    ) -> Result<Zeroizing<Vec<u8>>> {
+        self.expire();
+        melon_crypto::open_passkey_key(&self.device_key("autofill", scope)?, rp, id, encrypted_key)
+            .map_err(|_| "decrypt_failed")
     }
 
     pub fn passkey_open(
@@ -993,51 +1096,148 @@ mod tests {
     #[test]
     fn passkey_keys_move_between_wrappings_only_with_the_unlocked_account() {
         let (mut session, _) = account();
-        let device = SymmetricKey::from_bytes(
-            session
-                .biometric_key()
-                .unwrap()
-                .as_slice()
-                .try_into()
-                .unwrap(),
-        );
+        let device = autofill_key(&mut session, "scope");
         let created = melon_crypto::create_passkey(&device, "example.com").unwrap();
         let id = created.credential_id.clone();
         let private = session
-            .passkey_open("example.com", &id, &created.encrypted_key)
+            .autofill_passkey_open("scope", "example.com", &id, &created.encrypted_key)
             .unwrap();
-        let sealed = session.passkey_seal("example.com", &id, &private).unwrap();
+        assert!(
+            session
+                .passkey_open("example.com", &id, &created.encrypted_key)
+                .is_err()
+        );
+        let sealed = session
+            .autofill_passkey_seal("scope", "example.com", &id, &private)
+            .unwrap();
         assert!(
             melon_crypto::assert_passkey(&device, "example.com", &id, &sealed, &[1; 32]).is_ok()
         );
-        assert!(
-            session
-                .passkey_open("other.example", &id, &created.encrypted_key)
-                .is_err()
+        let legacy = session.passkey_seal("example.com", &id, &private).unwrap();
+        assert_eq!(
+            &*session.passkey_open("example.com", &id, &legacy).unwrap(),
+            &*private
         );
+        assert!(
+            melon_crypto::assert_passkey(&device, "example.com", &id, &legacy, &[1; 32]).is_err()
+        );
+        for (scope, rp) in [("other", "example.com"), ("scope", "other.example")] {
+            assert!(
+                session
+                    .autofill_passkey_open(scope, rp, &id, &created.encrypted_key)
+                    .is_err()
+            );
+        }
         let (mut other, _) = account();
         assert!(
             other
-                .passkey_open("example.com", &id, &created.encrypted_key)
+                .autofill_passkey_open("scope", "example.com", &id, &created.encrypted_key)
                 .is_err()
         );
         session.lock();
         assert_eq!(
             session
-                .passkey_open("example.com", &id, &created.encrypted_key)
+                .autofill_passkey_open("scope", "example.com", &id, &created.encrypted_key)
                 .err(),
             Some("locked")
         );
         assert_eq!(
-            session.passkey_seal("example.com", &id, &private).err(),
+            session
+                .autofill_passkey_seal("scope", "example.com", &id, &private)
+                .err(),
             Some("locked")
         );
+        assert_eq!(session.autofill_key("scope").err(), Some("locked"));
+    }
+
+    fn autofill_key(session: &mut Session, scope: &str) -> SymmetricKey {
+        SymmetricKey::from_bytes(
+            session
+                .autofill_key(scope)
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn autofill_key_cannot_open_the_account() {
+        let (mut session, created) = account();
+        let device = autofill_key(&mut session, "scope");
+        let encrypted = parse(created["encryptedPrivateKey"].as_str().unwrap()).unwrap();
+        assert!(KeyPair::open_with(&device, &encrypted).is_err());
+        assert!(KeyPair::open_with(session.account.as_ref().unwrap(), &encrypted).is_ok());
+        assert_ne!(
+            device.as_bytes(),
+            session.account.as_ref().unwrap().as_bytes()
+        );
+        let cached = session
+            .cache_seal("https://melon.example/x", b"secret")
+            .unwrap();
+        assert!(
+            device
+                .decrypt(
+                    &parse(&cached).unwrap(),
+                    b"melon/native/cache/v1/https://melon.example/x"
+                )
+                .is_err()
+        );
+        let forged = device
+            .encrypt(b"forged", b"melon/native/cache/v1/https://melon.example/x")
+            .to_string();
+        assert!(
+            session
+                .cache_open("https://melon.example/x", &forged)
+                .is_err()
+        );
+        let biometric = session.biometric_key("server/biometric").unwrap();
+        assert_ne!(biometric.as_slice(), device.as_bytes());
+        assert_ne!(
+            device.as_bytes(),
+            autofill_key(&mut session, "other").as_bytes()
+        );
+    }
+
+    #[test]
+    fn autofill_files_open_only_with_their_scope_and_name() {
+        let (mut session, _) = account();
+        let sealed = session.autofill_seal("scope", "passwords", b"[]").unwrap();
+        assert_eq!(
+            &*session
+                .autofill_open("scope", "passwords", &sealed)
+                .unwrap(),
+            b"[]"
+        );
+        assert!(session.autofill_open("scope", "synced", &sealed).is_err());
+        assert!(
+            session
+                .autofill_open("other", "passwords", &sealed)
+                .is_err()
+        );
+        assert!(
+            session
+                .cache_open("autofill/v1/scope/passwords", &sealed)
+                .is_err()
+        );
+        let device = autofill_key(&mut session, "scope");
+        assert_eq!(
+            &*device
+                .decrypt(
+                    &parse(&sealed).unwrap(),
+                    b"melon/native/cache/v1/autofill/v1/scope/passwords"
+                )
+                .unwrap(),
+            b"[]"
+        );
+        let (mut other, _) = account();
+        assert!(other.autofill_open("scope", "passwords", &sealed).is_err());
     }
 
     #[test]
     fn background_rejects_pending_biometric_restore_and_new_derivation() {
         let (mut session, _) = account();
-        let key = session.biometric_key().unwrap();
+        let key = session.biometric_key("test").unwrap();
         let snapshot = session.biometric_snapshot("test", json!({})).unwrap();
         session.set_active(false);
         assert_eq!(
@@ -1089,7 +1289,8 @@ mod tests {
     #[test]
     fn biometric_restore_authenticates_snapshot_and_never_returns_keys() {
         let (mut session, _) = account();
-        let key = session.biometric_key().unwrap();
+        let key = session.biometric_key("server/account").unwrap();
+        assert_ne!(key.as_slice(), session.account.as_ref().unwrap().as_bytes());
         let snapshot = session
             .biometric_snapshot("server/account", json!({"email":"test@example.com"}))
             .unwrap();
@@ -1108,6 +1309,87 @@ mod tests {
         assert!(
             session
                 .biometric_restore(&key, "other/account", &snapshot)
+                .is_err()
+        );
+        assert!(session.account.is_none());
+        let (mut other, _) = account();
+        let foreign_key = other.biometric_key("server/account").unwrap();
+        let foreign = other
+            .biometric_snapshot("server/account", json!({}))
+            .unwrap();
+        let account_bytes = other.account.as_ref().unwrap().as_bytes().to_vec();
+        let swapped = SymmetricKey::from_bytes(foreign_key.as_slice().try_into().unwrap());
+        let mut plain: Value = serde_json::from_slice(
+            &swapped
+                .decrypt(&parse(&foreign).unwrap(), &biometric_aad("server/account"))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            STANDARD.decode(plain["account"].as_str().unwrap()).unwrap(),
+            account_bytes
+        );
+        plain["account"] = json!(STANDARD.encode([1u8; 32]));
+        let tampered = swapped
+            .encrypt(
+                &serde_json::to_vec(&plain).unwrap(),
+                &biometric_aad("server/account"),
+            )
+            .to_string();
+        assert_eq!(
+            session
+                .biometric_restore(&foreign_key, "server/account", &tampered)
+                .err(),
+            Some("decrypt_failed")
+        );
+        assert!(session.account.is_none());
+    }
+
+    #[test]
+    fn old_biometric_snapshots_under_the_raw_account_key_are_refused() {
+        let (mut session, _) = account();
+        let account = SymmetricKey::from_bytes(*session.account.as_ref().unwrap().as_bytes());
+        let identity = session
+            .identity
+            .as_ref()
+            .unwrap()
+            .seal_with(&account)
+            .to_string();
+        let old = account
+            .encrypt(
+                &serde_json::to_vec(&json!({"identity":identity,"metadata":{}})).unwrap(),
+                b"melon/native/biometric/v1/server/biometric",
+            )
+            .to_string();
+        assert!(
+            !session
+                .biometric_configured("server/biometric", Some(&old))
+                .unwrap()
+        );
+        assert!(
+            session
+                .biometric_outdated("server/biometric", &old)
+                .unwrap()
+        );
+        assert!(!session.biometric_outdated("other/biometric", &old).unwrap());
+        let current = session
+            .biometric_snapshot("server/biometric", json!({}))
+            .unwrap();
+        assert!(
+            !session
+                .biometric_outdated("server/biometric", &current)
+                .unwrap()
+        );
+        let (mut other, _) = super::tests::account();
+        assert!(!other.biometric_outdated("server/biometric", &old).unwrap());
+        session.lock();
+        assert_eq!(
+            session.biometric_outdated("server/biometric", &old).err(),
+            Some("locked")
+        );
+        assert!(
+            session
+                .biometric_restore(account.as_bytes(), "server/biometric", &old)
                 .is_err()
         );
         assert!(session.account.is_none());
@@ -1295,7 +1577,7 @@ mod tests {
         let cached = session
             .cache_seal(scope, br#"{"identity":"x","metadata":{}}"#)
             .unwrap();
-        let key = session.biometric_key().unwrap();
+        let key = session.biometric_key(scope).unwrap();
         assert_eq!(
             session.biometric_restore(&key, scope, &cached).err(),
             Some("decrypt_failed")

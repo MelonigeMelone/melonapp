@@ -13,7 +13,20 @@ nicht erlaubt. Web und Browser-Erweiterung verwenden weiterhin WASM im Worker.
 ## Anmeldung und Server
 
 Auf dem Anmeldebildschirm die HTTPS-Adresse des eigenen Servers eintragen, ohne Pfad.
-HTTP ist ausschließlich für Loopback-Adressen erlaubt. Native HTTP-Anfragen folgen
+HTTP ist ausschließlich für Loopback-Adressen erlaubt. Die Adresse liegt im Schlüsselbund
+(`de.melonigemelone.app.server.v1`), nicht mehr in `server.txt`. Auf dem Mac ist das der
+normale Anmelde-Schlüsselbund, dessen Zugriffsliste nur die signierte App ohne Rückfrage zulässt.
+Die Data Protection Keychain bräuchte dort ein Entitlement, das die Mac-App nicht hat. Schadsoftware mit den Rechten
+der Person kann eine Datei im App-Verzeichnis ändern, den Schlüsselbund-Eintrag einer anderen App
+aber nicht. Sie könnte sonst die App unbemerkt auf einen eigenen Server umleiten, der beim
+nächsten Login den Anmelde-Nachweis bekommt. Eine alte `server.txt` füllt nach dem Update nur
+noch das Feld auf dem Anmeldebildschirm vor. Erst wer sich damit anmeldet, übernimmt die Adresse
+in den Schlüsselbund, danach wird die Datei gelöscht. Anfragen gehen nie an die Adresse aus der Datei.
+
+Der native Transport hängt den API-Pfad an `/api/v1` an. Er lehnt Punkt-Segmente ab, auch
+kodierte wie `%2e%2e`, und prüft nach dem Parsen, dass Ursprung und Präfix `/api/v1/` stimmen.
+Eingeschleuster Code in der WebView kann so keine anderen Pfade auf dem Server-Host erreichen,
+auch nicht mit dem Sitzungstoken. Native HTTP-Anfragen folgen
 keinen Weiterleitungen und sind auf 30 Sekunden sowie 32 MiB Antwortgröße begrenzt.
 Die WebView kann keine beliebigen Netzverbindungen öffnen; ausgenommen ist der
 bestehende, ausdrücklich gestartete Datenleck-Abgleich mit `api.pwnedpasswords.com`; der Rust-Transport bedient
@@ -79,13 +92,20 @@ diese Prüfungen bleiben Teil des tatsächlichen Entsperrens. Nach Änderungen a
 Fingerabdrücken oder Face ID kann die Person „Neu einrichten“ verwenden.
 
 Im Konto kann biometrisches Entsperren aktiviert oder deaktiviert werden. Der
-Kontoschlüssel liegt ausschließlich in der Data Protection Keychain, mit
+Schlüsselbund-Eintrag liegt ausschließlich in der Data Protection Keychain, mit
 `biometryCurrentSet` und `WhenPasscodeSetThisDeviceOnly`, ohne iCloud-Synchronisation.
-Der verschlüsselte Wiederaufnahmezustand enthält Identität und Sitzungsdaten. Er hat einen
-eigenen Verschlüsselungskontext (`melon/native/biometric/v1/…`), getrennt vom API- und
+Er enthält nicht den Kontoschlüssel, sondern einen daraus abgeleiteten Schlüssel
+([ADR 0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/)). Damit ist der
+Wiederaufnahmezustand verschlüsselt, und erst darin stecken Kontoschlüssel, Identität und
+Sitzungsdaten. Beim Entsperren prüft Rust, dass der Kontoschlüssel wieder genau den Schlüssel aus
+dem Schlüsselbund ergibt. Der Zustand hat einen
+eigenen Verschlüsselungskontext (`melon/native/biometric/v2/…`), getrennt vom API- und
 AutoFill-Cache (`melon/native/cache/v1/…`). Eine zwischengespeicherte Server-Antwort lässt sich
 so nie als Wiederaufnahmezustand ausgeben. Ein anderer Schlüssel, Server oder manipuliertes
-Dokument wird abgelehnt.
+Dokument wird abgelehnt. Einrichtungen aus der Zeit vor ADR 0029 (`…/biometric/v1/…`) gelten
+nicht mehr und müssen einmal neu eingerichtet werden. Erkennt die Statusabfrage eine solche alte
+Einrichtung dieses Kontos, löscht sie Schlüsselbund-Eintrag und Dateien sofort, damit der rohe
+Kontoschlüssel nicht im Schlüsselbund liegen bleibt.
 
 „Biometrisches Entsperren deaktivieren“ löscht den Schlüsselbund-Eintrag und den
 Wiederaufnahmezustand, auf iOS zusätzlich den AutoFill-Schlüssel (`de.melonapp.autofill.v1`),
@@ -127,7 +147,11 @@ rechnen denselben Abstand ein. Auf dem Mac und im Browser ist der Abstand 0.
 Unter „Konto“ veröffentlicht „Passwörter für iOS AutoFill aktualisieren“ nach einem
 Sync eine verschlüsselte Kopie der Login-Einträge in der App Group. Die Extension
 verwendet ausschließlich exakt passende HTTPS-Hosts und verlangt biometrisches
-Entsperren. Der Snapshot ist höchstens 24 Stunden gültig; Änderungen erfordern eine
+Entsperren. Ihr Schlüssel ist nicht der Kontoschlüssel, sondern ein eigener AutoFill-Schlüssel,
+abgeleitet aus Kontoschlüssel, Server und Konto
+([ADR 0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/)). Er öffnet nur die
+Passwort-Kopie, die Passkeys und den Briefkasten, nicht die Identität, die Bereichsschlüssel oder
+den API-Cache der App. Der Snapshot ist höchstens 24 Stunden gültig; Änderungen erfordern eine
 neue Veröffentlichung. Aktiviere anschließend MelonApp unter iOS **Einstellungen →
 Allgemein → Automatisch ausfüllen & Passwörter** (die Bezeichnung variiert je iOS-Version).
 

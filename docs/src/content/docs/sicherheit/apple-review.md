@@ -24,13 +24,16 @@ kleinere Punkte und ein Bedienfehler, alle behoben (#61–#65, siehe unten).
 - Tauri lädt ausschließlich die gemeinsame lokale Oberfläche mit begrenzter CSP.
   Serverwechsel erfordert, dass kein Tresor offen ist; eine abgebrochene Anmeldung samt
   Login-Nachweis wird dabei verworfen (#63, #65). API-URLs erlauben HTTPS und für lokale
-  Entwicklung HTTP auf Loopback; Weiterleitungen sind abgeschaltet.
+  Entwicklung HTTP auf Loopback; Weiterleitungen sind abgeschaltet. Die Server-Adresse liegt im
+  Schlüsselbund statt in einer Datei, API-Pfade bleiben auch mit `%2e%2e` unter `/api/v1/`.
 - Jedes Sperren, auch Fokusverlust, Suspendieren und der native Timer, meldet beim Server ab. Ausgenommen ist nur genau das Token, das im biometrischen Wiederaufnahmezustand steckt (#61).
 - Caches verwenden authentifizierte Verschlüsselung mit Konto-/Server-/Formatkontext. Der
   biometrische Wiederaufnahmezustand hat einen eigenen Kontext und lässt sich nicht mit
   einer Cache-Datei vertauschen (#62). Deaktivieren löscht auch den AutoFill-Schlüssel (#64).
   Schreibvorgänge verwenden private temporäre Dateien und atomaren Ersatz. Schlüssel
-  liegen nur in der Keychain mit `biometryCurrentSet` und gerätegebundener Zugriffsart.
+  liegen nur in der Keychain mit `biometryCurrentSet` und gerätegebundener Zugriffsart. Dort
+  liegen nur abgeleitete Schlüssel, nie der Kontoschlüssel; die Extension kann damit weder die
+  Identität noch Bereichsschlüssel öffnen ([ADR 0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/)).
 - AutoFill lehnt HTTP, ähnliche Domains und automatisch passende Subdomains ab.
   Fehlende Biometrie, falsche Schlüssel, defekte Dateien und abgelaufene Passwort-
   Snapshots führen zur Ablehnung. Keine ungeschützte Fallback-Datei wird angelegt.

@@ -49,7 +49,9 @@ den Tresor übernommen hat; bis dahin liegt er nur auf dem Gerät.
 ## Alternativen
 
 - AutoFill aus der WebView: erfüllt Apples Extension-Schnittstelle nicht.
-- Klartext oder rohe Schlüssel in der App Group: widerspricht dem Sicherheitsmodell.
+- Klartext oder rohe Schlüssel in der App Group: widerspricht dem Sicherheitsmodell. Bis
+  [ADR 0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/) lag trotzdem der
+  Kontoschlüssel in der geteilten Keychain-Gruppe. Seitdem ist es ein eigener AutoFill-Schlüssel.
 - Bestehende Login-Items für Passkeys zweckentfremden: keine klare Versionierung oder
   sichere Migration; deshalb zunächst getrennte lokale Dateien.
 

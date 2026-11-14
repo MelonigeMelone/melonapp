@@ -40,5 +40,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0026](/melonapp/entscheidungen/0026-safari-erweiterung-nur-mac/) | Safari-Erweiterung nur auf dem Mac, eingebettet in die Mac-App | angenommen |
 | [0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/) | Authentisierte Tresor-Schlüssel | angenommen |
 | [0028](/melonapp/entscheidungen/0028-bereiche-nur-mit-zustimmung/) | Bereiche nur mit Zustimmung | angenommen |
+| [0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/) | Abgeleitete Geräteschlüssel | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.
