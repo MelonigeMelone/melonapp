@@ -8,8 +8,8 @@ sidebar:
 | Workflow | Datei | Auslöser | Inhalt |
 |---|---|---|---|
 | CI | `ci.yml` | Push auf `main`, PR | ShellCheck für `deploy/bin/*`, `fmt`, `clippy -D warnings`, Rust-Tests mit PostgreSQL, Mindest-Rust-Version 1.87, Web-App und Erweiterung (WASM-Build, Tests, Build, Erweiterung als Artefakt `melonapp-extension`), **E2E**: kompletter Stack per Compose + Browser-Test der Web-App + Test der Erweiterung in Chromium + Prüfung, dass die Datenbank keinen Klartext enthält |
-| Security | `security.yml` | Push, PR, täglich 05:17 UTC, manuell | cargo-deny (auch für die Apple-Abhängigkeiten), npm audit (Produktionsabhängigkeiten, ab „high“), gitleaks, CodeQL, Fuzzing (nur täglich und manuell) ([Details](/melonapp/sicherheit/pruefungen/)) |
-| Images | `docker.yml` | Push auf `main`, Tags `v*`, PR mit Code-Änderungen | Images `melonapp-server` und `melonapp-web` bauen und nach GHCR pushen (nicht bei PRs), mit SBOM und Provenance. Bei einem Tag `v*` danach Job **Deploy**: Update des Servers per SSH ([Selbst hosten](/melonapp/betrieb/selbst-hosten/#updates-version-per-tag)) |
+| Security | `security.yml` | Push, PR, täglich 05:17 UTC, manuell | cargo-deny (auch für die Apple-Abhängigkeiten), npm audit (alle Abhängigkeiten samt Build-Werkzeugen, ab „high“), trivy (baut beide Images), zizmor (Workflows), gitleaks, CodeQL, Fuzzing (nur täglich und manuell) ([Details](/melonapp/sicherheit/pruefungen/)) |
+| Images | `docker.yml` | Push auf `main`, Tags `v*` | Images `melonapp-server` und `melonapp-web` bauen und nach GHCR pushen, mit SBOM und Provenance. Bei PRs baut der trivy-Job in Security beide Images. Bei einem Tag `v*` danach Job **Deploy**: Update des Servers per SSH ([Selbst hosten](/melonapp/betrieb/selbst-hosten/#updates-version-per-tag)) |
 | Docs | `docs.yml` | Push auf `main` mit Änderungen in `docs/`, PR, manuell | Doku bauen und auf GitHub Pages veröffentlichen (nicht bei PRs) |
 
 ## Image-Tags
@@ -21,6 +21,24 @@ sidebar:
 | `1.2.3` | Git-Tag `v1.2.3` |
 
 Images: `ghcr.io/melonigemelone/melonapp-server` und `ghcr.io/melonigemelone/melonapp-web`.
+
+## Härtung der Workflows
+
+- **Schreibrechte nur ohne fremden Code:** `packages: write` und `id-token: write` hat nur der
+  Image-Job in `docker.yml`, und der läuft nie bei PRs. Ob ein PR-Stand als Image baut, prüft der
+  trivy-Job, der nur `contents: read` hat.
+- **Release ohne Build-Cache:** Bei Tags baut `docker.yml` ohne `cache-from`, und
+  `apple-release.yml` nutzt keinen npm-Cache (`package-manager-cache: false`). Den
+  GitHub-Actions-Cache kann jeder Job auf `main` beschreiben, etwa über eine kompromittierte
+  Build-Abhängigkeit. Ein Release soll nur aus dem getaggten Code entstehen. Auf `main` bleibt der
+  Cache an, weil diese Images nicht deployt werden.
+- **Kein Token im Checkout:** Jeder `actions/checkout` setzt `persist-credentials: false`. Sonst
+  läge das `GITHUB_TOKEN` in `.git/config`, lesbar für jeden späteren Schritt und in Artefakten.
+  Kein Workflow pusht mit git; das Release-Upload nutzt `gh` mit eigenem Token.
+- **zizmor** prüft bei jedem Push und PR alle Workflows und `dependabot.yml` (Job *Workflows* in
+  `security.yml`). Neue Funde machen den Lauf rot.
+- **Dependabot wartet 7 Tage**, bevor es eine neue Version vorschlägt (`cooldown`). Ein gekapertes
+  Paket fällt meist in den ersten Tagen auf. Sicherheitsupdates kommen ohne Wartezeit.
 
 ## Öffentliches oder privates Repo
 
@@ -42,7 +60,15 @@ Repo, das prüft gitleaks.
 
 - **Pages:** Settings → Pages → Source: *GitHub Actions*.
 - **Private Vulnerability Reporting:** Settings → Code security → aktivieren.
-- **Branch-Schutz für `main`:** CI und Security als Pflicht-Checks.
+- **Ruleset „main“** (Settings → Rules): Änderungen nur per PR, kein Force-Push, kein Löschen.
+  Pflicht-Checks sind alle Jobs aus CI und Security, die bei jedem PR laufen (CI: Server scripts,
+  Format/lint/test, Web app, End-to-end, Minimum Rust version; Security: beide cargo-deny-Jobs,
+  npm audit, trivy, zizmor, gitleaks, CodeQL). Admins dürfen nur über einen PR ausweichen
+  (Bypass-Modus *pull request*), nicht direkt pushen.
+- **Ruleset „Release tags“:** Tags `v*` anlegen, verschieben und löschen darf nur ein Admin, weil
+  ein Tag sofort deployt.
+- **Actions-Policy** (Settings → Actions → General): *Require actions to be pinned to a full-length
+  commit SHA*. Eine Action mit Tag statt SHA startet dann gar nicht erst.
 
 ## Apple-Apps
 
