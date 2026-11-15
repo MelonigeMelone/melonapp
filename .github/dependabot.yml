@@ -4,6 +4,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       rustcrypto:
         patterns: [aead, argon2, chacha20poly1305, digest, hkdf, hmac, password-hash, sha2, blake2, p256, crypto-bigint, ctutils, elliptic-curve, ecdsa, hpke, rand, rand_core, getrandom]
@@ -13,6 +15,8 @@ updates:
     directory: /apps/desktop/src-tauri
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       rustcrypto:
         patterns: [aead, argon2, chacha20poly1305, digest, hkdf, hmac, password-hash, sha2, blake2, p256, crypto-bigint, ctutils, elliptic-curve, ecdsa, hpke, rand, rand_core, getrandom]
@@ -22,18 +26,26 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: docker
     directories: [/, /apps/web]
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: docker-compose
     directory: /deploy
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       npm-minor:
         update-types: [minor, patch]
