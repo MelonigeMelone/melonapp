@@ -128,6 +128,7 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | API-Pfade verlassen `/api/v1/` nicht, auch nicht mit `%2e%2e` | `platform::tests::api_paths_cannot_leave_the_api_prefix` |
 | Geräteschlüssel sind vom Kontoschlüssel und voneinander getrennt | `private::tests::device_keys_are_separate_from_the_account_and_each_other` |
 | AutoFill-Schlüssel öffnet weder Identität noch API-Cache und kann keinen Cache fälschen | `autofill_key_cannot_open_the_account` |
+| API-Cache hat einen eigenen Schlüssel: Der Kontoschlüssel öffnet ihn nicht, mit dem Kontoschlüssel verschlüsselte Dateien öffnet nur noch der Altpfad, und auch der nur entsperrt | `api_cache_has_its_own_key_and_old_files_open_only_on_the_legacy_path` |
 | AutoFill-Dateien öffnen nur mit Scope und Namen | `autofill_files_open_only_with_their_scope_and_name` |
 | Passkeys für die Extension lassen sich nicht mit dem Kontoschlüssel öffnen | `passkeys::tests::synced_copy_for_the_extension_cannot_be_opened_with_the_account_key` |
 | Briefkasten-Dateien von vor dem Update werden weiter übernommen | `passkeys::tests::outbox_files_written_before_the_autofill_key_are_still_imported` |

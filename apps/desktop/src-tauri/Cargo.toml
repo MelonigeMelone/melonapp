@@ -35,6 +35,7 @@ tauri-plugin-global-shortcut = "2"
 
 [dev-dependencies]
 melon-crypto = { path = "../../../crates/melon-crypto" }
+melon-native = { path = "../../../crates/melon-native", features = ["test-support"] }
 
 [lints.rust]
 unsafe_code = "forbid"

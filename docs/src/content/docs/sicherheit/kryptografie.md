@@ -192,6 +192,16 @@ Eine verschlüsselte Export-Datei ist JSON:
 genullt (`zeroize`) und implementieren kein `Debug`. Klartexte kommen als
 `Zeroizing<Vec<u8>>` zurück.
 
+Schlüssel entstehen direkt in ihrem Zielspeicher, ohne Kopie als `[u8; 32]` dazwischen: HKDF
+schreibt in den neuen Schlüssel (`SymmetricKey::filled`, `AuthKey::filled`), entschlüsselte
+Schlüssel kommen über `SymmetricKey::from_slice` aus dem genullten Puffer. Eine Kopie auf dem
+Stack würde sonst nach dem Verschieben ungenullt liegen bleiben. Rust garantiert das nicht für
+jede Kopie, die der Compiler anlegt; es geht darum, keine eigenen anzulegen.
+
+Schlüssel vergleicht `SymmetricKey::same_as` in konstanter Zeit (`subtle`). Die native Sitzung
+nutzt das, wenn sie beim Passwortwechsel und beim biometrischen Entsperren prüft, ob ein
+entschlüsselter Kontoschlüssel der erwartete ist.
+
 ## Passwort-Generator (`generator.rs`)
 
 - Zufall direkt aus dem Betriebssystem (`os_rng()`), gleichverteilt über `random_range` mit dem `rand`-Feature `unbiased` (ohne jede Verzerrung).

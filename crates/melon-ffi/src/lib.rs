@@ -18,11 +18,7 @@ pub fn decrypt_cache(
     scope: String,
 ) -> Result<Vec<u8>, CacheError> {
     let key = Zeroizing::new(key);
-    let bytes = key
-        .as_slice()
-        .try_into()
-        .map_err(|_| CacheError::InvalidKey)?;
-    let key = SymmetricKey::from_bytes(bytes);
+    let key = SymmetricKey::from_slice(&key).map_err(|_| CacheError::InvalidKey)?;
     if ciphertext.len() > 48 * 1024 * 1024 {
         return Err(CacheError::InvalidCache);
     }
@@ -43,14 +39,11 @@ pub fn encrypt_cache(
 ) -> Result<String, CacheError> {
     let key = Zeroizing::new(key);
     let plaintext = Zeroizing::new(plaintext);
-    let bytes = key
-        .as_slice()
-        .try_into()
-        .map_err(|_| CacheError::InvalidKey)?;
+    let key = SymmetricKey::from_slice(&key).map_err(|_| CacheError::InvalidKey)?;
     if plaintext.len() > 32 * 1024 * 1024 {
         return Err(CacheError::InvalidCache);
     }
-    Ok(SymmetricKey::from_bytes(bytes)
+    Ok(key
         .encrypt(
             &plaintext,
             format!("melon/native/cache/v1/{scope}").as_bytes(),
@@ -92,11 +85,7 @@ pub struct Assertion {
 #[uniffi::export]
 pub fn register_passkey(key: Vec<u8>, rp: String) -> Result<Registration, CacheError> {
     let key = Zeroizing::new(key);
-    let key = SymmetricKey::from_bytes(
-        key.as_slice()
-            .try_into()
-            .map_err(|_| CacheError::InvalidKey)?,
-    );
+    let key = SymmetricKey::from_slice(&key).map_err(|_| CacheError::InvalidKey)?;
     let result = melon_crypto::create_passkey(&key, &rp).map_err(|_| CacheError::InvalidCache)?;
     Ok(Registration {
         credential_id: result.credential_id,
@@ -114,11 +103,7 @@ pub fn sign_passkey(
     client_hash: Vec<u8>,
 ) -> Result<Assertion, CacheError> {
     let key = Zeroizing::new(key);
-    let key = SymmetricKey::from_bytes(
-        key.as_slice()
-            .try_into()
-            .map_err(|_| CacheError::InvalidKey)?,
-    );
+    let key = SymmetricKey::from_slice(&key).map_err(|_| CacheError::InvalidKey)?;
     let result =
         melon_crypto::assert_passkey(&key, &rp, &credential_id, &encrypted_key, &client_hash)
             .map_err(|_| CacheError::InvalidCache)?;

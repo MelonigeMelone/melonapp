@@ -2,10 +2,11 @@ use std::fmt;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chacha20poly1305::{
-    Key, KeyInit, XChaCha20Poly1305, XNonce,
+    KeyInit, XChaCha20Poly1305, XNonce,
     aead::{Aead, Payload},
 };
 use rand::Rng;
+use subtle::ConstantTimeEq;
 
 use crate::rng::os_rng;
 use serde::{Deserialize, Serialize};
@@ -31,14 +32,33 @@ impl SymmetricKey {
         Self(bytes)
     }
 
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, CryptoError> {
+        if bytes.len() != 32 {
+            return Err(CryptoError::InvalidKey);
+        }
+        let mut key = Self([0u8; 32]);
+        key.0.copy_from_slice(bytes);
+        Ok(key)
+    }
+
+    pub(crate) fn filled(fill: impl FnOnce(&mut [u8; 32])) -> Self {
+        let mut key = Self([0u8; 32]);
+        fill(&mut key.0);
+        key
+    }
+
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
+    }
+
+    pub fn same_as(&self, other: &SymmetricKey) -> bool {
+        self.0.ct_eq(&other.0).into()
     }
 
     pub fn encrypt(&self, plaintext: &[u8], aad: &[u8]) -> EncString {
         let mut nonce = [0u8; NONCE_LEN];
         os_rng().fill_bytes(&mut nonce);
-        let ciphertext = XChaCha20Poly1305::new(&Key::from(self.0))
+        let ciphertext = XChaCha20Poly1305::new((&self.0).into())
             .encrypt(
                 &XNonce::from(nonce),
                 Payload {
@@ -56,7 +76,7 @@ impl SymmetricKey {
     pub fn decrypt(&self, enc: &EncString, aad: &[u8]) -> Result<Zeroizing<Vec<u8>>, CryptoError> {
         let (nonce, ciphertext) = enc.raw.split_at(NONCE_LEN);
         let nonce = XNonce::try_from(nonce).map_err(|_| CryptoError::Malformed)?;
-        XChaCha20Poly1305::new(&Key::from(self.0))
+        XChaCha20Poly1305::new((&self.0).into())
             .decrypt(
                 &nonce,
                 Payload {

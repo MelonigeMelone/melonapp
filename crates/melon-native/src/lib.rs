@@ -194,7 +194,7 @@ impl Session {
             &parse(text(a, "wrappedAccountKey")?)?,
         )
         .map_err(|_| "wrong_password")?;
-        if account.as_bytes() != self.require_account()?.as_bytes() {
+        if !account.same_as(self.require_account()?) {
             return Err("wrong_account");
         }
         Ok(())
@@ -265,8 +265,7 @@ impl Session {
         if !self.active {
             return Err("background_locked");
         }
-        let bytes: [u8; 32] = key.try_into().map_err(|_| "invalid_key")?;
-        let wrap = SymmetricKey::from_bytes(bytes);
+        let wrap = SymmetricKey::from_slice(key).map_err(|_| "invalid_key")?;
         let plaintext = wrap
             .decrypt(&parse(snapshot)?, &biometric_aad(scope))
             .map_err(|_| "decrypt_failed")?;
@@ -291,9 +290,8 @@ impl Session {
                 .decode(text(value, "account")?)
                 .map_err(|_| "invalid_cache")?,
         );
-        let bytes: [u8; 32] = raw.as_slice().try_into().map_err(|_| "invalid_cache")?;
-        let account = SymmetricKey::from_bytes(bytes);
-        if derive_device_key(&account, "biometric", scope).as_bytes() != wrap.as_bytes() {
+        let account = SymmetricKey::from_slice(&raw).map_err(|_| "invalid_cache")?;
+        if !derive_device_key(&account, "biometric", scope).same_as(wrap) {
             return Err("decrypt_failed");
         }
         let identity = KeyPair::open_with(&account, &parse(text(value, "identity")?)?)
@@ -358,7 +356,7 @@ impl Session {
             .map_err(|_| "decrypt_failed")
     }
 
-    pub fn passkey_open(
+    pub fn legacy_passkey_open(
         &mut self,
         rp: &str,
         id: &[u8],
@@ -369,7 +367,8 @@ impl Session {
             .map_err(|_| "decrypt_failed")
     }
 
-    pub fn passkey_seal(&mut self, rp: &str, id: &[u8], private: &[u8]) -> Result<String> {
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn legacy_passkey_seal(&mut self, rp: &str, id: &[u8], private: &[u8]) -> Result<String> {
         self.expire();
         melon_crypto::seal_passkey_key(self.require_account()?, rp, id, private)
             .map_err(|_| "invalid_passkey")
@@ -381,7 +380,7 @@ impl Session {
             return Err("cache_too_large");
         }
         Ok(self
-            .require_account()?
+            .device_key("cache", scope)?
             .encrypt(
                 plaintext,
                 format!("melon/native/cache/v1/{scope}").as_bytes(),
@@ -390,6 +389,34 @@ impl Session {
     }
 
     pub fn cache_open(&mut self, scope: &str, ciphertext: &str) -> Result<Zeroizing<Vec<u8>>> {
+        self.expire();
+        if ciphertext.len() > 48 * 1024 * 1024 {
+            return Err("cache_too_large");
+        }
+        self.device_key("cache", scope)?
+            .decrypt(
+                &parse(ciphertext)?,
+                format!("melon/native/cache/v1/{scope}").as_bytes(),
+            )
+            .map_err(|_| "decrypt_failed")
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn legacy_cache_seal(&mut self, scope: &str, plaintext: &[u8]) -> Result<String> {
+        Ok(self
+            .require_account()?
+            .encrypt(
+                plaintext,
+                format!("melon/native/cache/v1/{scope}").as_bytes(),
+            )
+            .to_string())
+    }
+
+    pub fn legacy_cache_open(
+        &mut self,
+        scope: &str,
+        ciphertext: &str,
+    ) -> Result<Zeroizing<Vec<u8>>> {
         self.expire();
         if ciphertext.len() > 48 * 1024 * 1024 {
             return Err("cache_too_large");
@@ -642,7 +669,7 @@ impl Session {
                     &parse(text(a, "wrappedAccountKey")?)?,
                 )
                 .map_err(|_| "wrong_password")?;
-                if account.as_bytes() != self.require_account()?.as_bytes() {
+                if !account.same_as(self.require_account()?) {
                     return Err("wrong_account");
                 }
                 if method == "setupRecovery" {
@@ -1104,7 +1131,7 @@ mod tests {
             .unwrap();
         assert!(
             session
-                .passkey_open("example.com", &id, &created.encrypted_key)
+                .legacy_passkey_open("example.com", &id, &created.encrypted_key)
                 .is_err()
         );
         let sealed = session
@@ -1113,9 +1140,13 @@ mod tests {
         assert!(
             melon_crypto::assert_passkey(&device, "example.com", &id, &sealed, &[1; 32]).is_ok()
         );
-        let legacy = session.passkey_seal("example.com", &id, &private).unwrap();
+        let legacy = session
+            .legacy_passkey_seal("example.com", &id, &private)
+            .unwrap();
         assert_eq!(
-            &*session.passkey_open("example.com", &id, &legacy).unwrap(),
+            &*session
+                .legacy_passkey_open("example.com", &id, &legacy)
+                .unwrap(),
             &*private
         );
         assert!(
@@ -1196,6 +1227,44 @@ mod tests {
         assert_ne!(
             device.as_bytes(),
             autofill_key(&mut session, "other").as_bytes()
+        );
+    }
+
+    #[test]
+    fn api_cache_has_its_own_key_and_old_files_open_only_on_the_legacy_path() {
+        let (mut session, _) = account();
+        let account_key = SymmetricKey::from_bytes(*session.account.as_ref().unwrap().as_bytes());
+        let aad = b"melon/native/cache/v1/https://melon.example/x";
+        let cached = session
+            .cache_seal("https://melon.example/x", b"secret")
+            .unwrap();
+        assert!(account_key.decrypt(&parse(&cached).unwrap(), aad).is_err());
+        assert!(
+            session
+                .legacy_cache_open("https://melon.example/x", &cached)
+                .is_err()
+        );
+        let old = account_key.encrypt(b"old", aad).to_string();
+        assert!(session.cache_open("https://melon.example/x", &old).is_err());
+        assert_eq!(
+            &*session
+                .legacy_cache_open("https://melon.example/x", &old)
+                .unwrap(),
+            b"old"
+        );
+        assert_eq!(
+            &*session
+                .legacy_cache_seal("https://melon.example/x", b"old")
+                .and_then(|s| session.legacy_cache_open("https://melon.example/x", &s))
+                .unwrap(),
+            b"old"
+        );
+        session.lock();
+        assert_eq!(
+            session
+                .legacy_cache_open("https://melon.example/x", &old)
+                .err(),
+            Some("locked")
         );
     }
 
