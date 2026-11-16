@@ -21,10 +21,10 @@ fn aad(user_id: &str, purpose: &str) -> Vec<u8> {
 impl PrivateDataKey {
     pub fn derive(account_key: &SymmetricKey) -> Self {
         let hk = Hkdf::<Sha256>::new(Some(SALT), account_key.as_bytes());
-        let mut out = Zeroizing::new([0u8; 32]);
-        hk.expand(b"key", out.as_mut())
-            .expect("32 bytes is a valid HKDF output length");
-        Self(SymmetricKey::from_bytes(*out))
+        Self(SymmetricKey::filled(|out| {
+            hk.expand(b"key", out)
+                .expect("32 bytes is a valid HKDF output length")
+        }))
     }
 
     pub fn seal(&self, user_id: &str, purpose: &str, plaintext: &[u8]) -> EncString {
@@ -46,10 +46,10 @@ pub fn derive_device_key(account_key: &SymmetricKey, purpose: &str, scope: &str)
     let mut info = purpose.as_bytes().to_vec();
     info.push(0);
     info.extend_from_slice(scope.as_bytes());
-    let mut out = Zeroizing::new([0u8; 32]);
-    hk.expand(&info, out.as_mut())
-        .expect("32 bytes is a valid HKDF output length");
-    SymmetricKey::from_bytes(*out)
+    SymmetricKey::filled(|out| {
+        hk.expand(&info, out)
+            .expect("32 bytes is a valid HKDF output length")
+    })
 }
 
 #[cfg(test)]

@@ -126,11 +126,7 @@ impl KeyPair {
             )
             .map_err(|_| CryptoError::Decrypt)?,
         );
-        let arr: [u8; 32] = plain
-            .as_slice()
-            .try_into()
-            .map_err(|_| CryptoError::InvalidKey)?;
-        Ok(SymmetricKey::from_bytes(arr))
+        SymmetricKey::from_slice(&plain)
     }
 }
 
@@ -244,11 +240,7 @@ pub fn unwrap_account_key(
     wrapped: &EncString,
 ) -> Result<SymmetricKey, CryptoError> {
     let bytes = wrapping_key.decrypt(wrapped, AAD_ACCOUNT_KEY)?;
-    let arr: [u8; 32] = bytes
-        .as_slice()
-        .try_into()
-        .map_err(|_| CryptoError::InvalidKey)?;
-    Ok(SymmetricKey::from_bytes(arr))
+    SymmetricKey::from_slice(&bytes)
 }
 
 pub fn item_aad(vault_id: &str, item_id: &str, key_version: u32) -> Vec<u8> {

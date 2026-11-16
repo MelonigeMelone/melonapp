@@ -73,8 +73,10 @@ pub struct MasterKey([u8; 32]);
 pub struct AuthKey([u8; 32]);
 
 impl AuthKey {
-    pub(crate) fn from_bytes(bytes: [u8; 32]) -> Self {
-        Self(bytes)
+    pub(crate) fn filled(fill: impl FnOnce(&mut [u8; 32])) -> Self {
+        let mut key = Self([0u8; 32]);
+        fill(&mut key.0);
+        key
     }
 
     pub fn as_bytes(&self) -> &[u8; 32] {
@@ -113,20 +115,19 @@ pub fn derive_master_key(
 }
 
 impl MasterKey {
-    fn expand(&self, info: &[u8]) -> Zeroizing<[u8; 32]> {
-        let hk = Hkdf::<Sha256>::from_prk(&self.0).expect("32-byte PRK is always valid");
-        let mut out = Zeroizing::new([0u8; 32]);
-        hk.expand(info, out.as_mut())
+    fn expand(&self, info: &[u8], out: &mut [u8; 32]) {
+        Hkdf::<Sha256>::from_prk(&self.0)
+            .expect("32-byte PRK is always valid")
+            .expand(info, out)
             .expect("32 bytes is a valid HKDF output length");
-        out
     }
 
     pub fn auth_key(&self) -> AuthKey {
-        AuthKey(*self.expand(INFO_AUTH))
+        AuthKey::filled(|out| self.expand(INFO_AUTH, out))
     }
 
     pub fn wrapping_key(&self) -> SymmetricKey {
-        SymmetricKey::from_bytes(*self.expand(INFO_WRAP))
+        SymmetricKey::filled(|out| self.expand(INFO_WRAP, out))
     }
 }
 

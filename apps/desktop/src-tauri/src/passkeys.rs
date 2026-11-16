@@ -81,7 +81,7 @@ fn open_stored(session: &mut Session, scope: &str, file: &str, stored: &Stored) 
     }
     let private = session
         .autofill_passkey_open(scope, &stored.rp, &id, &stored.encrypted_key)
-        .or_else(|_| session.passkey_open(&stored.rp, &id, &stored.encrypted_key))
+        .or_else(|_| session.legacy_passkey_open(&stored.rp, &id, &stored.encrypted_key))
         .ok()?;
     Some(Pending {
         file: file.to_owned(),
@@ -116,7 +116,7 @@ fn read_file(
             let plaintext = session
                 .autofill_open(scope, &entry, &ciphertext)
                 .or_else(|_| {
-                    session.cache_open(&format!("autofill/v1/{scope}/{entry}"), &ciphertext)
+                    session.legacy_cache_open(&format!("autofill/v1/{scope}/{entry}"), &ciphertext)
                 })
                 .ok()?;
             let stored: Stored = serde_json::from_slice(&plaintext).ok()?;
@@ -129,7 +129,7 @@ fn read_file(
             let plaintext = session
                 .autofill_open(scope, "passkeys", &ciphertext)
                 .or_else(|_| {
-                    session.cache_open(&format!("autofill/v1/{scope}/passkeys"), &ciphertext)
+                    session.legacy_cache_open(&format!("autofill/v1/{scope}/passkeys"), &ciphertext)
                 })
                 .ok()?;
             let stored: Vec<Stored> = serde_json::from_slice(&plaintext).ok()?;
@@ -341,7 +341,7 @@ mod tests {
         .unwrap();
         assert!(
             session
-                .cache_open(&format!("autofill/v1/{SCOPE}/synced"), &sealed)
+                .legacy_cache_open(&format!("autofill/v1/{SCOPE}/synced"), &sealed)
                 .is_err()
         );
         let stored: Vec<Stored> =
@@ -349,7 +349,7 @@ mod tests {
                 .unwrap();
         assert!(
             session
-                .passkey_open("example.com", &[1; 32], &stored[0].encrypted_key)
+                .legacy_passkey_open("example.com", &[1; 32], &stored[0].encrypted_key)
                 .is_err()
         );
         assert!(session.autofill_open(OTHER, "synced", &sealed).is_err());
@@ -361,7 +361,9 @@ mod tests {
         let mut session = account();
         let private = [5u8; 32];
         let id = [6u8; 32];
-        let legacy_key = session.passkey_seal("example.com", &id, &private).unwrap();
+        let legacy_key = session
+            .legacy_passkey_seal("example.com", &id, &private)
+            .unwrap();
         let stored = Stored {
             id: STANDARD.encode(id),
             rp: "example.com".into(),
@@ -370,7 +372,7 @@ mod tests {
             encrypted_key: legacy_key,
         };
         let sealed = session
-            .cache_seal(
+            .legacy_cache_seal(
                 &format!("autofill/v1/{SCOPE}/outbox/{}", hex(&id)),
                 &serde_json::to_vec(&stored).unwrap(),
             )

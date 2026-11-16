@@ -75,20 +75,18 @@ impl RecoveryKey {
         Zeroizing::new(groups.join("-"))
     }
 
-    fn expand(&self, info: &[u8]) -> Zeroizing<[u8; 32]> {
-        let hk = Hkdf::<Sha256>::new(Some(SALT), self.secret.as_ref());
-        let mut out = Zeroizing::new([0u8; 32]);
-        hk.expand(info, out.as_mut())
+    fn expand(&self, info: &[u8], out: &mut [u8; 32]) {
+        Hkdf::<Sha256>::new(Some(SALT), self.secret.as_ref())
+            .expand(info, out)
             .expect("32 bytes is a valid HKDF output length");
-        out
     }
 
     pub fn auth_key(&self) -> AuthKey {
-        AuthKey::from_bytes(*self.expand(INFO_AUTH))
+        AuthKey::filled(|out| self.expand(INFO_AUTH, out))
     }
 
     fn wrapping_key(&self) -> SymmetricKey {
-        SymmetricKey::from_bytes(*self.expand(INFO_WRAP))
+        SymmetricKey::filled(|out| self.expand(INFO_WRAP, out))
     }
 
     pub fn wrap_account_key(&self, account_key: &SymmetricKey) -> EncString {
@@ -98,11 +96,7 @@ impl RecoveryKey {
 
     pub fn unwrap_account_key(&self, wrapped: &EncString) -> Result<SymmetricKey, CryptoError> {
         let bytes = self.wrapping_key().decrypt(wrapped, AAD_ACCOUNT_KEY)?;
-        let arr: [u8; 32] = bytes
-            .as_slice()
-            .try_into()
-            .map_err(|_| CryptoError::InvalidKey)?;
-        Ok(SymmetricKey::from_bytes(arr))
+        SymmetricKey::from_slice(&bytes)
     }
 }
 

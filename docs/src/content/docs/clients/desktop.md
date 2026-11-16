@@ -100,7 +100,7 @@ Wiederaufnahmezustand verschlüsselt, und erst darin stecken Kontoschlüssel, Id
 Sitzungsdaten. Beim Entsperren prüft Rust, dass der Kontoschlüssel wieder genau den Schlüssel aus
 dem Schlüsselbund ergibt. Der Zustand hat einen
 eigenen Verschlüsselungskontext (`melon/native/biometric/v2/…`), getrennt vom API- und
-AutoFill-Cache (`melon/native/cache/v1/…`). Eine zwischengespeicherte Server-Antwort lässt sich
+AutoFill-Cache (`melon/native/cache/v1/…`, jeweils mit eigenem abgeleiteten Schlüssel). Eine zwischengespeicherte Server-Antwort lässt sich
 so nie als Wiederaufnahmezustand ausgeben. Ein anderer Schlüssel, Server oder manipuliertes
 Dokument wird abgelehnt. Einrichtungen aus der Zeit vor ADR 0029 (`…/biometric/v1/…`) gelten
 nicht mehr und müssen einmal neu eingerichtet werden. Erkennt die Statusabfrage eine solche alte

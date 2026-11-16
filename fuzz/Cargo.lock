@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "melon-crypto"
-version = "0.1.0"
+version = "0.3.1"
 dependencies = [
  "argon2",
  "base64",
@@ -491,7 +491,9 @@ dependencies = [
  "p256",
  "rand",
  "serde",
+ "serde_json",
  "sha2",
+ "subtle",
  "thiserror",
  "unicode-normalization",
  "zeroize",
@@ -510,12 +512,13 @@ dependencies = [
 
 [[package]]
 name = "melon-native"
-version = "0.1.0"
+version = "0.3.1"
 dependencies = [
  "base64",
  "melon-crypto",
  "serde",
  "serde_json",
+ "unicode-normalization",
  "zeroize",
 ]
 
