@@ -17,7 +17,7 @@ Internet ─► Caddy :443 (TLS, HSTS)  ─┬─ /api/*, /health ─► melon-s
 ```
 
 Die Web-App und die API laufen unter derselben Domain. CORS ist dafür nicht nötig.
-Caddy setzt für die Web-App eine strenge Content-Security-Policy, auch für die Dateien unter `/assets/`, aus denen der Krypto-Worker kommt ([Details](/melonapp/clients/web/#schutzmaßnahmen)). Wer einen eigenen Proxy nutzt, muss beide Header übernehmen.
+Caddy setzt für die Web-App eine strenge Content-Security-Policy, auch für die Dateien unter `/assets/`, aus denen der Krypto-Worker kommt ([Details](/melonapp/clients/web/#schutzmaßnahmen)). Wer einen eigenen Proxy nutzt, muss beide CSPs samt Trusted Types sowie `Permissions-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy` und `Cross-Origin-Resource-Policy` aus `deploy/Caddyfile` übernehmen.
 Dafür erzeugt Caddy je Aufruf einen Nonce (`templates` für `index.html`). Wer einen eigenen
 Reverse Proxy vor die Web-App setzt, muss `index.html` ungecacht durchreichen und den
 CSP-Header von Caddy übernehmen ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)).

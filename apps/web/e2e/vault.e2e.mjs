@@ -22,6 +22,7 @@ const bob = { email: `bob-${stamp}@example.com`, master: 'melone kiwi banane ana
 const problems = [];
 let expect401 = false;
 let expect404 = false;
+let expectTrustedTypes = false;
 
 const browser = await chromium.launch();
 
@@ -30,7 +31,7 @@ async function newPage(options = {}) {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   const page = await context.newPage();
   page.on('console', (m) => {
-    const expected = (expect401 && m.text().includes('401')) || (expect404 && m.text().includes('404'));
+    const expected = (expect401 && m.text().includes('401')) || (expect404 && m.text().includes('404')) || (expectTrustedTypes && /Trusted|script URL not allowed/.test(m.text()));
     if (m.type() === 'error' && !expected) problems.push(`console: ${m.text()}`);
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
@@ -79,6 +80,31 @@ await step('the crypto worker runs under a CSP and nothing is spell-checked', as
   if (!scripts.length) throw new Error('no script assets found');
   const csp = await a.evaluate(async (src) => (await fetch(src)).headers.get('content-security-policy'), scripts[0]);
   if (!csp || !csp.includes("connect-src 'self'") || !csp.includes("default-src 'none'")) throw new Error(`assets lack a CSP: ${csp}`);
+  if (!csp.includes("require-trusted-types-for 'script'")) throw new Error(`assets lack trusted types: ${csp}`);
+  if (!(await a.evaluate(() => crossOriginIsolated))) throw new Error('page is not cross-origin isolated');
+  const page = await a.evaluate(async () => Object.fromEntries((await fetch(location.href)).headers));
+  if (!page['content-security-policy']?.includes("require-trusted-types-for 'script'")) throw new Error(`page lacks trusted types: ${page['content-security-policy']}`);
+  if (page['cross-origin-resource-policy'] !== 'same-origin') throw new Error(`page lacks CORP: ${page['cross-origin-resource-policy']}`);
+  if (!page['permissions-policy']?.includes('camera=()')) throw new Error(`page lacks a permissions policy: ${page['permissions-policy']}`);
+  expectTrustedTypes = true;
+  const blocked = await a.evaluate(() => {
+    const result = {};
+    try {
+      document.createElement('div').innerHTML = '<img src=x>';
+      result.html = 'allowed';
+    } catch (e) {
+      result.html = e.name;
+    }
+    try {
+      new Worker('https://evil.example/w.js');
+      result.worker = 'allowed';
+    } catch (e) {
+      result.worker = e.name;
+    }
+    return result;
+  });
+  expectTrustedTypes = false;
+  if (blocked.html !== 'TypeError' || blocked.worker !== 'TypeError') throw new Error(`trusted types not enforced: ${JSON.stringify(blocked)}`);
   if (await a.evaluate(() => document.documentElement.spellcheck)) throw new Error('spell check is on');
 });
 
