@@ -27,7 +27,7 @@ jobs:
       - id: changes
         if: github.event_name == 'pull_request'
         run: bash scripts/changed.sh '^(deploy/|scripts/changed\.sh$|\.github/workflows/ci\.yml$)'
-      - run: shellcheck -e SC1091 deploy/bin/* deploy/test/*.sh scripts/build-wasm.sh scripts/changed.sh
+      - run: shellcheck -e SC1091,SC2329 deploy/bin/* deploy/test/*.sh scripts/*.sh
       - run: sudo apt-get update -q && sudo apt-get install -yq age
       - run: bash deploy/test/backup-restore.sh
       - if: steps.changes.outputs.run != 'false'

@@ -90,18 +90,11 @@ export async function register(email: string, password: string, inviteToken: str
       },
       invite_token: inviteToken,
     });
-    const res = await api.login({ email, auth_key: authKey, device: deviceName() });
-    return open(email, res.user_id, res.token, {
-      kdf: DEFAULT_KDF,
-      salt,
-      wrappedAccountKey: account.wrappedAccountKey,
-      publicKey: account.publicKey,
-      hasRecovery: false,
-    });
   } catch (e) {
     await cryptoCall('lock');
     throw e;
   }
+  return login(email, password);
 }
 
 function reauth(session: Session, password: string) {
@@ -174,6 +167,7 @@ export async function lock(session: Session | null) {
   const platform = nativePlatform();
   if (platform && (await platform.biometricKeepsToken(session.token).catch(() => false))) return;
   await api.logout(session.token).catch(() => undefined);
+  await platform?.signedOut().catch(() => undefined);
 }
 
 const messages: Record<string, string> = {

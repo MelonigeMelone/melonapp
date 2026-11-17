@@ -65,7 +65,7 @@ fuzz_target!(|data: &[u8]| {
             let _ = session.resolve_auth_proofs(&mut body);
         }
         1 => {
-            let _ = session.cache_open("fuzz", &String::from_utf8_lossy(rest));
+            let _ = session.autofill_open("fuzz", "passwords", &String::from_utf8_lossy(rest));
         }
         2 => {
             let mut fresh = Session::default();

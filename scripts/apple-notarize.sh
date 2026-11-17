@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 : "${APPLE_API_KEY:?}" "${APPLE_API_ISSUER:?}" "${APPLE_API_KEY_PATH:?}"
 target="$1"

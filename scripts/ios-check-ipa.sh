@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 ipa="$1"
 build="$2"

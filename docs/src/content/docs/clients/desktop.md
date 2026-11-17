@@ -32,10 +32,13 @@ Die WebView kann keine beliebigen Netzverbindungen öffnen; ausgenommen ist der
 bestehende, ausdrücklich gestartete Datenleck-Abgleich mit `api.pwnedpasswords.com`; der Rust-Transport bedient
 das bestehende API-Protokoll. Angezeigte Einträge und Sitzungstokens liegen weiterhin in React. Authentifizierungs-
 und Entschlüsselungsschlüssel bleiben in Rust; der Login verwendet undurchsichtige
-Handles, die nur der native HTTP-Transport auflösen kann. Der ausdrücklich angezeigte
+Handles, die nur der native HTTP-Transport auflösen kann. Jeder Handle gilt für genau eine
+Anfrage: Der Transport entfernt ihn beim Einlösen, ein abgefangener oder wiederholter Handle ist
+danach wertlos. Die Registrierung meldet sich deshalb nach `register` mit einer neuen Ableitung
+an (`login`), statt den Handle ein zweites Mal zu schicken. Der ausdrücklich angezeigte
 Recovery-Key bleibt als Notfall-Kit für die Person sichtbar.
 
-## Sperren und Cache
+## Sperren und Abmelden
 
 Rust sperrt nach fünf Minuten ohne gemeldete Eingabe, zusätzlich zum vorhandenen
 UI-Timer. Bricht ein Aufruf mit einem Absturz ab, ist die Sitzungssperre in Rust „vergiftet“.
@@ -61,17 +64,31 @@ Wiederaufnahmezustand steckt. Dafür speichert die App beim Aktivieren
 Passwort geholtes Token oder eines für einen anderen Server wird also abgemeldet. Das
 biometrisch genutzte Token läuft nach der normalen Sitzungsdauer ab.
 
+Meldet das Sperren beim Server ab, ruft die App danach `signed_out` auf. Auf iOS löscht das wie
+das Ausschalten der Biometrie den AutoFill-Schlüssel, die Passwort- und Passkey-Kopie für die
+Extension und `active.txt` und leert die Vorschläge im Credential Identity Store von iOS
+(`removeAllCredentialIdentities`). Briefkasten-Dateien mit neu angelegten Passkeys bleiben, bis
+die App sie in den Tresor übernommen hat, sonst gingen sie verloren.
+
 Schlägt das Entsperren fehl (falsches Passwort), verwirft die native Sitzung alles, auch den
 schon abgeleiteten Login-Nachweis. Ein Serverwechsel wird nur abgelehnt, solange ein Tresor
 offen ist. Eine begonnene, aber nicht abgeschlossene Anmeldung (z. B. falsche Server-Adresse)
 wird beim Wechsel verworfen, ihr Login-Nachweis geht also nie an den neuen Server.
 
-Erfolgreiche GET-Antworten werden zusätzlich mit dem Kontoschlüssel verschlüsselt unter
-dem App-Datenverzeichnis gespeichert. Der authentifizierte Kontext enthält Server und
-API-Pfad, Dateinamen sind SHA-256-Ableitungen dieses Kontextes. Temporäre Dateien haben
-Modus 0600 und werden nach `sync_all` atomar umbenannt. Die erste Version verwendet
-bewusst keine automatische Offline-Antwort: Mitgliedschaftsentzug und gelöschte
-Einträge dürfen nicht unbemerkt durch veraltete Daten ersetzt werden.
+Die App speichert keine Server-Antworten. Frühere Versionen schrieben jede GET-Antwort
+verschlüsselt als `cache-<sha256>.enc`, lasen sie aber nie: Eine Offline-Antwort könnte
+Mitgliedschaftsentzug und gelöschte Einträge unbemerkt durch veraltete Daten ersetzen. Beim Start
+löscht die App solche Dateien (`remove_api_cache`, nur Dateien mit genau diesem Namensmuster).
+
+Dateien der App (Biometrie-Zustand, AutoFill-Kopien) haben Modus 0600 und werden nach
+`sync_all` atomar umbenannt. Auf iOS bekommen sie vorher die Schutzklasse *Complete*
+(`fcntl(F_SETPROTECTIONCLASS)`, entspricht `NSFileProtectionComplete`): Bei gesperrtem
+iPhone sind sie auch für jemanden mit Zugriff auf das Dateisystem nicht lesbar. Klappt das auf
+einem Gerät nicht, schlägt das Schreiben fehl; nur der Simulator kennt keine Schutzklassen und
+schreibt trotzdem. Die Briefkasten-Dateien der Extension nutzen dieselbe Klasse
+(`.completeFileProtection`). Der Aufruf braucht `unsafe`. Das Desktop-Crate verbietet
+`unsafe` deshalb mit `deny` statt `forbid` und erlaubt es nur in `src/ios.rs`, das allein
+`fcntl` und den Credential Identity Store aufruft.
 
 ## Touch ID und Face ID
 
@@ -99,9 +116,9 @@ Er enthält nicht den Kontoschlüssel, sondern einen daraus abgeleiteten Schlüs
 Wiederaufnahmezustand verschlüsselt, und erst darin stecken Kontoschlüssel, Identität und
 Sitzungsdaten. Beim Entsperren prüft Rust, dass der Kontoschlüssel wieder genau den Schlüssel aus
 dem Schlüsselbund ergibt. Der Zustand hat einen
-eigenen Verschlüsselungskontext (`melon/native/biometric/v2/…`), getrennt vom API- und
-AutoFill-Cache (`melon/native/cache/v1/…`, jeweils mit eigenem abgeleiteten Schlüssel). Eine zwischengespeicherte Server-Antwort lässt sich
-so nie als Wiederaufnahmezustand ausgeben. Ein anderer Schlüssel, Server oder manipuliertes
+eigenen Verschlüsselungskontext (`melon/native/biometric/v2/…`), getrennt von den
+AutoFill-Dateien (`melon/native/cache/v1/…`, mit eigenem abgeleiteten Schlüssel). Eine
+AutoFill-Datei lässt sich so nie als Wiederaufnahmezustand ausgeben. Ein anderer Schlüssel, Server oder manipuliertes
 Dokument wird abgelehnt. Einrichtungen aus der Zeit vor ADR 0029 (`…/biometric/v1/…`) gelten
 nicht mehr und müssen einmal neu eingerichtet werden. Erkennt die Statusabfrage eine solche alte
 Einrichtung dieses Kontos, löscht sie Schlüsselbund-Eintrag und Dateien sofort, damit der rohe
@@ -109,8 +126,9 @@ Kontoschlüssel nicht im Schlüsselbund liegen bleibt.
 
 „Biometrisches Entsperren deaktivieren“ löscht den Schlüsselbund-Eintrag und den
 Wiederaufnahmezustand, auf iOS zusätzlich den AutoFill-Schlüssel (`de.melonapp.autofill.v1`),
-die Passwort-Kopie in der App Group und `active.txt`. Gespeicherte Passkeys bleiben
-verschlüsselt erhalten und sind nach erneutem Aktivieren wieder nutzbar.
+die Passwort- und Passkey-Kopie in der App Group und `active.txt` und leert die
+Vorschläge von iOS. Passkeys im Tresor bleiben erhalten und landen nach erneutem Aktivieren
+wieder bei der Extension.
 
 Ein fehlendes Entitlement, abgebrochene Biometrie oder nicht verfügbare Hardware führt
 zu einem Fehler; es gibt keinen ungeschützten Ersatzspeicher. Nach Änderung der
@@ -146,13 +164,22 @@ rechnen denselben Abstand ein. Auf dem Mac und im Browser ist der Abstand 0.
 
 Unter „Konto“ veröffentlicht „Passwörter für iOS AutoFill aktualisieren“ nach einem
 Sync eine verschlüsselte Kopie der Login-Einträge in der App Group. Die Extension
-verwendet ausschließlich exakt passende HTTPS-Hosts und verlangt biometrisches
+verwendet ausschließlich exakt passende HTTPS-Hosts samt Port und verlangt biometrisches
 Entsperren. Ihr Schlüssel ist nicht der Kontoschlüssel, sondern ein eigener AutoFill-Schlüssel,
 abgeleitet aus Kontoschlüssel, Server und Konto
 ([ADR 0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/)). Er öffnet nur die
-Passwort-Kopie, die Passkeys und den Briefkasten, nicht die Identität, die Bereichsschlüssel oder
-den API-Cache der App. Der Snapshot ist höchstens 24 Stunden gültig; Änderungen erfordern eine
-neue Veröffentlichung. Aktiviere anschließend MelonApp unter iOS **Einstellungen →
+Passwort-Kopie, die Passkeys und den Briefkasten, nicht die Identität oder die Bereichsschlüssel.
+Der Snapshot ist höchstens 24 Stunden gültig; Änderungen erfordern eine neue Veröffentlichung.
+
+Beim Host-Abgleich zählt der Port mit (`CredentialVault.sites`, `authority`): Ein Eintrag für
+`https://example.com` füllt nicht `https://example.com:8443` aus und umgekehrt. Port 443
+gilt als kein Port. Sonst bekäme ein anderer Dienst auf demselben Host, etwa eine Admin-Oberfläche
+oder ein fremder Container, die Zugangsdaten angeboten.
+
+Swift kann `String`-Werte nicht verlässlich überschreiben. Passwörter aus der Kopie liegen deshalb
+nur so lange im Speicher der Extension, wie die Auswahl offen ist; Schlüssel und entschlüsselte
+`Data`-Puffer überschreibt sie nach Gebrauch (`resetBytes`), und `melon-ffi` nullt die
+übergebenen Schlüssel auf der Rust-Seite (`Zeroizing`). Aktiviere anschließend MelonApp unter iOS **Einstellungen →
 Allgemein → Automatisch ausfüllen & Passwörter** (die Bezeichnung variiert je iOS-Version).
 
 Die Extension enthält iOS-17-Callbacks für Passkey-Registrierung und Assertions. Die
@@ -163,7 +190,10 @@ Neue Passkeys landen zuerst als einzelne Datei im Briefkasten der App Group
 (`{scope}.outbox.{id}.enc`). Nach jedem Entsperren übernimmt die App sie als Eintrag vom Typ
 „Passkey“ in den persönlichen Bereich und löscht die Datei erst danach. Ist AutoFill für das
 Konto schon aktiv, veröffentlicht die App gleich neu; dabei landen alle Passkeys aus dem
-Tresor als `{scope}.synced.enc` bei der Extension. Ein neues iPhone bekommt so nach Anmelden,
+Tresor als `{scope}.synced.enc` bei der Extension, zusammen mit dem Zeitpunkt der
+Veröffentlichung (`{"createdAt", "passkeys"}`). Wie die Passwort-Kopie gilt sie 24 Stunden;
+danach und ohne Zeitpunkt (Dateien älterer Versionen) ignoriert die Extension sie. Die eigenen
+Passkeys im Briefkasten laufen nicht ab. Ein neues iPhone bekommt so nach Anmelden,
 Face ID einrichten und „Passwörter für iOS AutoFill aktualisieren“ alle Passkeys zurück
 ([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)). Alte gerätelokale Passkeys
 aus `{scope}.passkeys.enc` werden dabei einmalig mit übernommen. Bei jedem entsperrten Aufruf

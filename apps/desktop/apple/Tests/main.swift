@@ -1,11 +1,26 @@
+import AuthenticationServices
 import Foundation
 
 let entry = PasswordEntry(id: "test", user: "user", password: "secret", urls: ["https://example.com/login"])
-precondition(entry.matches(host: "example.com"))
-precondition(!entry.matches(host: "evil.example.com"))
-precondition(!entry.matches(host: "example.com.evil.test"))
-precondition(!PasswordEntry(id: "test", user: "u", password: "p", urls: ["http://example.com"]).matches(host: "example.com"))
-precondition(!PasswordEntry(id: "test", user: "u", password: "p", urls: ["https://evil@example.com"]).matches(host: "example.com"))
+precondition(entry.matches(site: "example.com"))
+precondition(entry.matches(site: "Example.COM"))
+precondition(!entry.matches(site: "evil.example.com"))
+precondition(!entry.matches(site: "example.com.evil.test"))
+precondition(!PasswordEntry(id: "test", user: "u", password: "p", urls: ["http://example.com"]).matches(site: "example.com"))
+precondition(!PasswordEntry(id: "test", user: "u", password: "p", urls: ["https://evil@example.com"]).matches(site: "example.com"))
+let sites = CredentialVault.sites(for: [
+    ASCredentialServiceIdentifier(identifier: "https://example.com:8443/login", type: .URL),
+    ASCredentialServiceIdentifier(identifier: "https://example.com:443/", type: .URL),
+    ASCredentialServiceIdentifier(identifier: "http://example.com/", type: .URL),
+    ASCredentialServiceIdentifier(identifier: "Example.org", type: .domain),
+])
+precondition(sites == ["example.com:8443", "example.com", "example.org"], "sites: \(sites)")
+precondition(!entry.matches(site: "example.com:8443"), "an entry for the default port must not fill another port")
+let onPort = PasswordEntry(id: "test", user: "u", password: "p", urls: ["https://example.com:8443/"])
+precondition(onPort.matches(site: "example.com:8443"))
+precondition(!onPort.matches(site: "example.com"), "an entry for another port must not fill the default port")
+precondition(!onPort.matches(site: "example.com:9443"))
+precondition(PasswordEntry(id: "test", user: "u", password: "p", urls: ["https://example.com:443/"]).matches(site: "example.com"))
 try PasswordCache(createdAt: 1000, passwords: []).validate(now: 1001)
 precondition((try? PasswordCache(createdAt: 1000, passwords: []).validate(now: 90000)) == nil)
 precondition((try? PasswordCache(createdAt: 1000, passwords: []).validate(now: 1)) == nil)
@@ -30,8 +45,9 @@ func stored(_ rp: String, _ name: String) throws -> StoredPasskey {
     let created = try registerPasskey(key: key, rp: rp)
     return StoredPasskey(id: created.credentialId, rp: rp, userName: name, userHandle: Data(name.utf8), encryptedKey: created.encryptedKey)
 }
+let now = Date().timeIntervalSince1970
 let synced = try stored("example.com", "synced")
-try Data(encryptCache(key: key, plaintext: JSONEncoder().encode([synced]), scope: "autofill/v1/\(scope)/synced").utf8).write(to: directory.appendingPathComponent("\(scope).synced.enc"))
+try Data(encryptCache(key: key, plaintext: JSONEncoder().encode(SyncedPasskeys(createdAt: now, passkeys: [synced])), scope: "autofill/v1/\(scope)/synced").utf8).write(to: directory.appendingPathComponent("\(scope).synced.enc"))
 let outbox = try stored("example.com", "outbox")
 try vault.saveOutbox(outbox, key: key)
 try vault.saveOutbox(synced, key: key)
@@ -58,9 +74,23 @@ defer { try? FileManager.default.removeItem(at: shadowDirectory) }
 let shadowVault = CredentialVault(directory: shadowDirectory, scope: scope)
 let own = try stored("example.com", "own")
 let planted = StoredPasskey(id: own.id, rp: own.rp, userName: "planted", userHandle: own.userHandle, encryptedKey: try registerPasskey(key: key, rp: "example.com").encryptedKey)
-try Data(encryptCache(key: key, plaintext: JSONEncoder().encode([planted]), scope: "autofill/v1/\(scope)/synced").utf8).write(to: shadowDirectory.appendingPathComponent("\(scope).synced.enc"))
+try Data(encryptCache(key: key, plaintext: JSONEncoder().encode(SyncedPasskeys(createdAt: now, passkeys: [planted])), scope: "autofill/v1/\(scope)/synced").utf8).write(to: shadowDirectory.appendingPathComponent("\(scope).synced.enc"))
 try shadowVault.saveOutbox(own, key: key)
 precondition(shadowVault.passkeys(key: key).map(\.userName) == ["own"], "the device's own passkey must win over a synced one with the same ID")
+let expiringDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+try FileManager.default.createDirectory(at: expiringDirectory, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: expiringDirectory) }
+let expiring = CredentialVault(directory: expiringDirectory, scope: scope)
+try Data(encryptCache(key: key, plaintext: JSONEncoder().encode(SyncedPasskeys(createdAt: now, passkeys: [synced])), scope: "autofill/v1/\(scope)/synced").utf8).write(to: expiringDirectory.appendingPathComponent("\(scope).synced.enc"))
+try expiring.saveOutbox(outbox, key: key)
+precondition(Set(expiring.passkeys(key: key, now: now).map(\.userName)) == ["synced", "outbox"])
+precondition(expiring.passkeys(key: key, now: now + 86401).map(\.userName) == ["outbox"], "synced passkeys expire after a day, the device's own do not")
+precondition(expiring.passkeys(key: key, now: now - 120).map(\.userName) == ["outbox"], "a synced file from the future is ignored")
+let unversioned = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+try FileManager.default.createDirectory(at: unversioned, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: unversioned) }
+try Data(encryptCache(key: key, plaintext: JSONEncoder().encode([synced]), scope: "autofill/v1/\(scope)/synced").utf8).write(to: unversioned.appendingPathComponent("\(scope).synced.enc"))
+precondition(CredentialVault(directory: unversioned, scope: scope).passkeys(key: key).isEmpty, "a synced file without a date must be ignored")
 let suggestions = CredentialVault.suggestions(vault.passkeys(key: key))
 precondition(suggestions.count == 3)
 precondition(Set(suggestions.map(\.credentialID)) == Set(vault.passkeys(key: key).map(\.id)))

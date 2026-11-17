@@ -1,3 +1,5 @@
+#[cfg(target_os = "ios")]
+mod ios;
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 mod passkeys;
 mod platform;
@@ -45,11 +47,15 @@ pub fn run() {
             platform::biometric_disable,
             platform::autofill_publish,
             platform::autofill_active,
+            platform::signed_out,
             platform::passkeys_pending,
             platform::passkeys_acknowledge,
             platform::is_ios
         ])
         .setup(|app| {
+            if let Ok(directory) = app.path().app_local_data_dir() {
+                platform::remove_api_cache(&directory);
+            }
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 loop {

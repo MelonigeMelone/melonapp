@@ -19,6 +19,13 @@ struct Stored {
     encrypted_key: String,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncedFile {
+    created_at: u64,
+    passkeys: Vec<Stored>,
+}
+
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Pending {
@@ -187,6 +194,7 @@ pub fn acknowledge(directory: &Path, scope: &str, files: &[String]) -> Result<()
 pub fn seal_synced(
     session: &mut Session,
     scope: &str,
+    created_at: u64,
     passkeys: &[Synced],
 ) -> Result<String, String> {
     if session.is_locked() {
@@ -219,8 +227,13 @@ pub fn seal_synced(
             encrypted_key,
         });
     }
-    let plaintext =
-        zeroize::Zeroizing::new(serde_json::to_vec(&stored).map_err(|_| "invalid_request")?);
+    let plaintext = zeroize::Zeroizing::new(
+        serde_json::to_vec(&SyncedFile {
+            created_at,
+            passkeys: stored,
+        })
+        .map_err(|_| "invalid_request")?,
+    );
     session
         .autofill_seal(scope, "synced", &plaintext)
         .map_err(str::to_owned)
@@ -303,6 +316,7 @@ mod tests {
         let sealed = seal_synced(
             &mut session,
             SCOPE,
+            1000,
             &[Synced {
                 rp: p.rp.clone(),
                 user_name: p.user_name.clone(),
@@ -313,7 +327,9 @@ mod tests {
         )
         .unwrap();
         let plaintext = session.autofill_open(SCOPE, "synced", &sealed).unwrap();
-        let stored: Vec<Stored> = serde_json::from_slice(&plaintext).unwrap();
+        let file: SyncedFile = serde_json::from_slice(&plaintext).unwrap();
+        assert_eq!(file.created_at, 1000);
+        let stored = file.passkeys;
         assert_eq!(stored.len(), 1);
         let key = device_key(&mut session, SCOPE);
         assert!(
@@ -330,6 +346,7 @@ mod tests {
         let sealed = seal_synced(
             &mut session,
             SCOPE,
+            1000,
             &[Synced {
                 rp: "example.com".into(),
                 user_name: "a".into(),
@@ -344,9 +361,11 @@ mod tests {
                 .legacy_cache_open(&format!("autofill/v1/{SCOPE}/synced"), &sealed)
                 .is_err()
         );
-        let stored: Vec<Stored> =
-            serde_json::from_slice(&session.autofill_open(SCOPE, "synced", &sealed).unwrap())
-                .unwrap();
+        let stored = serde_json::from_slice::<SyncedFile>(
+            &session.autofill_open(SCOPE, "synced", &sealed).unwrap(),
+        )
+        .unwrap()
+        .passkeys;
         assert!(
             session
                 .legacy_passkey_open("example.com", &[1; 32], &stored[0].encrypted_key)
@@ -505,7 +524,7 @@ mod tests {
             Some("locked".into())
         );
         assert_eq!(
-            seal_synced(&mut session, SCOPE, &[]).err(),
+            seal_synced(&mut session, SCOPE, 1000, &[]).err(),
             Some("locked".into())
         );
     }
@@ -531,6 +550,7 @@ mod tests {
         let sealed = seal_synced(
             &mut session,
             SCOPE,
+            1000,
             &[
                 valid,
                 duplicate,
@@ -540,9 +560,11 @@ mod tests {
             ],
         )
         .unwrap();
-        let stored: Vec<Stored> =
-            serde_json::from_slice(&session.autofill_open(SCOPE, "synced", &sealed).unwrap())
-                .unwrap();
+        let stored = serde_json::from_slice::<SyncedFile>(
+            &session.autofill_open(SCOPE, "synced", &sealed).unwrap(),
+        )
+        .unwrap()
+        .passkeys;
         assert_eq!(stored.len(), 1);
         assert_eq!(STANDARD.decode(&stored[0].id).unwrap(), vec![1; 32]);
     }

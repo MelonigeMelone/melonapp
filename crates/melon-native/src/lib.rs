@@ -374,33 +374,6 @@ impl Session {
             .map_err(|_| "invalid_passkey")
     }
 
-    pub fn cache_seal(&mut self, scope: &str, plaintext: &[u8]) -> Result<String> {
-        self.expire();
-        if plaintext.len() > 32 * 1024 * 1024 {
-            return Err("cache_too_large");
-        }
-        Ok(self
-            .device_key("cache", scope)?
-            .encrypt(
-                plaintext,
-                format!("melon/native/cache/v1/{scope}").as_bytes(),
-            )
-            .to_string())
-    }
-
-    pub fn cache_open(&mut self, scope: &str, ciphertext: &str) -> Result<Zeroizing<Vec<u8>>> {
-        self.expire();
-        if ciphertext.len() > 48 * 1024 * 1024 {
-            return Err("cache_too_large");
-        }
-        self.device_key("cache", scope)?
-            .decrypt(
-                &parse(ciphertext)?,
-                format!("melon/native/cache/v1/{scope}").as_bytes(),
-            )
-            .map_err(|_| "decrypt_failed")
-    }
-
     #[cfg(any(test, feature = "test-support"))]
     pub fn legacy_cache_seal(&mut self, scope: &str, plaintext: &[u8]) -> Result<String> {
         Ok(self
@@ -470,7 +443,7 @@ impl Session {
                 if let Some(value) = fields.get_mut(name) {
                     let proof = self
                         .proofs
-                        .get(value.as_str().ok_or("invalid_auth_handle")?)
+                        .remove(value.as_str().ok_or("invalid_auth_handle")?)
                         .ok_or("invalid_auth_handle")?;
                     *value = json!(proof.as_str());
                 }
@@ -850,9 +823,11 @@ mod tests {
             session.biometric_configured("server/biometric", Some(&snapshot[..snapshot.len() - 1])),
             Ok(false)
         );
-        let cache = session.cache_seal("server/biometric", b"secret").unwrap();
+        let other_file = session
+            .autofill_seal("server/biometric", "passwords", b"secret")
+            .unwrap();
         assert_eq!(
-            session.biometric_configured("server/biometric", Some(&cache)),
+            session.biometric_configured("server/biometric", Some(&other_file)),
             Ok(false)
         );
         session.lock();
@@ -1203,25 +1178,6 @@ mod tests {
             device.as_bytes(),
             session.account.as_ref().unwrap().as_bytes()
         );
-        let cached = session
-            .cache_seal("https://melon.example/x", b"secret")
-            .unwrap();
-        assert!(
-            device
-                .decrypt(
-                    &parse(&cached).unwrap(),
-                    b"melon/native/cache/v1/https://melon.example/x"
-                )
-                .is_err()
-        );
-        let forged = device
-            .encrypt(b"forged", b"melon/native/cache/v1/https://melon.example/x")
-            .to_string();
-        assert!(
-            session
-                .cache_open("https://melon.example/x", &forged)
-                .is_err()
-        );
         let biometric = session.biometric_key("server/biometric").unwrap();
         assert_ne!(biometric.as_slice(), device.as_bytes());
         assert_ne!(
@@ -1231,21 +1187,18 @@ mod tests {
     }
 
     #[test]
-    fn api_cache_has_its_own_key_and_old_files_open_only_on_the_legacy_path() {
+    fn old_account_key_files_open_only_on_the_legacy_path_and_only_unlocked() {
         let (mut session, _) = account();
         let account_key = SymmetricKey::from_bytes(*session.account.as_ref().unwrap().as_bytes());
         let aad = b"melon/native/cache/v1/https://melon.example/x";
-        let cached = session
-            .cache_seal("https://melon.example/x", b"secret")
-            .unwrap();
-        assert!(account_key.decrypt(&parse(&cached).unwrap(), aad).is_err());
+        let device = autofill_key(&mut session, "https://melon.example/x");
+        let not_old = device.encrypt(b"secret", aad).to_string();
         assert!(
             session
-                .legacy_cache_open("https://melon.example/x", &cached)
+                .legacy_cache_open("https://melon.example/x", &not_old)
                 .is_err()
         );
         let old = account_key.encrypt(b"old", aad).to_string();
-        assert!(session.cache_open("https://melon.example/x", &old).is_err());
         assert_eq!(
             &*session
                 .legacy_cache_open("https://melon.example/x", &old)
@@ -1282,11 +1235,6 @@ mod tests {
         assert!(
             session
                 .autofill_open("other", "passwords", &sealed)
-                .is_err()
-        );
-        assert!(
-            session
-                .cache_open("autofill/v1/scope/passwords", &sealed)
                 .is_err()
         );
         let device = autofill_key(&mut session, "scope");
@@ -1329,6 +1277,12 @@ mod tests {
         assert!(handle.as_str().unwrap().starts_with("native-proof:"));
         let mut body = json!({"auth_key":handle});
         session.resolve_auth_proofs(&mut body).unwrap();
+        assert_eq!(
+            session
+                .resolve_auth_proofs(&mut json!({"auth_key":handle}))
+                .err(),
+            Some("invalid_auth_handle")
+        );
         assert!(
             !body["auth_key"]
                 .as_str()
@@ -1479,33 +1433,48 @@ mod tests {
     }
 
     #[test]
-    fn cache_rejects_wrong_key_scope_and_tampering() {
+    fn autofill_files_reject_another_account_and_tampering() {
         let (mut session, _) = account();
-        let encrypted = session.cache_seal("user", b"cache secret").unwrap();
+        let encrypted = session
+            .autofill_seal("scope", "passwords", b"cache secret")
+            .unwrap();
         assert!(!encrypted.contains("cache secret"));
-        assert_eq!(
-            &**session.cache_open("user", &encrypted).as_ref().unwrap(),
-            b"cache secret"
-        );
-        assert!(session.cache_open("other", &encrypted).is_err());
         let (mut other, _) = account();
-        assert!(other.cache_open("user", &encrypted).is_err());
+        assert!(
+            other
+                .autofill_open("scope", "passwords", &encrypted)
+                .is_err()
+        );
         let mut tampered = encrypted.into_bytes();
         tampered[12] = if tampered[12] == b'A' { b'B' } else { b'A' };
         assert!(
             session
-                .cache_open("user", std::str::from_utf8(&tampered).unwrap())
+                .autofill_open(
+                    "scope",
+                    "passwords",
+                    std::str::from_utf8(&tampered).unwrap()
+                )
                 .is_err()
         );
     }
 
     #[test]
-    fn locked_state_cannot_access_cache_or_vaults() {
+    fn locked_state_cannot_access_autofill_files_or_vaults() {
         let (mut session, _) = account();
-        let encrypted = session.cache_seal("user", b"secret").unwrap();
+        let encrypted = session
+            .autofill_seal("scope", "passwords", b"secret")
+            .unwrap();
         session.lock();
-        assert_eq!(session.cache_seal("user", b"x").err(), Some("locked"));
-        assert_eq!(session.cache_open("user", &encrypted).err(), Some("locked"));
+        assert_eq!(
+            session.autofill_seal("scope", "passwords", b"x").err(),
+            Some("locked")
+        );
+        assert_eq!(
+            session
+                .autofill_open("scope", "passwords", &encrypted)
+                .err(),
+            Some("locked")
+        );
         assert_eq!(
             session
                 .call(
@@ -1536,7 +1505,10 @@ mod tests {
     fn timeout_is_enforced_without_ui_timer() {
         let (mut session, _) = account();
         session.last_activity = Instant::now() - Duration::from_secs(301);
-        assert_eq!(session.cache_seal("user", b"x").err(), Some("locked"));
+        assert_eq!(
+            session.autofill_seal("scope", "passwords", b"x").err(),
+            Some("locked")
+        );
         assert!(session.identity.is_none());
         assert!(session.wrapping.is_none());
     }
@@ -1638,13 +1610,17 @@ mod tests {
     }
 
     #[test]
-    fn api_cache_and_biometric_snapshot_cannot_be_swapped() {
+    fn autofill_file_and_biometric_snapshot_cannot_be_swapped() {
         let (mut session, _) = account();
         let scope = "https://melon.example/biometric";
         let snapshot = session.biometric_snapshot(scope, json!({})).unwrap();
-        assert!(session.cache_open(scope, &snapshot).is_err());
+        assert!(
+            session
+                .autofill_open(scope, "passwords", &snapshot)
+                .is_err()
+        );
         let cached = session
-            .cache_seal(scope, br#"{"identity":"x","metadata":{}}"#)
+            .autofill_seal(scope, "passwords", br#"{"identity":"x","metadata":{}}"#)
             .unwrap();
         let key = session.biometric_key(scope).unwrap();
         assert_eq!(

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 : "${APPLE_SIGNING_IDENTITY:?}"
 app="$1"

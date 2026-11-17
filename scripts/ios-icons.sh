@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
 icons=apps/desktop/src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset

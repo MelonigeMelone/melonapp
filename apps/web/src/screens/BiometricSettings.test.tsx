@@ -20,6 +20,7 @@ function platform(configured = false) {
     setServer: vi.fn(),
     unlockBiometric: vi.fn(),
     biometricKeepsToken: vi.fn(),
+    signedOut: vi.fn().mockResolvedValue(undefined),
     onLock: vi.fn(),
   } satisfies NativePlatform;
 }
