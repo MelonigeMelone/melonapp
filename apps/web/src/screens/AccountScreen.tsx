@@ -322,7 +322,7 @@ export function AccountScreen({ ctx, onUpdate }: { ctx: ShellContext; onUpdate: 
           </Stack>
         </Stack>
 
-        {nativePlatform() && <BiometricSettings platform={nativePlatform()!} session={session} />}
+        {nativePlatform()?.supportsBiometric && <BiometricSettings platform={nativePlatform()!} session={session} />}
 
         {!session.hasRecovery && (
           <Alert

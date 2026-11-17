@@ -2,7 +2,9 @@ import type { Session } from './session';
 
 export interface NativePlatform {
   server: string;
+  os: string;
   supportsAutofill: boolean;
+  supportsBiometric: boolean;
   publishAutofill(session: Session): Promise<void>;
   syncPasskeys(session: Session): Promise<void>;
   setServer(server: string): Promise<void>;

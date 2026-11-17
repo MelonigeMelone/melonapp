@@ -2,7 +2,7 @@ import { nativePlatform } from './platform';
 
 export function deviceName(userAgent = navigator.userAgent, protocol = location.protocol): string {
   const native = nativePlatform();
-  if (native) return native.supportsAutofill ? 'MelonApp für iPhone' : 'MelonApp für Mac';
+  if (native) return native.os === 'ios' ? 'MelonApp für iPhone' : native.os === 'windows' ? 'MelonApp für Windows' : 'MelonApp für Mac';
   const browser = /Edg\//.test(userAgent)
     ? 'Edge'
     : /OPR\/|Opera/.test(userAgent)
