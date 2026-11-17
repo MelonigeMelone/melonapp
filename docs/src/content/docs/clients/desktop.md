@@ -90,6 +90,19 @@ schreibt trotzdem. Die Briefkasten-Dateien der Extension nutzen dieselbe Klasse
 `unsafe` deshalb mit `deny` statt `forbid` und erlaubt es nur in `src/ios.rs`, das allein
 `fcntl` und den Credential Identity Store aufruft.
 
+## Zwischenablage
+
+WebKit lässt die Web-App nur direkt nach einem Klick in die Zwischenablage schreiben. Das
+automatische Leeren nach 30 Sekunden klappte in der Mac-App deshalb nicht. Dort kopiert jetzt Rust
+(`clipboard.rs`, `arboard` über `NSPasteboard`): `clipboard_copy` schreibt das Geheimnis und
+merkt es sich, `clipboard_clear` leert nur, wenn noch genau dieses Geheimnis in der Zwischenablage
+steht. Etwas, das man inzwischen selbst kopiert hat, bleibt. Fokus braucht das Leeren nicht, es
+passiert also auch, während man in einer anderen App einfügt. Sperren leert sofort.
+
+Die Kopie trägt den Typ `org.nspasteboard.ConcealedType` (`exclude_from_history`). Verlaufs-Apps
+wie Maccy oder Raycast, die dem [Standard](http://nspasteboard.org/) folgen, speichern sie nicht.
+Auf iOS bleibt es beim Weg über WebKit ([offene Punkte](/melonapp/sicherheit/offene-punkte/)).
+
 ## Touch ID und Face ID
 
 Im Konto zeigt eine eigene Karte den gespeicherten Einrichtungsstatus für das aktuelle

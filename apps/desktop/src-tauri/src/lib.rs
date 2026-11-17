@@ -1,6 +1,7 @@
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+mod clipboard;
 #[cfg(target_os = "ios")]
 mod ios;
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 mod passkeys;
 mod platform;
 use melon_native::Session;
@@ -50,7 +51,10 @@ pub fn run() {
             platform::signed_out,
             platform::passkeys_pending,
             platform::passkeys_acknowledge,
-            platform::is_ios
+            platform::is_ios,
+            clipboard::native_clipboard,
+            clipboard::clipboard_copy,
+            clipboard::clipboard_clear
         ])
         .setup(|app| {
             if let Ok(directory) = app.path().app_local_data_dir() {

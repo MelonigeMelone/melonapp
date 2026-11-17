@@ -78,6 +78,25 @@ describe('clearing copied secrets', () => {
     expect(state.text).toBe('Einkaufsliste');
   });
 
+  it('in the Mac app, copies and clears natively, even without focus', async () => {
+    const { state } = environment(true);
+    const { copySecret, clearClipboardNow } = await load();
+    const { setNativePlatform } = await import('./platform');
+    const native = { copy: vi.fn().mockResolvedValue(undefined), clear: vi.fn().mockResolvedValue(undefined) };
+    setNativePlatform({ clipboard: native } as unknown as Parameters<typeof setNativePlatform>[0]);
+    await copySecret('geheim');
+    expect(native.copy).toHaveBeenCalledWith('geheim');
+    expect(state.text).toBe('');
+    state.focused = false;
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(native.clear).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(native.clear).toHaveBeenCalledOnce();
+    await copySecret('zweites');
+    await clearClipboardNow();
+    expect(native.clear).toHaveBeenCalledTimes(2);
+  });
+
   it('clears right away when locking', async () => {
     const { state } = environment(true);
     const { copySecret, clearClipboardNow } = await load();
