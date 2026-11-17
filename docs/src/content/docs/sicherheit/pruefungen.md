@@ -70,7 +70,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Gleichzeitige Anfragen kommen nicht an den Limits vorbei | `api::simultaneous_failed_logins_cannot_slip_past_the_limits` |
 | `prelogin` verrät keine Konten | `api::prelogin_does_not_reveal_accounts` |
 | Kopierte Geheimnisse werden geleert, auch wenn man zum Einfügen die App verlassen hat, und sofort beim Sperren; anderes Kopiertes bleibt | `clipboard.test.ts` |
-| Krypto-Worker läuft mit eigener CSP; Rechtschreibprüfung ist aus | E2E-Schritt „the crypto worker runs under a CSP and nothing is spell-checked“ |
+| Krypto-Worker läuft mit eigener CSP; Rechtschreibprüfung ist aus; Trusted Types blockieren `innerHTML` und fremde Worker-URLs; die Seite ist cross-origin isolated und hat CORP und Permissions-Policy | E2E-Schritt „the crypto worker runs under a CSP and nothing is spell-checked“, `trustedTypes.test.ts` |
 | `mailto:`-Links bringen keine weiteren Empfänger oder Texte mit | `item.test.ts: only creates safe links` |
 | Niemand landet ohne Zustimmung in einem fremden Bereich: Angebote sind unsichtbar und ohne Rechte, ein nicht angenommener Besitzer zählt nicht, Ablehnen erzwingt einen Schlüsselwechsel | `api::nobody_lands_in_a_shared_vault_without_accepting_it`, `manager.test.ts` (`shared vaults offered to me`), E2E-Schritt „re-adding bob shows his security code first“ |
 | Ein Tresor wächst nie über das, was ein Schlüsselwechsel tragen kann; Grenzen für Tresore, Mitglieder und Angebote; ein Absender kann die Angebote einer Person nicht aufbrauchen | `api::a_vault_cannot_grow_past_what_one_key_change_can_carry`, `api::offers_shared_vaults_and_members_are_capped` |

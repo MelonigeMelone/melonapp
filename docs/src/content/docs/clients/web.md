@@ -26,6 +26,7 @@ apps/web/src
 ├── api.ts         HTTP-Client für die Server-API
 ├── session.ts     Anmelden, Registrieren, Sperren, Fehlermeldungen
 ├── clipboard.ts   Kopieren mit automatischem Leeren
+├── trustedTypes.ts Trusted-Types-Policy, nur für die Worker-URL
 ├── prefs.ts       Geräte-Einstellungen (Auto-Lock-Zeit) im localStorage
 └── useIdle.ts     Auto-Lock
 ```
@@ -344,6 +345,9 @@ einzeln oder zusammen abmelden ([Authentifizierung](/melonapp/server/authentifiz
 | Maßnahme | Warum |
 |---|---|
 | Strenge CSP (`script-src 'self' 'wasm-unsafe-eval'`, `connect-src 'self' https://api.pwnedpasswords.com`, `img-src 'self' data:`, `frame-ancestors 'none'`), gesetzt von Caddy | Selbst eingeschleuster Code könnte keine Daten an fremde Server schicken. Die einzige fremde Adresse ist der Datenleck-Abgleich ([ADR 0014](/melonapp/entscheidungen/0014-2fa-und-sicherheits-check/)). `style-src 'self' 'nonce-…'`: Caddy erzeugt je Aufruf einen Nonce, nur Emotions Style-Elemente tragen ihn. Eingeschleustes CSS wird blockiert ([ADR 0019](/melonapp/entscheidungen/0019-csp-nonce-fuer-styles/)). |
+| Trusted Types (`require-trusted-types-for 'script'` in beiden CSPs) | Strings landen nicht mehr in Sinks wie `innerHTML`, `eval` oder `new Worker(url)`. Eine eingeschleuste Zeichenkette wird damit nicht zu HTML oder Code, auch wenn ein Fehler in der App oder einer Bibliothek sie dorthin reicht. Die Seite erlaubt nur die Policy `default` (`trustedTypes.ts`, als erstes Modul geladen): Sie lässt nur Skript-URLs vom eigenen Origin über http(s) durch, also den Krypto-Worker. Für HTML und Skript-Strings gibt es keine Regel, die bleiben gesperrt. Unter `/assets/` gibt es gar keine Policy (`trusted-types 'none'`). |
+| `Cross-Origin-Embedder-Policy: require-corp` und `Cross-Origin-Resource-Policy: same-origin` auf Seite und `/assets/`, dazu `Cross-Origin-Opener-Policy: same-origin` | Die Seite ist damit *cross-origin isolated*: Sie teilt sich keinen Prozess mit fremden Fenstern oder Ressourcen, was Spectre-artige Seitenkanäle auf den Speicher mit den Schlüsseln erschwert. Fremde Seiten können Skripte und den WASM-Code nicht per `<script>` oder `<img>` einbinden. Der Datenleck-Abgleich ist ein CORS-Abruf und davon nicht betroffen. |
+| `Permissions-Policy` | Kamera, Mikrofon, Standort, Zahlungen, USB, Seriell, HID, Bluetooth, MIDI, Bildschirmaufnahme, Bewegungssensoren und Topics sind aus. Die App braucht nichts davon; eingeschleuster Code bekommt es so auch nicht. Die Zwischenablage bleibt erlaubt. |
 | Eigene CSP für alles unter `/assets/` (`default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'`) | Der Krypto-Worker bekommt seine CSP aus den Headern seiner eigenen Datei, nicht von der Seite. Ohne diesen Header könnte Code im Worker, wo die Schlüssel liegen, beliebige Server erreichen. |
 | Links in Einträgen nur mit `http(s):`, `mailto:`, `tel:`. `mailto:` nur für eine einfache Adresse ohne `?`, `&`, `#`, `%`, `/` oder `:` | verhindert `javascript:`-Links in gespeicherten Feldern und `mailto:`-Links, die heimlich weitere Empfänger, Betreff oder Text mitbringen |
 | Einladungs-Token im URL-Fragment (`/#/invite/…`) | landet nie in Server- oder Proxy-Logs |
