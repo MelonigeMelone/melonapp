@@ -70,7 +70,7 @@ schema() {
 }
 
 healthy() {
-  for _ in $(seq 1 30); do
+  for _ in $(seq 1 "${MELON_HEALTH_TRIES:-30}"); do
     if docker compose exec -T caddy wget -qO- http://server:8080/health > /dev/null 2>&1; then
       return 0
     fi

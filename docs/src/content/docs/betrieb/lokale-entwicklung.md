@@ -61,8 +61,13 @@ npm run dev -w web
 Der Dev-Server leitet `/api` an `localhost:8080` weiter. Der Server muss also wie oben
 laufen, mit `MELON_ALLOW_REGISTRATION=true`. Tests: `npm test -w web`.
 
-`build-wasm.sh` installiert beim ersten Lauf `wasm-bindgen-cli` in genau der Version aus
-`Cargo.lock`. CLI und Bibliothek müssen exakt zusammenpassen.
+`build-wasm.sh` installiert beim ersten Lauf `wasm-bindgen` in genau der Version aus
+`Cargo.lock`. CLI und Bibliothek müssen exakt zusammenpassen. Für Linux (x86_64, ARM64) und macOS
+lädt es das fertige Binary aus dem GitHub-Release von `wasm-bindgen` und prüft dessen SHA-256 gegen
+die Tabelle `checksum()` im Skript. Stimmt die Prüfsumme nicht, bricht es ab. Für andere
+Plattformen oder Versionen ohne Eintrag baut es `wasm-bindgen-cli` mit `cargo install --locked`.
+Hebt Dependabot `wasm-bindgen` an, gehören die neuen Prüfsummen aus dem Release in dieselbe
+Änderung, sonst wird jeder Build einige Minuten langsamer.
 
 ## Gesamtes System + Browser-Test
 

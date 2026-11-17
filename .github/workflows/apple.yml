@@ -3,7 +3,9 @@ name: Apple apps
 on:
   push:
     branches: [main, feat/apple-apps]
+    paths: ["crates/**", "apps/**", "packages/**", "scripts/**", "Cargo.*", "package*.json", ".nvmrc", ".github/workflows/apple.yml"]
   pull_request:
+    paths: ["crates/**", "apps/**", "packages/**", "scripts/**", "Cargo.*", "package*.json", ".nvmrc", ".github/workflows/apple.yml"]
 
 permissions:
   contents: read

@@ -23,10 +23,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: shellcheck -e SC1091 deploy/bin/* deploy/test/*.sh
+          fetch-depth: 2
+      - id: changes
+        if: github.event_name == 'pull_request'
+        run: bash scripts/changed.sh '^(deploy/|scripts/changed\.sh$|\.github/workflows/ci\.yml$)'
+      - run: shellcheck -e SC1091 deploy/bin/* deploy/test/*.sh scripts/*.sh
       - run: sudo apt-get update -q && sudo apt-get install -yq age
       - run: bash deploy/test/backup-restore.sh
-      - run: bash deploy/test/update.sh
+      - if: steps.changes.outputs.run != 'false'
+        run: bash deploy/test/update.sh
 
   rust:
     name: Format, lint, test

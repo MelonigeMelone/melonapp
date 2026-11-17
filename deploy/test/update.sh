@@ -33,6 +33,7 @@ cp "$repo"/deploy/bin/* "$work/m/bin/"
 cd "$work/m"
 printf 'MELON_DOMAIN=:80\nPOSTGRES_PASSWORD=update-test\nMELON_SERVER_SECRET=update-test-secret-update-test-secret-xx\n' > .env
 export MELON_UPDATE_SOURCE="file://$work/src"
+export MELON_HEALTH_TRIES=15
 source_with
 
 if MELON_PROVENANCE_REPO=someone/else bin/melon-update "$version" 2> "$work/err"; then
