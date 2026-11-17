@@ -101,7 +101,7 @@ git tag v1.2.0 && git push origin v1.2.0
 4. Backup (`bin/melon-backup`).
 5. Die Images in `.env` auf die geprüften Digests festlegen (`…@sha256:…`), `docker compose pull`
    und `up -d`.
-6. Bis zu 60 Sekunden auf `/health` warten.
+6. Bis zu 60 Sekunden auf `/health` warten (`MELON_HEALTH_TRIES` × 2 Sekunden, Standard 30).
 7. Klappt etwas nicht, kommen alte Dateien und alte `.env` zurück, und der Workflow wird rot.
    Danach kommt es auf die Datenbank an:
    - **Unverändert** (gleiche letzte Migration wie vorher): Die alte Version startet wieder.

@@ -7,10 +7,36 @@ sidebar:
 
 | Workflow | Datei | Auslöser | Inhalt |
 |---|---|---|---|
-| CI | `ci.yml` | Push auf `main`, PR | ShellCheck für `deploy/bin/*`, `fmt`, `clippy -D warnings`, Rust-Tests mit PostgreSQL, Mindest-Rust-Version 1.87, Web-App und Erweiterung (WASM-Build, Tests, Build, Erweiterung als Artefakt `melonapp-extension`), **E2E**: kompletter Stack per Compose + Browser-Test der Web-App + Test der Erweiterung in Chromium + Prüfung, dass die Datenbank keinen Klartext enthält |
-| Security | `security.yml` | Push, PR, täglich 05:17 UTC, manuell | cargo-deny (auch für die Apple-Abhängigkeiten), npm audit (alle Abhängigkeiten samt Build-Werkzeugen, ab „high“), trivy (baut beide Images), zizmor (Workflows), gitleaks, CodeQL, Fuzzing (nur täglich und manuell) ([Details](/melonapp/sicherheit/pruefungen/)) |
+| CI | `ci.yml` | Push auf `main`, PR | ShellCheck für `deploy/bin/*`, `build-wasm.sh` und `changed.sh`, Backup-/Restore-Test, Update-Test (bei PRs nur mit Änderungen in `deploy/`), `fmt`, `clippy -D warnings`, Rust-Tests mit PostgreSQL, Mindest-Rust-Version 1.87, Web-App und Erweiterung (WASM-Build, Tests, Build, Erweiterung als Artefakt `melonapp-extension`), **E2E**: kompletter Stack per Compose + Browser-Test der Web-App + Test der Erweiterung in Chromium + Prüfung, dass die Datenbank keinen Klartext enthält |
+| Security | `security.yml` | Push, PR, täglich 05:17 UTC, manuell | cargo-deny (auch für die Apple-Abhängigkeiten), npm audit (alle Abhängigkeiten samt Build-Werkzeugen, ab „high“), trivy (baut beide Images), zizmor (Workflows), gitleaks, CodeQL (Rust bei PRs nur mit Rust-Änderungen), Fuzzing (nur täglich und manuell) ([Details](/melonapp/sicherheit/pruefungen/)) |
 | Images | `docker.yml` | Push auf `main`, Tags `v*` | Images `melonapp-server` und `melonapp-web` bauen und nach GHCR pushen, mit SBOM und Provenance. Bei PRs baut der trivy-Job in Security beide Images. Bei einem Tag `v*` danach Job **Deploy**: Update des Servers per SSH ([Selbst hosten](/melonapp/betrieb/selbst-hosten/#updates-version-per-tag)) |
 | Docs | `docs.yml` | Push auf `main` mit Änderungen in `docs/`, PR, manuell | Doku bauen und auf GitHub Pages veröffentlichen (nicht bei PRs) |
+
+## Laufzeit
+
+Die Pflicht-Checks im Ruleset müssen bei jedem PR grün werden, auch wenn ein Job nichts zu tun hat.
+Ein Workflow-Filter (`paths:`) würde den Check gar nicht erst starten, und der PR bliebe hängen.
+Deshalb überspringen die teuren Pflicht-Jobs nur einzelne **Schritte**:
+`scripts/changed.sh <Regex>` vergleicht den Merge-Commit des PRs mit seinem ersten Elternteil
+(Checkout mit `fetch-depth: 2`) und setzt `run=false`, wenn keine Datei passt.
+
+| Schritt | läuft bei PRs nur bei Änderungen in |
+|---|---|
+| Update-Test (`ci.yml`, Job *Server scripts*) | `deploy/`, `scripts/changed.sh`, `ci.yml` |
+| CodeQL für Rust (`security.yml`) | `crates/`, `fuzz/`, `apps/desktop/src-tauri/`, `Cargo.*`, `.github/codeql/`, `scripts/changed.sh`, `security.yml` |
+
+Auf `main` und im täglichen Lauf läuft alles. Der Update-Test wartet nur 30 statt 60 Sekunden auf
+`/health` (`MELON_HEALTH_TRIES=15`), weil er zwei Fehlerfälle durchspielt, die die Wartezeit
+voll ausschöpfen.
+
+`apple.yml` ist kein Pflicht-Check und nutzt deshalb einen `paths:`-Filter: Der macOS-Runner
+startet nur bei Änderungen in `crates/`, `apps/`, `packages/`, `scripts/`, `Cargo.*`,
+`package*.json`, `.nvmrc` oder am Workflow selbst. Reine Doku- oder Deploy-PRs warten also nicht
+auf einen macOS-Runner.
+
+`build-wasm.sh` lädt `wasm-bindgen` als fertiges Binary von den GitHub-Releases des Projekts,
+statt es mehrere Minuten zu kompilieren (CI, Apple-Builds, Web-Image). Siehe
+[Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklung/).
 
 ## Image-Tags
 
