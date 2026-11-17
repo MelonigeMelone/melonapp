@@ -11,7 +11,9 @@ const session = { userId: 'test-user', token: 'test-token' } as Session;
 function platform(configured = false) {
   return {
     server: 'https://example.test',
+    os: 'macos',
     supportsAutofill: false as boolean,
+    supportsBiometric: true,
     biometricStatus: vi.fn().mockResolvedValue(configured),
     enableBiometric: vi.fn().mockResolvedValue(undefined),
     disableBiometric: vi.fn().mockResolvedValue(undefined),

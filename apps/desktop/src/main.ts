@@ -9,7 +9,9 @@ import './mobile.css';
 setNativeRequest((method, path, opts) => invoke('api_request', { method, path, opts }));
 const platform = {
   server: await invoke<string>('get_server'),
+  os: await invoke<string>('native_os'),
   supportsAutofill: await invoke<boolean>('is_ios'),
+  supportsBiometric: await invoke<boolean>('biometric_available'),
   async publishAutofill(session: Session) {
     await session.vaults.sync();
     const entries = session.vaults.getSnapshot().items.filter((v) => v.item.type === 'login').map((v) => ({

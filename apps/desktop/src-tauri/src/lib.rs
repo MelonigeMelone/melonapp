@@ -1,6 +1,7 @@
 mod clipboard;
 #[cfg(target_os = "ios")]
 mod ios;
+mod keystore;
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 mod passkeys;
 mod platform;
@@ -52,6 +53,8 @@ pub fn run() {
             platform::passkeys_pending,
             platform::passkeys_acknowledge,
             platform::is_ios,
+            platform::native_os,
+            platform::biometric_available,
             clipboard::native_clipboard,
             clipboard::clipboard_copy,
             clipboard::clipboard_clear
@@ -89,7 +92,7 @@ pub fn run() {
                 }
             }
         });
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     let builder = builder.plugin(
         tauri_plugin_global_shortcut::Builder::new()
             .with_shortcut("CommandOrControl+Shift+M")

@@ -1,9 +1,10 @@
 ---
 title: Desktop und iOS
-description: Native Apple-App mit gemeinsamer React-Oberfläche.
+description: Native App für macOS, iOS und Windows mit gemeinsamer React-Oberfläche.
 ---
 
-Die Apple-App unter `apps/desktop` verwendet die Oberfläche aus `apps/web`. Ihr eigener
+Die App unter `apps/desktop` läuft auf macOS, iOS und Windows (siehe [Windows](#windows)). Die
+Apple-App verwendet die Oberfläche aus `apps/web`. Ihr eigener
 Vite-Einstieg ersetzt nur den Krypto-Transport. Der native TypeScript-Build beginnt
 bei diesem Einstieg und prüft die transitiv importierte gemeinsame UI; der ausschließlich
 im Browser verwendete WASM-Worker gehört nicht zum nativen Build. `melon-native` hält Konto-, Identitäts-
@@ -43,7 +44,7 @@ Recovery-Key bleibt als Notfall-Kit für die Person sichtbar.
 Rust sperrt nach fünf Minuten ohne gemeldete Eingabe, zusätzlich zum vorhandenen
 UI-Timer. Bricht ein Aufruf mit einem Absturz ab, ist die Sitzungssperre in Rust „vergiftet“.
 Der nächste Zugriff löscht dann alle Schlüssel und arbeitet gesperrt weiter, statt die Sitzung
-unerreichbar mit Schlüsseln im Speicher stehen zu lassen. Fokusverlust sperrt sofort. `⌘⇧M` bringt auf macOS das Fenster nach vorn,
+unerreichbar mit Schlüsseln im Speicher stehen zu lassen. Fokusverlust sperrt sofort. `⌘⇧M` (Windows: `Strg+Umschalt+M`) bringt das Fenster nach vorn,
 entsperrt es aber nicht. Hintergrund-Sperren werden als Ereignis an React gemeldet.
 
 Der Face-ID-Dialog macht die iOS-App kurz inaktiv (`sceneWillResignActive`), was wie jeder
@@ -102,6 +103,37 @@ passiert also auch, während man in einer anderen App einfügt. Sperren leert so
 Die Kopie trägt den Typ `org.nspasteboard.ConcealedType` (`exclude_from_history`). Verlaufs-Apps
 wie Maccy oder Raycast, die dem [Standard](http://nspasteboard.org/) folgen, speichern sie nicht.
 Auf iOS bleibt es beim Weg über WebKit ([offene Punkte](/melonapp/sicherheit/offene-punkte/)).
+
+## Windows
+
+Die Windows-App ist dieselbe Tauri-App mit WebView2 ([#33](https://github.com/MelonigeMelone/melonapp/issues/33)).
+Native Krypto, Sperren, Login-Handles und API-Transport sind identisch mit macOS. Plattformabhängig
+sind nur drei Dinge, gekapselt in `keystore.rs` und `clipboard.rs`:
+
+- **Server-Adresse:** Sie liegt in der Windows-Anmeldeinformationsverwaltung
+  (`keyring`, Ziel `de.melonigemelone.app.server.v1`). Anders als der Mac-Schlüsselbund trennt
+  Windows dort nicht zwischen Apps: Jedes Programm, das als dieselbe Person läuft, kann den Eintrag
+  lesen und ändern und die App so auf einen eigenen Server umleiten. Unter Windows schützt das also
+  nur vor anderen Benutzerkonten ([offene Punkte](/melonapp/sicherheit/offene-punkte/)).
+- **Biometrie:** Windows Hello kommt in einem eigenen Schritt. Bis dahin meldet
+  `biometric_available` `false`; Anmeldebildschirm und Konto zeigen keine Biometrie-Optionen, und
+  `biometric_enable` lehnt ab.
+- **Zwischenablage:** Kopieren und Leeren laufen wie auf dem Mac nativ über `arboard`. Die Kopie
+  trägt die Windows-Formate, die sie vom Verlauf (`Win+V`), der Cloud-Zwischenablage und anderen
+  Clipboard-Programmen ausnehmen (`exclude_from_monitoring`).
+
+Dateien der App liegen unter `%LOCALAPPDATA%\de.melonigemelone.app`; das Verzeichnis erbt die
+Zugriffsrechte des Benutzerprofils. Der Unix-Modus 0600 und sein Test gelten nur für macOS und iOS.
+
+Bauen auf einem Windows-Rechner mit Rust (MSVC) und Node:
+
+```powershell
+npm ci
+npm run tauri -w desktop -- build --bundles nsis
+```
+
+Der Installer liegt danach unter `apps/desktop/src-tauri/target/release/bundle/nsis/`. Er ist nicht
+signiert; Windows SmartScreen warnt deshalb beim ersten Start („Unbekannter Herausgeber“).
 
 ## Touch ID und Face ID
 

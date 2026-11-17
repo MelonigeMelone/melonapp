@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deviceName } from './device';
+import { setNativePlatform } from './platform';
 
 const CHROME_WIN = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36';
 const EDGE = `${CHROME_WIN} Edg/140.0`;
@@ -22,5 +23,12 @@ describe('deviceName', () => {
   it('marks the browser extension', () => {
     expect(deviceName(CHROME_WIN, 'chrome-extension:')).toBe('Erweiterung in Chrome auf Windows');
     expect(deviceName(FIREFOX_LINUX, 'moz-extension:')).toBe('Erweiterung in Firefox auf Linux');
+  });
+
+  it('names the native apps by operating system', () => {
+    for (const [os, name] of [['macos', 'MelonApp für Mac'], ['ios', 'MelonApp für iPhone'], ['windows', 'MelonApp für Windows']]) {
+      setNativePlatform({ os } as Parameters<typeof setNativePlatform>[0]);
+      expect(deviceName(CHROME_WIN, 'tauri:')).toBe(name);
+    }
   });
 });

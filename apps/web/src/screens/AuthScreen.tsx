@@ -200,7 +200,7 @@ export function AuthScreen({
           )}
 
           {platform && <TextField label="Server-Adresse (HTTPS)" value={server} onChange={(e) => setServer(e.target.value)} disabled={busy} fullWidth />}
-          {platform && mode === 'login' && <Button disabled={busy} onClick={async () => {
+          {platform?.supportsBiometric && mode === 'login' && <Button disabled={busy} onClick={async () => {
             setBusy(true);
             try { await platform.setServer(server); onSession(await platform.unlockBiometric()); }
             catch { setError('Biometrisches Entsperren nicht verfügbar. Melde dich mit dem Master-Passwort an.'); }

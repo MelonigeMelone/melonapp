@@ -1,4 +1,6 @@
+use crate::keystore;
 use melon_native::Session;
+#[cfg(target_os = "ios")]
 use security_framework::{
     access_control::{ProtectionMode, SecAccessControl},
     passwords::{self, AccessControlOptions, PasswordOptions},
@@ -14,10 +16,10 @@ use std::{
     time::Duration,
 };
 use tauri::Manager;
+#[cfg(target_os = "ios")]
 use zeroize::Zeroizing;
 
-const SERVICE: &str = "de.melonigemelone.app.biometric.v1";
-const SERVER_SERVICE: &str = "de.melonigemelone.app.server.v1";
+#[cfg(target_os = "ios")]
 const NOT_FOUND: i32 = -25300;
 
 static SERVER: Mutex<Option<String>> = Mutex::new(None);
@@ -113,16 +115,12 @@ fn read(app: &tauri::AppHandle, name: &str) -> Result<String, String> {
     fs::read_to_string(path).map_err(|_| "cache_unavailable".into())
 }
 
-fn server_item() -> PasswordOptions {
-    PasswordOptions::new_generic_password(SERVER_SERVICE, "server")
-}
-
 fn server(_app: &tauri::AppHandle) -> Result<String, String> {
     let mut cached = SERVER.lock().map_err(|_| "server_unavailable")?;
     if let Some(value) = cached.as_ref() {
         return Ok(value.clone());
     }
-    let stored = passwords::generic_password(server_item()).map_err(|_| "server_not_set")?;
+    let stored = keystore::load_server()?;
     let value = validated_server(std::str::from_utf8(&stored).map_err(|_| "invalid_server")?)?;
     *cached = Some(value.clone());
     Ok(value)
@@ -130,14 +128,8 @@ fn server(_app: &tauri::AppHandle) -> Result<String, String> {
 
 fn store_server(app: &tauri::AppHandle, value: &str) -> Result<(), String> {
     let mut cached = SERVER.lock().map_err(|_| "server_unavailable")?;
-    if passwords::delete_generic_password_options(server_item())
-        .is_err_and(|e| e.code() != NOT_FOUND)
-    {
-        return Err("server_unavailable".into());
-    }
     *cached = None;
-    passwords::set_generic_password_options(value.as_bytes(), server_item())
-        .map_err(|_| "server_unavailable")?;
+    keystore::save_server(value)?;
     *cached = Some(value.to_owned());
     let legacy = location(app, "server.txt")?;
     if legacy.exists() {
@@ -257,15 +249,16 @@ pub async fn api_request(
     Ok(Response { status, body })
 }
 
-fn options(scope: &str) -> PasswordOptions {
-    let mut options = PasswordOptions::new_generic_password(SERVICE, scope);
-    options.use_protected_keychain();
-    options.set_access_synchronized(Some(false));
-    options
+#[tauri::command]
+pub fn biometric_available() -> bool {
+    keystore::biometric_available()
 }
 
 #[tauri::command]
 pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<(), String> {
+    if !keystore::biometric_available() {
+        return Err("biometric_unavailable".into());
+    }
     tauri::async_runtime::spawn_blocking(move || {
         let base = server(&app)?;
         let scope = format!("{base}/biometric");
@@ -284,19 +277,7 @@ pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<
                     .map_err(str::to_owned)?,
             )
         };
-        let access = SecAccessControl::create_with_protection(
-            Some(ProtectionMode::AccessibleWhenPasscodeSetThisDeviceOnly),
-            AccessControlOptions::BIOMETRY_CURRENT_SET.bits(),
-        )
-        .map_err(|_| "biometric_unavailable")?;
-        let mut config = options(&scope);
-        config.set_access_control(access);
-        let deletion = passwords::delete_generic_password_options(options(&scope));
-        if deletion.is_err_and(|e| e.code() != NOT_FOUND) {
-            return Err("biometric_unavailable".into());
-        }
-        passwords::set_generic_password_options(&key, config)
-            .map_err(|_| "biometric_unavailable")?;
+        keystore::save_biometric(&scope, &key)?;
         write(
             &app,
             "biometric.token",
@@ -355,9 +336,7 @@ pub async fn biometric_unlock(app: tauri::AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let scope = format!("{}/biometric", server(&app)?);
         let snapshot = read(&app, "biometric.enc")?;
-        let key = Zeroizing::new(
-            passwords::generic_password(options(&scope)).map_err(|_| "biometric_unavailable")?,
-        );
+        let key = keystore::load_biometric(&scope)?;
         let state = app.state::<Mutex<Session>>();
         let mut session = wait_until_active(&state, ACTIVE_ATTEMPTS, ACTIVE_DELAY)?;
         if format!("{}/biometric", server(&app)?) != scope {
@@ -397,11 +376,7 @@ pub fn signed_out() -> Result<(), String> {
 }
 
 fn remove_biometric(app: &tauri::AppHandle, scope: &str) -> Result<(), String> {
-    if passwords::delete_generic_password_options(options(scope))
-        .is_err_and(|e| e.code() != NOT_FOUND)
-    {
-        return Err("biometric_unavailable".into());
-    }
+    keystore::delete_biometric(scope)?;
     for name in ["biometric.enc", "biometric.token"] {
         let path = location(app, name)?;
         if path.exists() {
@@ -540,6 +515,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn cache_files_are_private_and_atomically_replaced() {
         use std::os::unix::fs::PermissionsExt;
         let directory = tempfile::tempdir().unwrap();
@@ -682,6 +658,11 @@ pub fn autofill_active(app: tauri::AppHandle, user_id: String) -> bool {
         };
         fs::read_to_string(directory.join("active.txt")).is_ok_and(|active| active.trim() == scope)
     }
+}
+
+#[tauri::command]
+pub fn native_os() -> &'static str {
+    std::env::consts::OS
 }
 
 #[tauri::command]
