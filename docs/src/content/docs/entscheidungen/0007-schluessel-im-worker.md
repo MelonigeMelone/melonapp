@@ -17,8 +17,15 @@ jede eingebundene Bibliothek.
 ## Entscheidung
 
 `melon-crypto` läuft als WASM **in einem dedizierten Web Worker**. Schlüssel werden dort als
-WASM-Objekte gehalten und verlassen den Worker nie. Der Haupt-Thread schickt nur Aufträge
-(„entschlüssle diese Items“) und bekommt Ergebnisse zurück.
+WASM-Objekte gehalten. Der Haupt-Thread schickt nur Aufträge („entschlüssle diese Items“) und
+bekommt Ergebnisse zurück.
+
+Zwei Ausnahmen: Der Auth-Key geht an den Haupt-Thread, weil der ihn an den Server schickt; er
+entschlüsselt nichts. Und die Browser-Erweiterung holt die Tresor-Schlüssel mit
+`exportVaultKeys` aus dem Worker, um sie als Rohbytes in `storage.session` (nur im Speicher) zu halten
+und das Popup ohne neue Ableitung wieder zu öffnen ([ADR 0013](/melonapp/entscheidungen/0013-browser-erweiterung/)).
+`exportVaultKeys` und `importVaultKeys` gibt es nur im Build der Erweiterung
+(`VITE_MELON_EXTENSION`); in der Web-App lehnt der Worker sie mit `unknown_method` ab.
 
 ## Alternativen
 

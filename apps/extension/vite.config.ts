@@ -7,6 +7,7 @@ export default defineConfig({
   base: './',
   plugins: [react()],
   resolve: { alias: { '@web': fileURLToPath(new URL('../web/src', import.meta.url)) } },
+  define: { 'import.meta.env.VITE_MELON_EXTENSION': JSON.stringify('1') },
   worker: { format: 'es' },
   optimizeDeps: { exclude: ['@melon/wasm'] },
   build: {

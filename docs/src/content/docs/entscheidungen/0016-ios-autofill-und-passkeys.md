@@ -28,7 +28,9 @@ Passkeys verwenden ES256 mit RustCrypto `p256` 0.14. Die ältere 0.13-Linie zieh
 ein von RUSTSEC-2026-0387 betroffenes `crypto-bigint` ein; deshalb verwenden wir die
 gepatchte Abhängigkeitslinie und erhöhen die Workspace-Mindestversion auf Rust 1.87. Private Schlüssel werden bereits vor
 Verlassen von Rust mit dem Kontoschlüssel und an RP-ID sowie Credential-ID gebunden
-verschlüsselt. Die Extension speichert diese Datensätze nochmals verschlüsselt in der
+verschlüsselt. Seit [ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/) gilt das nur
+noch innerhalb der Extension: Beim Übernehmen in den Tresor und beim Veröffentlichen erreicht der
+private Schlüssel die WebView im Klartext. Die Extension speichert diese Datensätze nochmals verschlüsselt in der
 App Group. WebAuthn-Registrierung verwendet Attestation `none`, Null-AAGUID und einen
 Signaturzähler von null. UP/UV werden nur im biometrisch authentifizierten Ablauf genutzt.
 Die Credentials sind gerätegebunden. Trotzdem setzen Authenticator-Daten bei Registrierung und
