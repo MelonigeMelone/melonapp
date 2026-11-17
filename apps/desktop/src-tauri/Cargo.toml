@@ -38,6 +38,8 @@ arboard = { version = "3", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
+melon-crypto = { path = "../../../crates/melon-crypto" }
+windows = { version = "0.62", features = ["Foundation", "Security_Credentials", "Security_Cryptography", "Storage_Streams"] }
 
 [dev-dependencies]
 melon-crypto = { path = "../../../crates/melon-crypto" }

@@ -7,6 +7,7 @@ mod imp {
         access_control::{ProtectionMode, SecAccessControl},
         passwords::{self, AccessControlOptions, PasswordOptions},
     };
+    use std::path::Path;
     use zeroize::Zeroizing;
 
     const SERVICE: &str = "de.melonigemelone.app.biometric.v1";
@@ -41,7 +42,7 @@ mod imp {
         true
     }
 
-    pub fn save_biometric(scope: &str, key: &[u8]) -> Result<(), String> {
+    pub fn save_biometric(_file: &Path, scope: &str, key: &[u8]) -> Result<(), String> {
         let access = SecAccessControl::create_with_protection(
             Some(ProtectionMode::AccessibleWhenPasscodeSetThisDeviceOnly),
             AccessControlOptions::BIOMETRY_CURRENT_SET.bits(),
@@ -49,18 +50,18 @@ mod imp {
         .map_err(|_| "biometric_unavailable")?;
         let mut config = biometric_item(scope);
         config.set_access_control(access);
-        delete_biometric(scope)?;
+        delete_biometric(_file, scope)?;
         passwords::set_generic_password_options(key, config)
             .map_err(|_| "biometric_unavailable".into())
     }
 
-    pub fn load_biometric(scope: &str) -> Result<Zeroizing<Vec<u8>>, String> {
+    pub fn load_biometric(_file: &Path, scope: &str) -> Result<Zeroizing<Vec<u8>>, String> {
         passwords::generic_password(biometric_item(scope))
             .map(Zeroizing::new)
             .map_err(|_| "biometric_unavailable".into())
     }
 
-    pub fn delete_biometric(scope: &str) -> Result<(), String> {
+    pub fn delete_biometric(_file: &Path, scope: &str) -> Result<(), String> {
         if passwords::delete_generic_password_options(biometric_item(scope))
             .is_err_and(|e| e.code() != NOT_FOUND)
         {
@@ -73,6 +74,8 @@ mod imp {
 #[cfg(windows)]
 mod imp {
     use super::SERVER_SERVICE;
+    use crate::hello;
+    use std::{fs, path::Path};
     use zeroize::Zeroizing;
 
     fn server_entry() -> Result<keyring::Entry, String> {
@@ -93,19 +96,29 @@ mod imp {
     }
 
     pub fn biometric_available() -> bool {
-        false
+        hello::system::available()
     }
 
-    pub fn save_biometric(_scope: &str, _key: &[u8]) -> Result<(), String> {
-        Err("biometric_unavailable".into())
+    pub fn save_biometric(file: &Path, scope: &str, key: &[u8]) -> Result<(), String> {
+        let sealed = hello::seal(scope, key, |challenge| hello::system::sign(challenge, true))?;
+        crate::platform::atomic_write(file, sealed.as_bytes())
     }
 
-    pub fn load_biometric(_scope: &str) -> Result<Zeroizing<Vec<u8>>, String> {
-        Err("biometric_unavailable".into())
+    pub fn load_biometric(file: &Path, scope: &str) -> Result<Zeroizing<Vec<u8>>, String> {
+        let sealed = fs::read_to_string(file).map_err(|_| "biometric_unavailable")?;
+        hello::open(scope, &sealed, |challenge| {
+            hello::system::sign(challenge, false)
+        })
     }
 
-    pub fn delete_biometric(_scope: &str) -> Result<(), String> {
-        Ok(())
+    pub fn delete_biometric(file: &Path, _scope: &str) -> Result<(), String> {
+        hello::system::delete();
+        match fs::remove_file(file) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                Err("storage_unavailable".into())
+            }
+            _ => Ok(()),
+        }
     }
 }
 

@@ -1,4 +1,6 @@
 mod clipboard;
+#[cfg(any(windows, test))]
+mod hello;
 #[cfg(target_os = "ios")]
 mod ios;
 mod keystore;

@@ -7,7 +7,7 @@ import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
-import type { NativePlatform } from '../platform';
+import { biometricName, type NativePlatform } from '../platform';
 import type { Session } from '../session';
 
 type Action = 'enable' | 'disable' | 'autofill';
@@ -90,14 +90,14 @@ export function BiometricSettings({ platform, session }: { platform: NativePlatf
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           <Box sx={{ p: 1.25, borderRadius: '14px', bgcolor: 'melon.sunk', color: 'primary.main', display: 'flex' }}><FingerprintIcon /></Box>
           <Stack spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
-            <Typography id="biometric-heading" component="h2" variant="h6">Touch ID / Face ID</Typography>
+            <Typography id="biometric-heading" component="h2" variant="h6">{biometricName(platform)}</Typography>
             <Chip label={status} color={configured ? 'success' : 'default'} variant="outlined" size="small" sx={{ alignSelf: 'flex-start' }} />
           </Stack>
         </Stack>
         <Typography variant="body2" color="text.secondary">
           {configured
-            ? 'Die Einrichtung ist für dieses Konto auf diesem Gerät gespeichert. Beim Entsperren prüft macOS oder iOS deine Biometrie erneut. Nach Änderungen an deinen Fingerabdrücken oder Face ID bitte neu einrichten.'
-            : 'Entsperre deinen Tresor mit Touch ID oder Face ID. Dein Master-Passwort bleibt weiterhin nutzbar.'}
+            ? `Die Einrichtung ist für dieses Konto auf diesem Gerät gespeichert. Beim Entsperren fragt ${biometricName(platform)} dich erneut. Wenn das Entsperren nicht mehr klappt, etwa nach Änderungen an Fingerabdrücken, Gesicht oder PIN, bitte neu einrichten.`
+            : `Entsperre deinen Tresor mit ${biometricName(platform)}. Dein Master-Passwort bleibt weiterhin nutzbar.`}
         </Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ flexWrap: 'wrap' }}>
           <Button variant="contained" disabled={busy !== null || configured === null} loading={busy === 'enable'} onClick={() => void run('enable')}>

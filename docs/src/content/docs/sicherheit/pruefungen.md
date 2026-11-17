@@ -167,6 +167,7 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | Hintergrund verwirft Schlüssel und verhindert verspätetes biometrisches Entsperren | `background_rejects_pending_biometric_restore_and_new_derivation` |
 | Teilen/Rotation binden Empfänger und Version; alter Schlüssel liest neue Version nicht | `sharing_and_rotation_preserve_context_and_versions` |
 | Passwortwechsel und Recovery behalten Kontoidentität, falsches Passwort wird abgelehnt | `password_change_and_recovery_preserve_account_and_reject_wrong_password` |
+| Windows Hello: nur dieselbe Hello-Signatur öffnet den Geräteschlüssel; anderer Hello-Schlüssel, anderer Scope, geänderte Challenge, manipulierte Datei, abgelehnte oder zu kurze Signatur öffnen nichts; jede Einrichtung signiert eine neue Challenge | `hello::tests` (Windows-CI) |
 | App-Dateien bleiben privat (0600), atomarer Ersatz hinterlässt keine temporäre Datei | `platform::tests::cache_files_are_private_and_atomically_replaced` |
 
 Der Passkey-Test rekonstruiert den öffentlichen Schlüssel direkt aus dem ausgelieferten

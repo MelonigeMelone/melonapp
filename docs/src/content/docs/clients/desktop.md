@@ -115,9 +115,13 @@ sind nur drei Dinge, gekapselt in `keystore.rs` und `clipboard.rs`:
   Windows dort nicht zwischen Apps: Jedes Programm, das als dieselbe Person läuft, kann den Eintrag
   lesen und ändern und die App so auf einen eigenen Server umleiten. Unter Windows schützt das also
   nur vor anderen Benutzerkonten ([offene Punkte](/melonapp/sicherheit/offene-punkte/)).
-- **Biometrie:** Windows Hello kommt in einem eigenen Schritt. Bis dahin meldet
-  `biometric_available` `false`; Anmeldebildschirm und Konto zeigen keine Biometrie-Optionen, und
-  `biometric_enable` lehnt ab.
+- **Biometrie:** Windows Hello ([ADR 0030](/melonapp/entscheidungen/0030-windows-hello/)). Ein
+  Hello-Schlüssel signiert eine feste Challenge; aus der Signatur entsteht der Schlüssel, der den
+  biometrischen Geräteschlüssel in `biometric.hello` verschlüsselt. Die Oberfläche heißt dort
+  „Windows Hello“ statt „Touch ID / Face ID“. Ohne eingerichtetes Hello meldet
+  `biometric_available` `false`, und die App zeigt keine Biometrie-Optionen. Anders als auf dem
+  Mac kann ein anderes Programm der Person denselben Hello-Schlüssel benutzen, wenn die Person die
+  Abfrage bestätigt.
 - **Zwischenablage:** Kopieren und Leeren laufen wie auf dem Mac nativ über `arboard`. Die Kopie
   trägt die Windows-Formate, die sie vom Verlauf (`Win+V`), der Cloud-Zwischenablage und anderen
   Clipboard-Programmen ausnehmen (`exclude_from_monitoring`).
