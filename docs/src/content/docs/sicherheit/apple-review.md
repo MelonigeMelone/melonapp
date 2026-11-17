@@ -39,8 +39,11 @@ kleinere Punkte und ein Bedienfehler, alle behoben (#61–#65, siehe unten).
 - AutoFill lehnt HTTP, ähnliche Domains und automatisch passende Subdomains ab.
   Fehlende Biometrie, falsche Schlüssel, defekte Dateien und abgelaufene Passwort-
   Snapshots führen zur Ablehnung. Keine ungeschützte Fallback-Datei wird angelegt.
-- Passkey-Signaturen binden RP-ID, Credential-ID und Challenge. Private Schlüssel
-  verlassen Rust nur verschlüsselt. Swift meldet Ergebnisse nach Abbruch nicht mehr
+- Passkey-Signaturen binden RP-ID, Credential-ID und Challenge. In der AutoFill-Extension
+  verlassen private Schlüssel Rust nur verschlüsselt. Seit Passkeys im Tresor liegen
+  ([ADR 0023](/melonapp/entscheidungen/0023-passkeys-im-tresor/)) sind sie beim Übernehmen aus
+  dem Briefkasten und beim Veröffentlichen für die Extension aber kurz im Klartext im JavaScript
+  der WebView, wie Passwörter auch. Swift meldet Ergebnisse nach Abbruch nicht mehr
   erfolgreich zurück und blockiert den UI-Thread nicht während der Biometrie.
 
 Die ausführbaren Nachweise stehen in [Automatische Prüfungen](/melonapp/sicherheit/pruefungen/).

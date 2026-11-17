@@ -91,7 +91,9 @@ Für eine Familien-Instanz ist das akzeptiert.
   für 15 Minuten aussperren. Dasselbe gilt, wenn Docker die echten Adressen nicht durchreicht
   (rootless Docker oder IPv6 ohne IPv6 im Docker-Netz): Dann sehen alle Anfragen wie die
   Docker-Bridge aus. Im Zweifel in den Server-Logs prüfen, welche Adressen ankommen.
-- Die Zähler liegen im Speicher, höchstens 10 000 Einträge je Zähler. Abgelaufene fallen sofort
+- Die Zähler liegen im Speicher, in vier Tabellen (Konto, Konto + Adresse, Adresse, Abfragen von
+  E-Mails) mit je höchstens 10 000 Einträgen. Login, Recovery und Passwortbestätigung teilen sich
+  diese Tabellen über ihr Präfix. Abgelaufene fallen sofort
   heraus. Ist der Speicher trotzdem voll, verdrängt ein neuer Eintrag nur einen mit höchstens
   einem Versuch. Zähler, die schon mehr gezählt haben, bleiben, sonst könnte ein Angreifer mit
   vielen erfundenen E-Mails die Sperre seines Ziels löschen. Findet sich unter den ältesten 64

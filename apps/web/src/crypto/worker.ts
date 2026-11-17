@@ -21,6 +21,8 @@ let pendingRecovery: Recovery | null = null;
 const vaults = new Map<string, { key: VaultKey; version: number }>();
 const ready = init();
 
+const extensionOnly = () => import.meta.env.VITE_MELON_EXTENSION === '1';
+
 const fail = (code: string): never => {
   throw new Error(code);
 };
@@ -249,9 +251,11 @@ const handlers: CryptoMethods = {
     return openExport(password, data);
   },
   exportVaultKeys() {
+    if (!extensionOnly()) fail('unknown_method');
     return [...vaults.entries()].map(([vaultId, v]) => ({ vaultId, version: v.version, raw: [...v.key.exportRaw()] }));
   },
   importVaultKeys({ keys }) {
+    if (!extensionOnly()) fail('unknown_method');
     for (const k of keys) setVault(k.vaultId, VaultKey.fromRaw(new Uint8Array(k.raw)), k.version);
   },
   lock() {
