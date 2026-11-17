@@ -106,16 +106,8 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         button("Abbrechen", primary: false) { [weak self] in self?.cancel() }
     }
 
-    private static func hosts(for identifiers: [ASCredentialServiceIdentifier]) -> [String] {
-        identifiers.compactMap { service in
-            if service.type == .domain { return service.identifier.lowercased() }
-            guard let url = URLComponents(string: service.identifier), url.scheme == "https" else { return nil }
-            return url.host?.lowercased()
-        }
-    }
-
     override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
-        hosts = Self.hosts(for: serviceIdentifiers)
+        hosts = CredentialVault.sites(for: serviceIdentifiers)
         pendingRequest = nil
         parameters = nil
         registration = false
@@ -181,9 +173,9 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
                     var requiredHosts = hosts
                     if let request = request as? ASPasswordCredentialRequest {
                         guard let identity = request.credentialIdentity as? ASPasswordCredentialIdentity else { throw VaultError.invalid }
-                        requiredHosts = Self.hosts(for: [identity.serviceIdentifier])
+                        requiredHosts = CredentialVault.sites(for: [identity.serviceIdentifier])
                     }
-                    result = .passwords(try vault.passwords().filter { entry in requiredHosts.contains { entry.matches(host: $0) } })
+                    result = .passwords(try vault.passwords().filter { entry in requiredHosts.contains { entry.matches(site: $0) } })
                 }
                 try self.cancellation.check()
                 DispatchQueue.main.async { [weak self] in

@@ -2265,8 +2265,10 @@ name = "melon-desktop"
 version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
+ "libc",
  "melon-crypto",
  "melon-native",
+ "objc2-authentication-services",
  "objc2-foundation",
  "reqwest 0.12.28",
  "security-framework",
@@ -2460,6 +2462,19 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation",
  "objc2-quartz-core",
+]
+
+[[package]]
+name = "objc2-authentication-services"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee6d6f7dab884a28adaec1012eb3889257a49cc145724e35f93ece2d209f8b25"
+dependencies = [
+ "bitflags 2.13.2",
+ "block2",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
 ]
 
 [[package]]

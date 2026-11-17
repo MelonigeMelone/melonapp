@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const calls = vi.hoisted(() => ({ crypto: [] as string[], logout: [] as string[], serverKey: 'OWN-KEY', kdf: null as null | { memory_kib: number; iterations: number; parallelism: number } }));
+const calls = vi.hoisted(() => ({ crypto: [] as string[], logout: [] as string[], logins: [] as string[], registered: [] as string[], serverKey: 'OWN-KEY', kdf: null as null | { memory_kib: number; iterations: number; parallelism: number } }));
 
 vi.mock('./crypto/client', () => ({
   cryptoCall: vi.fn(async (method: string) => {
     calls.crypto.push(method);
-    if (method === 'derive') return 'auth-key';
+    if (method === 'derive') return `auth-key-${calls.crypto.filter((m) => m === 'derive').length}`;
     if (method === 'unlock') return 'OWN-KEY';
+    if (method === 'generateSalt') return 'salt';
+    if (method === 'createAccount') return { wrappedAccountKey: 'wrapped', publicKey: 'OWN-KEY', encryptedPrivateKey: 'private', personalVault: { encryptedMeta: 'meta', encryptedVaultKey: 'key' } };
     return undefined;
   }),
 }));
@@ -19,7 +21,10 @@ vi.mock('./api', async (importOriginal) => {
     ...original,
     api: {
       prelogin: async () => ({ kdf: calls.kdf ?? original.DEFAULT_KDF, salt: 'salt' }),
-      login: async () => ({
+      register: async (body: { auth_key: string }) => {
+        calls.registered.push(body.auth_key);
+      },
+      login: async (body: { auth_key: string }) => (calls.logins.push(body.auth_key), {
         user_id: 'me',
         token: 'token',
         wrapped_account_key: 'wrapped',
@@ -34,14 +39,26 @@ vi.mock('./api', async (importOriginal) => {
   };
 });
 
-const { login, describeError } = await import('./session');
+const { login, register, lock, describeError } = await import('./session');
 const { ApiError } = await import('./api');
+const { setNativePlatform } = await import('./platform');
+type Native = Parameters<typeof setNativePlatform>[0];
 
 describe('login', () => {
   beforeEach(() => {
     calls.crypto = [];
     calls.logout = [];
+    calls.logins = [];
+    calls.registered = [];
     calls.kdf = null;
+  });
+
+  it('logs in after registering with a fresh proof, because native proof handles work only once', async () => {
+    calls.serverKey = 'OWN-KEY';
+    const session = await register('me@example.test', 'pw', null);
+    expect(session.publicKey).toBe('OWN-KEY');
+    expect(calls.registered).toEqual(['auth-key-1']);
+    expect(calls.logins).toEqual(['auth-key-2']);
   });
 
   it('refuses weaker key derivation than the apps use before deriving or sending anything', async () => {
@@ -74,5 +91,33 @@ describe('login', () => {
     expect(describeError(error)).toContain('falschen öffentlichen Schlüssel');
     expect(calls.crypto).toContain('lock');
     expect(calls.logout).toEqual(['token']);
+  });
+});
+
+describe('lock', () => {
+  const session = { token: 'token' } as Parameters<typeof lock>[0];
+
+  function native(keepsToken: boolean) {
+    const signedOut = vi.fn().mockResolvedValue(undefined);
+    setNativePlatform({ biometricKeepsToken: vi.fn().mockResolvedValue(keepsToken), signedOut } as unknown as Native);
+    return signedOut;
+  }
+
+  beforeEach(() => {
+    calls.logout = [];
+  });
+
+  it('signing out removes the AutoFill data of this device', async () => {
+    const signedOut = native(false);
+    await lock(session);
+    expect(calls.logout).toEqual(['token']);
+    expect(signedOut).toHaveBeenCalledOnce();
+  });
+
+  it('locking with biometrics keeps the session and the AutoFill data', async () => {
+    const signedOut = native(true);
+    await lock(session);
+    expect(calls.logout).toEqual([]);
+    expect(signedOut).not.toHaveBeenCalled();
   });
 });

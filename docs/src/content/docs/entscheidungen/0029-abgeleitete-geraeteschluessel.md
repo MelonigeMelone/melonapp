@@ -37,11 +37,10 @@ Unterschied. Der Kontoschlüssel verlässt die App nicht mehr.
 
 ### Nachtrag: API-Cache (Issue #107)
 
-Die App speichert GET-Antworten des Servers verschlüsselt (`cache-….enc`). Dafür nutzt sie jetzt
-ebenfalls einen abgeleiteten Schlüssel, Zweck `cache`, Scope = Server ‖ Pfad, statt des
-Kontoschlüssels mit eigenem AAD. Ein Fehler im Cache-Code kann damit keine anderen Daten des Kontos
-öffnen oder fälschen. Alte Cache-Dateien gelten einfach nicht mehr und werden neu geschrieben.
-Den Kontoschlüssel nutzen danach nur noch die Lesepfade für Dateien aus der Zeit vor ADR 0029
+Die App speicherte GET-Antworten des Servers verschlüsselt (`cache-….enc`). Mit #107 bekamen sie
+einen eigenen abgeleiteten Schlüssel (Zweck `cache`). Mit #106 ist der Cache ganz entfallen, weil
+ihn nichts las; die App löscht alte Dateien beim Start, und `cache_seal`/`cache_open` gibt es
+nicht mehr. Den Kontoschlüssel nutzen nur noch die Lesepfade für Dateien aus der Zeit vor ADR 0029
 (`legacy_cache_open`, `legacy_passkey_open`). Die passenden Schreibfunktionen gibt es nur in
 Tests (Feature `test-support`).
 
@@ -55,7 +54,7 @@ Tests (Feature `test-support`).
 ## Folgen
 
 - Ein kompromittierter AutoFill-Schlüssel verrät nur, was die Extension ohnehin sieht:
-  Login-Einträge und Passkeys. Identität, Bereichsschlüssel und API-Cache bleiben zu.
+  Login-Einträge und Passkeys. Identität und Bereichsschlüssel bleiben zu.
 - Briefkasten-Dateien und die alte `{scope}.passkeys.enc`, die vor dem Update noch mit dem
   Kontoschlüssel verschlüsselt wurden, übernimmt die App weiterhin. Dafür versucht sie nach dem
   AutoFill-Schlüssel auch den Kontoschlüssel. Das geht nur in der App, nie in der Extension.

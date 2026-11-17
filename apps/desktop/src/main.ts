@@ -45,6 +45,7 @@ const platform = {
   },
   async disableBiometric() { await invoke('biometric_disable'); },
   async biometricKeepsToken(token: string) { return invoke<boolean>('biometric_keeps_token', { token }); },
+  async signedOut() { await invoke('signed_out'); },
   async onLock(callback: () => void) { return listen('melon-locked', callback); },
 };
 setNativePlatform(platform);

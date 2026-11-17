@@ -63,12 +63,42 @@ fn atomic_write(path: &std::path::Path, data: &[u8]) -> Result<(), String> {
     let parent = path.parent().ok_or("storage_unavailable")?;
     let mut temporary =
         tempfile::NamedTempFile::new_in(parent).map_err(|_| "storage_unavailable")?;
+    protect(temporary.as_file())?;
     temporary
         .write_all(data)
         .and_then(|()| temporary.as_file().sync_all())
         .map_err(|_| "storage_unavailable")?;
     temporary.persist(path).map_err(|_| "storage_unavailable")?;
     Ok(())
+}
+
+#[cfg(target_os = "ios")]
+fn protect(file: &fs::File) -> Result<(), String> {
+    crate::ios::protect(file)
+}
+
+#[cfg(not(target_os = "ios"))]
+fn protect(_file: &fs::File) -> Result<(), String> {
+    Ok(())
+}
+
+pub fn remove_api_cache(directory: &std::path::Path) {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        let is_cache = name
+            .strip_prefix("cache-")
+            .and_then(|rest| rest.strip_suffix(".enc"))
+            .is_some_and(|hex| hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()));
+        if is_cache && entry.file_type().is_ok_and(|t| t.is_file()) {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
 }
 
 fn write(app: &tauri::AppHandle, name: &str, data: &[u8]) -> Result<(), String> {
@@ -224,18 +254,6 @@ pub async fn api_request(
         bytes.extend_from_slice(&chunk);
     }
     let body = String::from_utf8(bytes).map_err(|_| "invalid_response")?;
-    if method == "GET" && status == 200 {
-        let scope = format!("{base}{path}");
-        let name = format!("cache-{}.enc", sha256_hex(scope.as_bytes()));
-        let mut session = app
-            .state::<Mutex<Session>>()
-            .inner()
-            .lock()
-            .map_err(|_| "session_unavailable")?;
-        if let Ok(ciphertext) = session.cache_seal(&scope, body.as_bytes()) {
-            write(&app, &name, ciphertext.as_bytes())?;
-        }
-    }
     Ok(Response { status, body })
 }
 
@@ -373,6 +391,11 @@ pub fn biometric_disable(app: tauri::AppHandle) -> Result<(), String> {
     autofill_remove()
 }
 
+#[tauri::command]
+pub fn signed_out() -> Result<(), String> {
+    autofill_remove()
+}
+
 fn remove_biometric(app: &tauri::AppHandle, scope: &str) -> Result<(), String> {
     if passwords::delete_generic_password_options(options(scope))
         .is_err_and(|e| e.code() != NOT_FOUND)
@@ -395,14 +418,11 @@ fn autofill_remove() -> Result<(), String> {
 
 #[cfg(target_os = "ios")]
 fn autofill_remove() -> Result<(), String> {
-    use objc2_foundation::{NSFileManager, NSString};
-    let group = "group.de.melonigemelone.app";
-    let Some(url) = NSFileManager::defaultManager()
-        .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(group))
-    else {
+    crate::ios::clear_suggestions();
+    let group = APP_GROUP;
+    let Ok(directory) = app_group() else {
         return Ok(());
     };
-    let directory = PathBuf::from(url.path().ok_or("app_group_unavailable")?.to_string());
     let active = directory.join("active.txt");
     let Ok(scope) = fs::read_to_string(&active) else {
         return Ok(());
@@ -480,6 +500,44 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn old_api_cache_files_are_removed_and_nothing_else() {
+        let directory = tempfile::tempdir().unwrap();
+        let cache = format!("cache-{}.enc", "a".repeat(64));
+        for name in [
+            cache.as_str(),
+            "biometric.enc",
+            "biometric.token",
+            "cache-short.enc",
+            "cache-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz.enc",
+        ] {
+            fs::write(directory.path().join(name), b"x").unwrap();
+        }
+        fs::create_dir(
+            directory
+                .path()
+                .join(format!("cache-{}.enc", "b".repeat(64))),
+        )
+        .unwrap();
+        remove_api_cache(directory.path());
+        let mut left: Vec<String> = fs::read_dir(directory.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(
+            left,
+            [
+                "biometric.enc".to_owned(),
+                "biometric.token".to_owned(),
+                format!("cache-{}.enc", "b".repeat(64)),
+                "cache-short.enc".to_owned(),
+                "cache-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz.enc"
+                    .to_owned(),
+            ]
+        );
+    }
 
     #[test]
     fn cache_files_are_private_and_atomically_replaced() {
@@ -665,7 +723,7 @@ pub async fn autofill_publish(
                     session
                         .autofill_seal(&scope, "passwords", &data)
                         .map_err(str::to_owned)?,
-                    crate::passkeys::seal_synced(&mut session, &scope, &passkeys)?,
+                    crate::passkeys::seal_synced(&mut session, &scope, created, &passkeys)?,
                 )
             };
             let item = || {

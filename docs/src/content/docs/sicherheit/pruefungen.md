@@ -35,7 +35,7 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Export braucht das Master-Passwort, auch in der nativen Sitzung | `melon-native`: `export_needs_the_master_password_and_reopens_with_the_export_password`, E2E-Schritt „export encrypted and as CSV …“ |
 | Export-Datei ist wirklich verschlüsselt, CSV nur nach Bestätigung, Wieder-Import mit falschem Export-Passwort scheitert | E2E-Schritt „export encrypted and as CSV, import the encrypted file again“ |
 | Server spielt alte Version eines Eintrags oder einen gelöschten Eintrag zurück, auch nach Neustart | `store.test.ts` (`detects an old version replayed …`, `remembers what it has seen across sessions`, `detects a deleted item brought back …`), `seen.test.ts` |
-| Native Apps: fehlgeschlagenes Entsperren und Serverwechsel verwerfen Login-Nachweise; Cache und Biometrie-Zustand sind nicht vertauschbar | `melon-native`: `failed_unlock_discards_pending_auth_proofs`, `server_change_drops_an_abandoned_login_but_not_an_open_vault`, `api_cache_and_biometric_snapshot_cannot_be_swapped` |
+| Native Apps: fehlgeschlagenes Entsperren und Serverwechsel verwerfen Login-Nachweise; AutoFill-Datei und Biometrie-Zustand sind nicht vertauschbar | `melon-native`: `failed_unlock_discards_pending_auth_proofs`, `server_change_drops_an_abandoned_login_but_not_an_open_vault`, `autofill_file_and_biometric_snapshot_cannot_be_swapped` |
 | Chiffretext lässt sich nicht in anderen Eintrag/Tresor/Schlüsselversion verschieben | `sharing::tests::item_aad_separates_contexts`, `api::personal_vault_flow` |
 | Geteilter Tresor-Schlüssel ist an Tresor, Person und Version gebunden | `sharing::tests::sealed_key_is_bound_to_vault_user_and_version` |
 | Nur der Empfänger öffnet seine Schlüssel-Kopie | `sharing::tests::other_person_cannot_open` |
@@ -114,8 +114,8 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | Eigenschaft | Test |
 |---|---|
 | Eintragsverschlüsselung und Bindung an die Eintrags-ID | `roundtrip_and_wrong_item_context` |
-| Cache lehnt falschen Schlüssel, Kontext und Manipulation ab | `cache_rejects_wrong_key_scope_and_tampering` |
-| Gesperrte Sitzung kann weder Cache noch Tresor lesen | `locked_state_cannot_access_cache_or_vaults` |
+| AutoFill-Dateien lehnen ein anderes Konto und Manipulation ab | `autofill_files_reject_another_account_and_tampering` |
+| Gesperrte Sitzung kann weder AutoFill-Dateien noch Tresor lesen | `locked_state_cannot_access_autofill_files_or_vaults` |
 | Falsches Passwort verbraucht die Ableitung ohne Restschlüssel | `wrong_password_does_not_leave_keys_and_retry_needs_derivation` |
 | Rust erzwingt Ablauf ohne UI-Timer | `timeout_is_enforced_without_ui_timer` |
 | Kein Import/Export roher Schlüssel über die UI-Schnittstelle | `raw_keys_and_unknown_commands_are_never_exposed` |
@@ -127,8 +127,11 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | Server-Adresse erzwingt TLS außer Loopback und lehnt eingebettete Zugangsdaten ab | `platform::tests::server_requires_tls_except_loopback_and_rejects_credentials` |
 | API-Pfade verlassen `/api/v1/` nicht, auch nicht mit `%2e%2e` | `platform::tests::api_paths_cannot_leave_the_api_prefix` |
 | Geräteschlüssel sind vom Kontoschlüssel und voneinander getrennt | `private::tests::device_keys_are_separate_from_the_account_and_each_other` |
-| AutoFill-Schlüssel öffnet weder Identität noch API-Cache und kann keinen Cache fälschen | `autofill_key_cannot_open_the_account` |
-| API-Cache hat einen eigenen Schlüssel: Der Kontoschlüssel öffnet ihn nicht, mit dem Kontoschlüssel verschlüsselte Dateien öffnet nur noch der Altpfad, und auch der nur entsperrt | `api_cache_has_its_own_key_and_old_files_open_only_on_the_legacy_path` |
+| AutoFill-Schlüssel öffnet die Identität nicht und unterscheidet sich von Konto-, Biometrie- und anderen AutoFill-Schlüsseln | `autofill_key_cannot_open_the_account` |
+| Mit dem Kontoschlüssel verschlüsselte Altdateien öffnet nur der Altpfad, und auch der nur entsperrt; Dateien mit abgeleitetem Schlüssel öffnet er nicht | `old_account_key_files_open_only_on_the_legacy_path_and_only_unlocked` |
+| Alte API-Cache-Dateien werden beim Start gelöscht, andere Dateien und Verzeichnisse bleiben | `platform::tests::old_api_cache_files_are_removed_and_nothing_else` |
+| Passkey-Kopie für die Extension trägt den Veröffentlichungszeitpunkt | `passkeys::tests::outbox_passkey_moves_to_synced_copy_and_signs_identically` |
+| Echtes Abmelden räumt AutoFill auf, Sperren mit Biometrie nicht; die Registrierung schickt keinen Login-Nachweis zweimal | `session.test.ts` |
 | AutoFill-Dateien öffnen nur mit Scope und Namen | `autofill_files_open_only_with_their_scope_and_name` |
 | Passkeys für die Extension lassen sich nicht mit dem Kontoschlüssel öffnen | `passkeys::tests::synced_copy_for_the_extension_cannot_be_opened_with_the_account_key` |
 | Briefkasten-Dateien von vor dem Update werden weiter übernommen | `passkeys::tests::outbox_files_written_before_the_autofill_key_are_still_imported` |
@@ -150,11 +153,11 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | Teilweise unlesbare Gerätedatei wird nicht gelöscht | `passkeys::tests::partly_unreadable_legacy_file_is_marked_partial` (Desktop) |
 | Extension: eigener Passkey gewinnt gegen gleichnamige ID aus dem Tresor | `apps/desktop/apple/Tests/main.swift` |
 | CSV-Export enthält keine Passkeys, verschlüsselter Export behält sie vollständig | `export/formats.test.ts` |
-| Swift: exakte HTTPS-Hosts, keine Eltern-/Subdomains, Cache-Ablauf und Aufrufe über echte UniFFI-Bindings | `bash scripts/test-apple-swift.sh` |
+| Swift: exakte HTTPS-Hosts samt Port (443 = kein Port), keine Eltern-/Subdomains, Cache-Ablauf, synchronisierte Passkeys laufen nach 24 Stunden ab und gelten ohne Zeitpunkt nicht (eigene im Briefkasten nie), Aufrufe über echte UniFFI-Bindings | `bash scripts/test-apple-swift.sh` |
 
 | Native Authentifizierung | Test |
 |---|---|
-| React erhält nur zufällige Auth-Handles; fremde und gesperrte Handles werden verworfen | `auth_proofs_stay_native_and_handles_expire_on_lock` |
+| React erhält nur zufällige Auth-Handles; jeder gilt nur einmal, fremde und gesperrte werden verworfen | `auth_proofs_stay_native_and_handles_expire_on_lock` |
 | Nativer Client registriert und entsperrt gegen den echten Server mit PostgreSQL, liest verschlüsselte Items und richtet Recovery ein | `api::native_client_registers_unlocks_and_roundtrips_items` |
 
 
@@ -163,7 +166,7 @@ Ohne lokales Rust siehe [Lokale Entwicklung](/melonapp/betrieb/lokale-entwicklun
 | Hintergrund verwirft Schlüssel und verhindert verspätetes biometrisches Entsperren | `background_rejects_pending_biometric_restore_and_new_derivation` |
 | Teilen/Rotation binden Empfänger und Version; alter Schlüssel liest neue Version nicht | `sharing_and_rotation_preserve_context_and_versions` |
 | Passwortwechsel und Recovery behalten Kontoidentität, falsches Passwort wird abgelehnt | `password_change_and_recovery_preserve_account_and_reject_wrong_password` |
-| Cache-Dateien bleiben privat (0600), atomarer Ersatz hinterlässt keine temporäre Datei | `platform::tests::cache_files_are_private_and_atomically_replaced` |
+| App-Dateien bleiben privat (0600), atomarer Ersatz hinterlässt keine temporäre Datei | `platform::tests::cache_files_are_private_and_atomically_replaced` |
 
 Der Passkey-Test rekonstruiert den öffentlichen Schlüssel direkt aus dem ausgelieferten
 COSE-Objekt der Registrierung und prüft damit die Assertion. Er greift für diesen
@@ -178,7 +181,7 @@ bleibt Teil der Hardware-Abnahme in #23 und #27.
 
 `melon-native` prüft den gespeicherten Status ausschließlich in einer entsperrten Sitzung.
 Neue Angriffsprüfungen decken fremde Kontoschlüssel, fremde Server-Kontexte, beschädigte
-Snapshots, vertauschte API-Caches sowie gesperrte und abgelaufene Sitzungen ab. Eine
+Snapshots, vertauschte AutoFill-Dateien sowie gesperrte und abgelaufene Sitzungen ab. Eine
 Statusabfrage verlängert die Inaktivitätsfrist nicht und stellt keine Sitzung wieder her.
 
 Die React-Interaktionstests prüfen Wiederöffnen, verzögerte Aktivierung und gesperrte

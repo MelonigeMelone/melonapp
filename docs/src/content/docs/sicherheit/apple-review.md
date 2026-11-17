@@ -13,7 +13,7 @@ kleinere Punkte und ein Bedienfehler, alle behoben (#61–#65, siehe unten).
 
 - Die native UI erhält keine Konto-, Bereichs-, Identitäts- oder Authentifizierungsschlüssel.
   Authentifizierungsnachweise sind zufällige Handles, die ausschließlich der native
-  HTTP-Transport auflöst; Sperren verwirft sie.
+  HTTP-Transport auflöst, jeder genau einmal; Sperren verwirft sie (#106).
 - Die gemeinsam genutzte Web-UI zeigt entschlüsselte Einträge, Sitzungstokens und auf
   ausdrücklichen Wunsch den Recovery-Key an. Eine kompromittierte UI könnte weiterhin
   angezeigte Daten lesen oder native Entschlüsselungsaufträge stellen; die Isolation
@@ -29,8 +29,10 @@ kleinere Punkte und ein Bedienfehler, alle behoben (#61–#65, siehe unten).
 - Jedes Sperren, auch Fokusverlust, Suspendieren und der native Timer, meldet beim Server ab. Ausgenommen ist nur genau das Token, das im biometrischen Wiederaufnahmezustand steckt (#61).
 - Caches verwenden authentifizierte Verschlüsselung mit Konto-/Server-/Formatkontext. Der
   biometrische Wiederaufnahmezustand hat einen eigenen Kontext und lässt sich nicht mit
-  einer Cache-Datei vertauschen (#62). Deaktivieren löscht auch den AutoFill-Schlüssel (#64).
-  Schreibvorgänge verwenden private temporäre Dateien und atomaren Ersatz. Schlüssel
+  einer Cache-Datei vertauschen (#62). Deaktivieren löscht auch den AutoFill-Schlüssel (#64),
+  ebenso echtes Abmelden; beides leert die iOS-Vorschläge (#106). Server-Antworten speichert die
+  App nicht mehr (#106). Schreibvorgänge verwenden private temporäre Dateien und atomaren Ersatz,
+  auf iOS mit Schutzklasse *Complete* (#106). Schlüssel
   liegen nur in der Keychain mit `biometryCurrentSet` und gerätegebundener Zugriffsart. Dort
   liegen nur abgeleitete Schlüssel, nie der Kontoschlüssel; die Extension kann damit weder die
   Identität noch Bereichsschlüssel öffnen ([ADR 0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/)).
@@ -114,7 +116,10 @@ Stand: 12. November 2026. Signierte Builds mit Team `S7FTFS4QRH`, Bundle-IDs
   in Tests, im Simulator und auf dem iPhone 13 geprüft (gerätelokaler Passkey übernommen,
   Anmeldung danach aus der Tresor-Kopie). Wiederherstellung auf einem zweiten Gerät
   (anmelden, Face ID einrichten, AutoFill veröffentlichen) vom Nutzer bestätigt. Gelöschte Passkeys verschwinden aus den iOS-Vorschlägen erst beim
-  nächsten entsperrten AutoFill-Vorgang.
+  nächsten entsperrten AutoFill-Vorgang. Die Passkey-Kopie für die Extension gilt wie die
+  Passwort-Kopie 24 Stunden (#106).
+- AutoFill gleicht den Port mit ab; ein Eintrag für den Standard-Port füllt keinen anderen Port
+  desselben Hosts aus (#106).
 - Im Simulator zeigt die AutoFill-Extension keinen Face-ID-Dialog;
   biometrische Aussagen gelten nur für die Hardware-Abnahme oben.
 

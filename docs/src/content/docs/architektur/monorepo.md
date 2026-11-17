@@ -29,7 +29,8 @@ melonapp/
 ## Zwei Workspaces
 
 - **Cargo** für alles in Rust. Gemeinsame Version, Edition und Lints stehen in der
-  Wurzel-`Cargo.toml`. `unsafe` ist für den ganzen Workspace verboten.
+  Wurzel-`Cargo.toml`. `unsafe` ist für den ganzen Workspace verboten. Das Desktop-Crate hat einen eigenen
+  Workspace und erlaubt `unsafe` nur in `src/ios.rs` ([Desktop & iOS](/melonapp/clients/desktop/#sperren-und-abmelden)).
 - **npm** für alles in JavaScript/TypeScript (`docs`, `apps/*`, `packages/*`).
   Benötigt Node ≥ 22.23 (siehe `.nvmrc`).
 

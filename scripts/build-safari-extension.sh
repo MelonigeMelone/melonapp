@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
 : "${APPLE_SIGNING_IDENTITY:?Set APPLE_SIGNING_IDENTITY, or - for an unsigned build}"

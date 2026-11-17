@@ -9,12 +9,16 @@ struct PasswordEntry: Codable {
     let password: String
     let urls: [String]
 
-    func matches(host: String) -> Bool {
+    func matches(site: String) -> Bool {
         urls.contains { value in
             guard let url = URLComponents(string: value), url.scheme == "https", url.user == nil, url.password == nil else { return false }
-            return url.host?.lowercased() == host.lowercased()
+            return CredentialVault.authority(url) == site.lowercased()
         }
     }
+}
+
+func isFresh(_ createdAt: TimeInterval, now: TimeInterval) -> Bool {
+    createdAt <= now + 60 && now - createdAt <= 86400
 }
 
 struct PasswordCache: Codable {
@@ -22,8 +26,13 @@ struct PasswordCache: Codable {
     let passwords: [PasswordEntry]
 
     func validate(now: TimeInterval = Date().timeIntervalSince1970) throws {
-        guard createdAt <= now + 60, now - createdAt <= 86400 else { throw VaultError.expired }
+        guard isFresh(createdAt, now: now) else { throw VaultError.expired }
     }
+}
+
+struct SyncedPasskeys: Codable {
+    let createdAt: TimeInterval
+    let passkeys: [StoredPasskey]
 }
 
 struct StoredPasskey: Codable {
@@ -107,11 +116,25 @@ final class CredentialVault {
         return try? JSONDecoder().decode(type, from: plaintext)
     }
 
+    static func authority(_ url: URLComponents) -> String? {
+        guard let host = url.host?.lowercased(), !host.isEmpty else { return nil }
+        if let port = url.port, port != 443 { return "\(host):\(port)" }
+        return host
+    }
+
+    static func sites(for identifiers: [ASCredentialServiceIdentifier]) -> [String] {
+        identifiers.compactMap { service in
+            if service.type == .domain { return service.identifier.lowercased() }
+            guard let url = URLComponents(string: service.identifier), url.scheme == "https" else { return nil }
+            return authority(url)
+        }
+    }
+
     static func hex(_ data: Data) -> String {
         data.map { String(format: "%02x", $0) }.joined()
     }
 
-    func passkeys(key: Data) -> [StoredPasskey] {
+    func passkeys(key: Data, now: TimeInterval = Date().timeIntervalSince1970) -> [StoredPasskey] {
         var result: [StoredPasskey] = []
         let prefix = "\(scope).outbox."
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).sorted()
@@ -122,7 +145,9 @@ final class CredentialVault {
             result.append(passkey)
         }
         result += decode([StoredPasskey].self, "\(scope).passkeys.enc", scope: "autofill/v1/\(scope)/passkeys", key: key, limit: 8 * 1024 * 1024) ?? []
-        result += decode([StoredPasskey].self, "\(scope).synced.enc", scope: "autofill/v1/\(scope)/synced", key: key, limit: 48 * 1024 * 1024) ?? []
+        if let synced = decode(SyncedPasskeys.self, "\(scope).synced.enc", scope: "autofill/v1/\(scope)/synced", key: key, limit: 48 * 1024 * 1024), isFresh(synced.createdAt, now: now) {
+            result += synced.passkeys
+        }
         var seen = Set<Data>()
         return result.filter { seen.insert($0.id).inserted }
     }
