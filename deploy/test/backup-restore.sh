@@ -81,6 +81,7 @@ printf 'X' | dd of="$work/tampered.age" bs=1 seek=200 conv=notrunc 2> /dev/null
 if bin/melon-restore "$work/tampered.age" --yes --identity "$work/key.txt" > /dev/null 2>&1; then fail "restored a tampered file"; fi
 [[ "$(sql 'select v from canary')" == changed ]] || fail "tampered file touched the database"
 
+sql "create table filler as select md5(g::text) as v from generate_series(1, 20000) g" > /dev/null
 bin/melon-backup --local > /dev/null
 plain="$(find backups -name 'melon-*.dump' -newer "$sealed" | head -1)"
 [[ -n "$plain" ]] || fail "no local dump"
