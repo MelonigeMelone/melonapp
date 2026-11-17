@@ -1,3 +1,5 @@
+import { nativePlatform } from './platform';
+
 export const CLIPBOARD_CLEAR_SECONDS = 30;
 
 interface Pending {
@@ -19,7 +21,14 @@ async function readClipboard(): Promise<string | null> {
 
 async function clearPending(now: boolean): Promise<void> {
   const p = pending;
-  if (!p || (!now && Date.now() < p.due) || !document.hasFocus()) return;
+  if (!p || (!now && Date.now() < p.due)) return;
+  const native = nativePlatform()?.clipboard;
+  if (native) {
+    pending = null;
+    await native.clear().catch(() => undefined);
+    return;
+  }
+  if (!document.hasFocus()) return;
   const current = await readClipboard();
   if (current !== null && current !== p.secret) {
     if (pending === p) pending = null;
@@ -45,8 +54,13 @@ function watch() {
 }
 
 export async function copySecret(secret: string): Promise<void> {
-  await navigator.clipboard.writeText(secret);
-  watch();
+  const native = nativePlatform()?.clipboard;
+  if (native) {
+    await native.copy(secret);
+  } else {
+    await navigator.clipboard.writeText(secret);
+    watch();
+  }
   pending = { secret, due: Date.now() + CLIPBOARD_CLEAR_SECONDS * 1000 };
   clearTimeout(timer);
   timer = setTimeout(() => void clearPending(false), CLIPBOARD_CLEAR_SECONDS * 1000);
