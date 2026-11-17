@@ -81,6 +81,16 @@ printf 'X' | dd of="$work/tampered.age" bs=1 seek=200 conv=notrunc 2> /dev/null
 if bin/melon-restore "$work/tampered.age" --yes --identity "$work/key.txt" > /dev/null 2>&1; then fail "restored a tampered file"; fi
 [[ "$(sql 'select v from canary')" == changed ]] || fail "tampered file touched the database"
 
+bin/melon-backup --local > /dev/null
+plain="$(find backups -name 'melon-*.dump' -newer "$sealed" | head -1)"
+[[ -n "$plain" ]] || fail "no local dump"
+size="$(wc -c < "$plain")"
+head -c "$((size - 300))" "$plain" > "$work/truncated.dump"
+docker compose exec -T db pg_restore --list < "$work/truncated.dump" > /dev/null || fail "test setup: a truncated dump should pass the list check"
+if bin/melon-restore "$work/truncated.dump" --yes > /dev/null 2>&1; then fail "restored a truncated dump"; fi
+[[ "$(sql 'select v from canary')" == changed ]] || fail "a failed restore touched the database"
+[[ "$(docker compose exec -T db psql -tAqU melon -d postgres -c "select count(*) from pg_database where datname = 'melon_restore'")" == 0 ]] || fail "temporary database left behind"
+
 bin/melon-restore "$sealed" --yes --identity "$work/key.txt" > /dev/null 2>&1
 [[ "$(sql 'select v from canary')" == original ]] || fail "encrypted restore did not bring the data back"
 [[ -z "$(find backups -name 'restore-*')" ]] || fail "decrypted temp file left behind"

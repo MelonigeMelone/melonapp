@@ -28,6 +28,7 @@ function Read-Settings {
         KnownHosts   = $(if ($c.KnownHosts) { $c.KnownHosts } else { Join-Path $env:USERPROFILE '.ssh\known_hosts' })
         IntervalDays = $(if ($c.IntervalDays) { [int]$c.IntervalDays } else { 30 })
         Keep         = $(if ($c.Keep) { [int]$c.Keep } else { 12 })
+        MaxAgeDays   = $(if ($c.MaxAgeDays) { [int]$c.MaxAgeDays } else { 7 })
     }
 }
 
@@ -55,6 +56,24 @@ function Write-Log($s, [string]$Text) {
     Add-Content -Path (Join-Path $s.Target 'home-backup.log') -Value "$((Get-Date).ToString('s')) $Text"
 }
 
+function Get-DumpTime([string]$Name) {
+    $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+    $time = [datetime]::MinValue
+    if ([datetime]::TryParseExact($Name.Substring(6, 16), "yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$time)) { return $time }
+    $null
+}
+
+function Select-Newest([string[]]$Names, [datetime]$Now, [int]$MaxAgeDays) {
+    $dumps = @($Names | Where-Object { $_ -match $DumpPattern })
+    if (-not $dumps) { throw 'Es liegt kein verschlüsseltes Backup (melon-*.dump.age) bereit.' }
+    $odd = @($dumps | Where-Object { $t = Get-DumpTime $_; -not $t -or $t -gt $Now.AddHours(1) })
+    if ($odd) { throw "Backups mit ungültigem Datum oder Datum in der Zukunft: $($odd -join ', '). Das kann ein manipulierter Server sein, bitte prüfen." }
+    $newest = $dumps | Sort-Object { Get-DumpTime $_ } -Descending | Select-Object -First 1
+    $age = ($Now - (Get-DumpTime $newest)).TotalDays
+    if ($age -gt $MaxAgeDays) { throw "Das neueste Backup ($newest) ist $([int]$age) Tage alt. Läuft das nächtliche Backup auf dem Server noch?" }
+    $newest
+}
+
 function Test-Dump([string]$Path) {
     $bytes = New-Object byte[] $AgeHeader.Length
     $stream = [IO.File]::OpenRead($Path)
@@ -72,9 +91,8 @@ function Invoke-Backup {
     }
 
     $listing = Invoke-Sftp $s @("cd `"$($s.RemoteDir)`"", 'ls -1')
-    $newest = $listing | ForEach-Object { ($_ -split '/')[-1].Trim() } | Where-Object { $_ -match $DumpPattern } |
-        Sort-Object -Descending | Select-Object -First 1
-    if (-not $newest) { throw "Auf $($s.Host) liegt kein verschlüsseltes Backup (melon-*.dump.age)." }
+    $names = @($listing | ForEach-Object { ($_ -split '/')[-1].Trim() })
+    $newest = Select-Newest $names ([datetime]::UtcNow) $s.MaxAgeDays
 
     $final = Join-Path $s.Target $newest
     if (-not (Test-Path $final)) {
@@ -87,8 +105,8 @@ function Invoke-Backup {
         Move-Item $partial $final -Force
     }
 
-    Get-ChildItem $s.Target -Filter 'melon-*.dump.age' | Where-Object { $_.Name -match $DumpPattern } |
-        Sort-Object Name -Descending | Select-Object -Skip $s.Keep | Remove-Item
+    Get-ChildItem $s.Target -Filter 'melon-*.dump.age' | Where-Object { $_.Name -match $DumpPattern -and (Get-DumpTime $_.Name) } |
+        Sort-Object { Get-DumpTime $_.Name } -Descending | Select-Object -Skip $s.Keep | Remove-Item
     (Get-Date).ToString('o', [Globalization.CultureInfo]::InvariantCulture) | Set-Content $marker
     Write-Log $s "ok $newest"
     $newest

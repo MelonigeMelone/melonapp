@@ -96,7 +96,8 @@ Der tägliche Lauf findet sie auch dann, wenn niemand pusht.
 | Erweiterung im echten Chromium: kein Ausfüllen ohne Klick, nichts auf fremder Domain, Speichern landet verschlüsselt im Bereich, Sperren beendet Ausfüllen | CI-Job `e2e` (`apps/extension/e2e`) |
 | Zwei Personen im echten Browser: Einladen, automatische Freigabe, Entfernen mit Schlüsselwechsel, Zugriff danach weg | CI-Job `e2e` (`apps/web/e2e/vault.e2e.mjs`) |
 | Datenbank enthält nach dem Browser-Test keinen Klartext, auch keine Tresor-Namen | CI-Job `e2e`, Schritt „no plaintext“ |
-| Backups verlassen den Server nur mit age verschlüsselt (ohne Empfänger wird nichts kopiert); falscher Schlüssel oder veränderte Datei lassen die Datenbank unberührt, der richtige stellt sie wieder her; Fehler und Erfolg werden an `BACKUP_PING_URL` gemeldet, ohne Konfiguration preiszugeben | CI-Job „Server scripts“, `deploy/test/backup-restore.sh` |
+| Backups verlassen den Server nur mit age verschlüsselt (ohne Empfänger wird nichts kopiert); falscher Schlüssel, veränderte oder abgeschnittene Datei lassen die Datenbank unberührt (ohne übrig gebliebene Hilfsdatenbank), der richtige stellt sie wieder her; Fehler und Erfolg werden an `BACKUP_PING_URL` gemeldet, ohne Konfiguration preiszugeben | CI-Job „Server scripts“, `deploy/test/backup-restore.sh` |
+| Heim-Backup nimmt das Backup mit dem spätesten Datum, verweigert Dateien mit Datum in der Zukunft oder ungültigem Datum und meldet ein zu altes neuestes Backup als Fehler | CI-Job „Server scripts“, `scripts/test-home-backup.ps1` |
 
 ## Lokal ausführen
 

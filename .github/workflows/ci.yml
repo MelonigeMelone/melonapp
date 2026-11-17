@@ -30,6 +30,7 @@ jobs:
       - run: shellcheck -e SC1091,SC2329 deploy/bin/* deploy/test/*.sh scripts/*.sh
       - run: sudo apt-get update -q && sudo apt-get install -yq age
       - run: bash deploy/test/backup-restore.sh
+      - run: pwsh -NoProfile -File scripts/test-home-backup.ps1
       - if: steps.changes.outputs.run != 'false'
         run: bash deploy/test/update.sh
 
