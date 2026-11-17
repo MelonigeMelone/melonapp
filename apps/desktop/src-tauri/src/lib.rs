@@ -1,7 +1,7 @@
-#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 mod clipboard;
 #[cfg(target_os = "ios")]
 mod ios;
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 mod passkeys;
 mod platform;
 use melon_native::Session;
