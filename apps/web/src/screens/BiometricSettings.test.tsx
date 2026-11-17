@@ -28,6 +28,14 @@ function platform(configured = false) {
 }
 
 describe('biometric settings', () => {
+  it('names Windows Hello on Windows and Touch ID / Face ID on Apple devices', async () => {
+    render(<BiometricSettings platform={{ ...platform(), os: 'windows' }} session={session} />);
+    expect(await screen.findByRole('heading', { name: 'Windows Hello' })).toBeTruthy();
+    cleanup();
+    render(<BiometricSettings platform={platform()} session={session} />);
+    expect(await screen.findByRole('heading', { name: 'Touch ID / Face ID' })).toBeTruthy();
+  });
+
   it('loads persisted setup when reopened without prompting for biometric unlock', async () => {
     const native = platform(true);
     const first = render(<BiometricSettings platform={native} session={session} />);

@@ -21,6 +21,7 @@ use zeroize::Zeroizing;
 
 #[cfg(target_os = "ios")]
 const NOT_FOUND: i32 = -25300;
+const HELLO_FILE: &str = "biometric.hello";
 
 static SERVER: Mutex<Option<String>> = Mutex::new(None);
 const ACTIVE_ATTEMPTS: u32 = 20;
@@ -60,7 +61,7 @@ fn location(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String> {
     Ok(dir.join(name))
 }
 
-fn atomic_write(path: &std::path::Path, data: &[u8]) -> Result<(), String> {
+pub fn atomic_write(path: &std::path::Path, data: &[u8]) -> Result<(), String> {
     use std::io::Write;
     let parent = path.parent().ok_or("storage_unavailable")?;
     let mut temporary =
@@ -250,16 +251,18 @@ pub async fn api_request(
 }
 
 #[tauri::command]
-pub fn biometric_available() -> bool {
-    keystore::biometric_available()
+pub async fn biometric_available() -> bool {
+    tauri::async_runtime::spawn_blocking(keystore::biometric_available)
+        .await
+        .unwrap_or(false)
 }
 
 #[tauri::command]
 pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<(), String> {
-    if !keystore::biometric_available() {
-        return Err("biometric_unavailable".into());
-    }
     tauri::async_runtime::spawn_blocking(move || {
+        if !keystore::biometric_available() {
+            return Err("biometric_unavailable".into());
+        }
         let base = server(&app)?;
         let scope = format!("{base}/biometric");
         let token = metadata
@@ -277,7 +280,7 @@ pub async fn biometric_enable(app: tauri::AppHandle, metadata: Value) -> Result<
                     .map_err(str::to_owned)?,
             )
         };
-        keystore::save_biometric(&scope, &key)?;
+        keystore::save_biometric(&location(&app, HELLO_FILE)?, &scope, &key)?;
         write(
             &app,
             "biometric.token",
@@ -336,7 +339,7 @@ pub async fn biometric_unlock(app: tauri::AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let scope = format!("{}/biometric", server(&app)?);
         let snapshot = read(&app, "biometric.enc")?;
-        let key = keystore::load_biometric(&scope)?;
+        let key = keystore::load_biometric(&location(&app, HELLO_FILE)?, &scope)?;
         let state = app.state::<Mutex<Session>>();
         let mut session = wait_until_active(&state, ACTIVE_ATTEMPTS, ACTIVE_DELAY)?;
         if format!("{}/biometric", server(&app)?) != scope {
@@ -376,7 +379,7 @@ pub fn signed_out() -> Result<(), String> {
 }
 
 fn remove_biometric(app: &tauri::AppHandle, scope: &str) -> Result<(), String> {
-    keystore::delete_biometric(scope)?;
+    keystore::delete_biometric(&location(app, HELLO_FILE)?, scope)?;
     for name in ["biometric.enc", "biometric.token"] {
         let path = location(app, name)?;
         if path.exists() {

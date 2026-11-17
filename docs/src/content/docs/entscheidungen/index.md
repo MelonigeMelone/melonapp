@@ -41,5 +41,6 @@ eine Entscheidung, bekommt die alte Seite den Status *ersetzt durch …*, statt 
 | [0027](/melonapp/entscheidungen/0027-authentisierte-tresor-schluessel/) | Authentisierte Tresor-Schlüssel | angenommen |
 | [0028](/melonapp/entscheidungen/0028-bereiche-nur-mit-zustimmung/) | Bereiche nur mit Zustimmung | angenommen |
 | [0029](/melonapp/entscheidungen/0029-abgeleitete-geraeteschluessel/) | Abgeleitete Geräteschlüssel | angenommen |
+| [0030](/melonapp/entscheidungen/0030-windows-hello/) | Windows Hello über einen Signaturschlüssel | angenommen |
 
 Vorlage für neue ADRs: `docs/src/content/docs/entscheidungen/_vorlage.md`.

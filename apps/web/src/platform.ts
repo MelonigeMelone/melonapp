@@ -18,6 +18,10 @@ export interface NativePlatform {
   onLock(callback: () => void): Promise<() => void>;
 }
 
+export function biometricName(platform: Pick<NativePlatform, 'os'>) {
+  return platform.os === 'windows' ? 'Windows Hello' : 'Touch ID / Face ID';
+}
+
 let native: NativePlatform | null = null;
 export function setNativePlatform(platform: NativePlatform) { native = platform; }
 export function nativePlatform() { return native; }

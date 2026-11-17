@@ -15,7 +15,7 @@ import { float, reducedMotion, riseIn, shimmer, spin } from '../motion';
 import { describeError, login, recoverAccount, register, type Session } from '../session';
 import { ApiError } from '../api';
 
-import { nativePlatform } from '../platform';
+import { biometricName, nativePlatform } from '../platform';
 
 type Mode = 'login' | 'register' | 'recover';
 const MIN_LENGTH = 12;
@@ -205,7 +205,7 @@ export function AuthScreen({
             try { await platform.setServer(server); onSession(await platform.unlockBiometric()); }
             catch { setError('Biometrisches Entsperren nicht verfügbar. Melde dich mit dem Master-Passwort an.'); }
             finally { setBusy(false); }
-          }}>Mit Touch ID / Face ID entsperren</Button>}
+          }}>Mit {biometricName(platform)} entsperren</Button>}
           {notice && mode === 'login' && <Alert severity="info">{notice}</Alert>}
           {inviter && mode === 'register' && (
             <Alert severity="success">
