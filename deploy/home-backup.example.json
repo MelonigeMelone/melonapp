@@ -4,5 +4,6 @@
   "Key": "C:\\Users\\DEIN-NAME\\.melonapp\\storagebox",
   "Port": 23,
   "IntervalDays": 30,
-  "Keep": 12
+  "Keep": 12,
+  "MaxAgeDays": 7
 }

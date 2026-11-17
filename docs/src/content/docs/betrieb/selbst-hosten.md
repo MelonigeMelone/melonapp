@@ -163,7 +163,7 @@ auf dem Server liegt ([ADR 0022](/melonapp/entscheidungen/0022-backups-mit-age/)
 | Was | Wann | Wo |
 |---|---|---|
 | `bin/melon-backup`: `pg_dump` im Custom-Format, danach mit `pg_restore --list` geprüft | nächtlich 03:30 (systemd-Timer) und vor jedem Update | `backups/` auf dem Server (`chmod 700`), 14 Tage, unverschlüsselt |
-| Verschlüsselte Kopie (`offsite/*.dump.age`) per `rsync` (ohne `--delete`) | nächtlich, wenn `backup.env` existiert. Vor Updates nur lokal, damit ein Ausfall der Storage Box kein Deployment blockiert. | Hetzner Storage Box. Dort wird nichts gelöscht, auch nicht von einem übernommenen Server aus. |
+| Verschlüsselte Kopie (`offsite/*.dump.age`) per `rsync` (ohne `--delete`) | nächtlich, wenn `backup.env` existiert. Vor Updates nur lokal, damit ein Ausfall der Storage Box kein Deployment blockiert. | Hetzner Storage Box. `melon-backup` löscht dort nichts. Der Sub-Account des Servers könnte es aber per `sftp`, etwa von einem übernommenen Server aus. Davor schützen nur die automatischen Snapshots der Box (siehe unten). |
 | Hetzner-Backups (Server-Snapshot) | täglich, 7 Tage | Hetzner, Schutz gegen „Server kaputt“ |
 | Kopie zu Hause (`scripts/home-backup.ps1`) | wenn das letzte Mal 30 Tage her ist, geprüft bei jeder Anmeldung und täglich um 12 Uhr | eigener Windows-Rechner, die 12 neuesten, verschlüsselt, Schutz gegen „Hetzner-Konto weg“ |
 
@@ -174,6 +174,12 @@ sudo cp systemd/melon-backup.* /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now melon-backup.timer
 systemctl list-timers melon-backup.timer
 ```
+
+Der Dienst läuft gehärtet: ohne neue Rechte (`NoNewPrivileges`), mit eigenem `/tmp`, ohne
+Geräte und Capabilities, das System schreibgeschützt (`ProtectSystem=strict`) und das
+Home-Verzeichnis schreibgeschützt bis auf `~/melonapp` (und `~/.docker`, falls vorhanden). Nach
+einem Update der Unit-Datei sie wie oben neu kopieren und `daemon-reload` ausführen;
+`systemd-analyze security melon-backup.service` zeigt die Bewertung.
 
 **Backup-Schlüssel (einmal, auf dem eigenen Rechner, nicht auf dem Server):**
 
@@ -201,8 +207,9 @@ systemctl list-timers melon-backup.timer
 
 1. Storage Box bestellen, darin einen **Sub-Account** nur für den Ordner `melonapp/` anlegen und
    SSH dafür einschalten.
-2. In der Storage Box **automatische Snapshots** einschalten. Die kann der Server nicht löschen,
-   auch nicht mit seinem Schlüssel.
+2. In der Storage Box **automatische Snapshots** einschalten. Sie sind der einzige Schutz gegen
+   Löschen: Mit seinem Schlüssel kann der Server die Dateien im Ordner löschen, die Snapshots aber
+   nicht.
 3. Auf dem Server einen Schlüssel ohne Passphrase erzeugen (`ssh-keygen -t ed25519 -N "" -f ~/.ssh/storagebox`)
    und beim Sub-Account hinterlegen.
 4. Den Host-Schlüssel der Box festhalten und den Fingerabdruck mit der Hetzner-Doku vergleichen:
@@ -264,7 +271,8 @@ damit ein befallener Rechner dort nichts löschen kann.
 
 3. Jetzt den Sub-Account in der Hetzner-Konsole auf **schreibgeschützt** stellen.
 4. `deploy/home-backup.example.json` nach `~\.melonapp\home-backup.json` kopieren und ausfüllen.
-   Optional: `Target` (Standard `~\MelonApp-Backups`), `IntervalDays` (30), `Keep` (12).
+   Optional: `Target` (Standard `~\MelonApp-Backups`), `IntervalDays` (30), `Keep` (12),
+   `MaxAgeDays` (7).
 5. Einmal von Hand holen, dann die geplante Aufgabe einrichten:
 
    ```powershell
@@ -273,7 +281,12 @@ damit ein befallener Rechner dort nichts löschen kann.
    ```
 
 Das Skript lädt nur den neuesten `melon-*.dump.age`, prüft den age-Header (sonst wird die Datei
-verworfen), behält die 12 neuesten und schreibt `home-backup.log`. Läuft es als geplante Aufgabe und scheitert, erscheint ein
+verworfen), behält die 12 neuesten und schreibt `home-backup.log`. Der neueste ist der mit dem
+spätesten Zeitpunkt im Namen. Liegt auf der Box eine Datei mit Datum in der Zukunft oder ungültigem
+Datum, bricht es mit Fehler ab: Ein übernommener Server könnte sonst eine Datei
+`melon-2999….dump.age` ablegen, und das Skript würde nie mehr ein echtes Backup holen, aber „ok“
+melden. Ebenso ist es ein Fehler, wenn das neueste Backup älter als `MaxAgeDays` ist; dann läuft
+das nächtliche Backup auf dem Server nicht mehr. Läuft es als geplante Aufgabe und scheitert, erscheint ein
 Hinweisfenster. `-Uninstall` entfernt die Aufgabe. Der Rechner braucht dafür keinen Schlüssel.
 
 **Wiederherstellen:**
@@ -283,6 +296,11 @@ Aus einem lokalen Dump auf dem Server (z. B. nach einem misslungenen Update):
 ```sh
 bin/melon-restore backups/melon-20261112T033000Z.dump --yes
 ```
+
+`melon-restore` spielt den Dump zuerst in eine eigene Datenbank `melon_restore` ein. Erst wenn das
+ohne Fehler klappt, stoppt es den Server, löscht die alte Datenbank und benennt die neue um.
+Scheitert das Einspielen (z. B. abgeschnittene Datei), bleibt alles, wie es war, und der Server
+läuft weiter. Während des Einspielens braucht die Datenbank also kurz doppelt so viel Platz.
 
 Aus einer verschlüsselten Kopie: auf dem **eigenen Rechner** entschlüsseln (fragt nach der
 Passphrase), hochladen, einspielen, danach die Klartext-Datei auf beiden Seiten löschen. So
